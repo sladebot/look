@@ -1,0 +1,13 @@
+# Virtualenv
+.venv/
+__pycache__/
+
+# Database (local only, not tracked)
+*.db
+
+# Thumbnails and converted images (generated, not source)
+*.thumbnails/
+.converted/
+
+# Environment
+.env

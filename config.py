@@ -1,0 +1,57 @@
+"""Local Photo Library Server — Configuration"""
+import os
+from pathlib import Path
+from dataclasses import dataclass, field
+from typing import Optional
+
+
+@dataclass
+class Config:
+    """Server configuration."""
+    
+    # Watch directories (multi-dir support)
+    watch_dirs: list = field(default_factory=list)  # list of absolute paths
+    
+    # Default single photo_dir (backwards compat, also added to watch_dirs)
+    photo_dir: str = os.environ.get("PHOTO_DIR", str(Path.home() / "Pictures" / "Photos"))
+    
+    # Server settings
+    host: str = os.environ.get("HOST", "0.0.0.0")
+    port: int = int(os.environ.get("PORT", "8080"))
+    
+    # Database
+    db_path: str = os.environ.get("DB_PATH", str(Path.home() / ".local" / "local-photos" / "library.db"))
+    
+    # Thumbnails directory (relative to photo_dir)
+    thumbnails_dir: str = ".thumbnails"
+    
+    # Converted RAW files (relative to photo_dir)
+    converted_dir: str = ".converted"
+    
+    # API key (optional, for authentication)
+    api_key: Optional[str] = os.environ.get("API_KEY", None)
+    
+    # Thumbnail quality (1-100)
+    thumbnail_quality: int = int(os.environ.get("THUMBNAIL_QUALITY", "85"))
+    
+    # Max thumbnail size (pixels, width)
+    max_thumbnail_width: int = int(os.environ.get("MAX_THUMBNAIL_WIDTH", "1024"))
+    
+    # Log level
+    log_level: str = os.environ.get("LOG_LEVEL", "info")
+    
+    # Allowed photo extensions
+    image_extensions: tuple = field(default_factory=lambda: (
+        ".jpg", ".jpeg", ".png", ".heic", ".heif",
+        ".arw", ".cr2", ".nef", ".orf", ".raf", ".pef", ".dng"
+    ))
+    
+    def __post_init__(self):
+        """Create directories if they don't exist, populate watch_dirs."""
+        # Ensure backward compat: add default photo_dir to watch_dirs
+        if self.photo_dir and self.photo_dir not in self.watch_dirs:
+            self.watch_dirs.append(self.photo_dir)
+        
+        for d in self.watch_dirs:
+            Path(d).mkdir(parents=True, exist_ok=True)
+        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
