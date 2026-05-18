@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Photo Library</title>
+    <style>
+        :root {
+            --primary: #007AFF;
+            --primary-hover: #0056CC;
+            --bg: #F2F2F7;
+            --card: #FFFFFF;
+            --text: #1C1C1E;
+            --text-secondary: #8E8E93;
+            --border: #E5E5EA;
+            --success: #34C759;
+            --warning: #FF9500;
+            --danger: #FF3B30;
+            --radius: 12px;
+            --shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header h1 { font-size: 20px; font-weight: 600; }
+        .header-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+        
+        .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+        
+        /* Watch List */
+        .section { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 24px; }
+        .section-title { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
+        
+        .add-dir-form { display: flex; gap: 10px; margin-bottom: 16px; }
+        .add-dir-form input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 15px;
+            background: var(--bg);
+            outline: none;
+        }
+        .add-dir-form input:focus { border-color: var(--primary); }
+        .add-dir-form button {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .add-dir-form button:hover { background: var(--primary-hover); }
+        
+        .dir-list { list-style: none; }
+        .dir-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+        .dir-item:last-child { border-bottom: none; }
+        .dir-item:hover { background: rgba(0,122,255,0.04); }
+        
+        .dir-path {
+            font-family: 'SF Mono', 'Menlo', monospace;
+            font-size: 14px;
+            color: var(--text);
+            flex: 1;
+            word-break: break-all;
+        }
+        
+        .dir-actions { display: flex; gap: 8px; align-items: center; }
+        
+        .badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .badge-active { background: rgba(52,199,89,0.12); color: var(--success); }
+        .badge-inactive { background: rgba(255,59,48,0.12); color: var(--danger); }
+        
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+        }
+        .btn-icon:hover { background: var(--bg); color: var(--text); }
+        .btn-icon.danger:hover { background: rgba(255,59,48,0.12); color: var(--danger); }
+        
+        /* Import */
+        .import-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .import-btn:hover { background: var(--primary-hover); }
+        .import-btn:disabled { background: var(--border); cursor: not-allowed; }
+        
+        .import-status {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+        .import-status.success { background: rgba(52,199,89,0.12); color: #1B8C3A; display: block; }
+        .import-status.error { background: rgba(255,59,48,0.12); color: #C0392B; display: block; }
+        .import-status.loading { background: rgba(0,122,255,0.12); color: var(--primary); display: block; }
+        
+        /* Photo Gallery */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 8px;
+        }
+        .gallery-grid.wide { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+        
+        .photo-card {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.15s;
+            background: var(--bg);
+        }
+        .photo-card:hover { transform: scale(1.02); }
+        .photo-card img { width: 100%; height: 100%; object-fit: cover; }
+        .photo-card .placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            font-size: 12px;
+            text-align: center;
+            padding: 8px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-secondary);
+        }
+        .empty-state p { font-size: 15px; }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        
+        /* Nav tabs */
+        .nav-tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--card); border-radius: var(--radius); padding: 4px; box-shadow: var(--shadow); }
+        .nav-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+        }
+        .nav-tab.active { background: var(--primary); color: white; }
+        .nav-tab:hover:not(.active) { background: var(--bg); }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Stats */
+        .stats { display: flex; gap: 16px; margin-bottom: 16px; }
+        .stat { background: var(--bg); padding: 12px 16px; border-radius: 8px; }
+        .stat-value { font-size: 24px; font-weight: 600; color: var(--primary); }
+        .stat-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--text);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📸 Local Photo Library</h1>
+        <div class="header-subtitle">Private, local-only, served by Tailscale</div>
+    </div>
+    
+    <div class="container">
+        <!-- Stats -->
+        <div class="stats" id="stats">
+            <div class="stat">
+                <div class="stat-value" id="stat-photos">0</div>
+                <div class="stat-label">Photos</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="stat-dirs">0</div>
+                <div class="stat-label">Folders</div>
+            </div>
+        </div>
+        
+        <!-- Navigation -->
+        <div class="nav-tabs">
+            <button class="nav-tab active" data-tab="photos">Photos</button>
+            <button class="nav-tab" data-tab="directories">Directories</button>
+            <button class="nav-tab" data-tab="albums">Albums</button>
+        </div>
+        
+        <!-- Photos Tab -->
+        <div class="tab-content active" id="tab-photos">
+            <div class="section">
+                <div class="section-title">Photo Gallery</div>
+                <div class="gallery-grid wide" id="gallery"></div>
+                <div class="empty-state" id="gallery-empty" style="display:none;">
+                    <div class="icon">📷</div>
+                    <p>No photos yet. Add directories and import photos.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Directories Tab -->
+        <div class="tab-content" id="tab-directories">
+            <div class="section">
+                <div class="section-title">Watch Directories</div>
+                <div class="add-dir-form">
+                    <input type="text" id="new-dir-input" placeholder="/path/to/your/photos" />
+                    <button onclick="addDirectory()">Add Folder</button>
+                </div>
+                <ul class="dir-list" id="dir-list"></ul>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Import Photos</div>
+                <button class="import-btn" id="import-btn" onclick="importAll()">Scan All Watched Folders</button>
+                <div class="import-status" id="import-status"></div>
+            </div>
+        </div>
+        
+        <!-- Albums Tab -->
+        <div class="tab-content" id="tab-albums">
+            <div class="section">
+                <div class="section-title">Albums</div>
+                <div class="add-dir-form">
+                    <input type="text" id="new-album-name" placeholder="Album name" />
+                    <input type="text" id="new-album-desc" placeholder="Description (optional)" style="flex:0.5;" />
+                    <button onclick="createAlbum()">Create Album</button>
+                </div>
+                <div id="albums-list"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
+    
+    <script>
+        // Tab navigation
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                if (tab.dataset.tab === 'photos') loadPhotos();
+                if (tab.dataset.tab === 'directories') loadDirectories();
+                if (tab.dataset.tab === 'albums') loadAlbums();
+            });
+        });
+        
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        // ==================== Directory Management ====================
+        
+        async function loadDirectories() {
+            try {
+                const res = await fetch('/api/watch-list');
+                const data = await res.json();
+                const list = document.getElementById('dir-list');
+                list.innerHTML = '';
+                
+                (data.directories || []).forEach(dir => {
+                    const li = document.createElement('li');
+                    li.className = 'dir-item';
+                    
+                    const badgeClass = dir.active ? 'badge-active' : 'badge-inactive';
+                    const badgeText = dir.active ? 'Active' : 'Paused';
+                    
+                    li.innerHTML = `
+                        <span class="dir-path">${dir.path}</span>
+                        <div class="dir-actions">
+                            <span class="badge ${badgeClass}">${badgeText}</span>
+                            <button class="btn-icon" title="${dir.active ? 'Pause' : 'Enable'}" onclick="toggleDir('${dir.path}', ${!dir.active})">
+                                ${dir.active ? '⏸' : '▶'}
+                            </button>
+                            <button class="btn-icon danger" title="Remove" onclick="removeDir('${dir.path}')">✕</button>
+                        </div>
+                    `;
+                    list.appendChild(li);
+                });
+                
+                // Update stats
+                document.getElementById('stat-dirs').textContent = data.directories.length;
+            } catch(e) {
+                showToast('Failed to load directories');
+            }
+        }
+        
+        async function addDirectory() {
+            const input = document.getElementById('new-dir-input');
+            const path = input.value.trim();
+            if (!path) return;
+            
+            try {
+                const res = await fetch(`/api/watch-list?path=${encodeURIComponent(path)}`, { method: 'POST' });
+                if (res.status === 409) {
+                    showToast('Directory already added');
+                } else if (res.ok) {
+                    showToast(`Added: ${path}`);
+                    input.value = '';
+                    loadDirectories();
+                }
+            } catch(e) {
+                showToast('Failed to add directory');
+            }
+        }
+        
+        async function removeDir(path) {
+            if (!confirm(`Remove "${path}" from watch list? (Photos remain in library)`)) return;
+            await fetch(`/api/watch-list/${encodeURIComponent(path)}`, { method: 'DELETE' });
+            showToast('Directory removed from watch list');
+            loadDirectories();
+        }
+        
+        async function toggleDir(path, active) {
+            await fetch(`/api/watch-list/${encodeURIComponent(path)}/active?active=${active}`, { method: 'PATCH' });
+            showToast(`Directory ${active ? 'enabled' : 'paused'}`);
+            loadDirectories();
+        }
+        
+        // ==================== Import ====================
+        
+        async function importAll() {
+            const btn = document.getElementById('import-btn');
+            const status = document.getElementById('import-status');
+            
+            btn.disabled = true;
+            status.className = 'import-status loading';
+            status.textContent = 'Scanning and importing photos... This may take a moment.';
+            
+            try {
+                const res = await fetch('/api/import', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.imported > 0) {
+                    status.className = 'import-status success';
+                    status.textContent = data.message || `Imported ${data.imported} photos (${data.errors} errors)`;
+                    loadPhotos();
+                    loadDirectories();
+                    updateStats();
+                } else {
+                    status.className = 'import-status error';
+                    status.textContent = data.message || 'No photos found to import. Add directories first.';
+                }
+            } catch(e) {
+                status.className = 'import-status error';
+                status.textContent = 'Import failed: ' + e.message;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        
+        // ==================== Photo Gallery ====================
+        
+        async function loadPhotos(offset = 0) {
+            try {
+                const limit = 50;
+                const res = await fetch(`/api/photos?limit=${limit}&offset=${offset}`);
+                const data = await res.json();
+                const gallery = document.getElementById('gallery');
+                const empty = document.getElementById('gallery-empty');
+                
+                const photos = data.photos || [];
+                if (offset === 0) gallery.innerHTML = '';
+                
+                if (photos.length === 0 && offset === 0) {
+                    gallery.style.display = 'none';
+                    empty.style.display = 'block';
+                } else {
+                    gallery.style.display = 'grid';
+                    empty.style.display = 'none';
+                    
+                    photos.forEach(photo => {
+                        const card = document.createElement('div');
+                        card.className = 'photo-card';
+                        card.onclick = () => openPhoto(photo.id);
+                        
+                        const img = document.createElement('img');
+                        img.src = `/api/thumbnails/${photo.id}?size=400`;
+                        img.alt = photo.filename;
+                        img.loading = 'lazy';
+                        
+                        card.appendChild(img);
+                        gallery.appendChild(card);
+                    });
+                }
+                
+                document.getElementById('stat-photos').textContent = data.total;
+            } catch(e) {
+                console.error('Failed to load photos:', e);
+            }
+        }
+        
+        async function openPhoto(photoId) {
+            window.open(`/api/full/${photoId}`, '_blank');
+        }
+        
+        // ==================== Albums ====================
+        
+        async function loadAlbums() {
+            try {
+                const res = await fetch('/api/albums');
+                const data = await res.json();
+                const list = document.getElementById('albums-list');
+                list.innerHTML = '';
+                
+                (data.albums || []).forEach(album => {
+                    const div = document.createElement('div');
+                    div.className = 'dir-item';
+                    div.innerHTML = `
+                        <div>
+                            <div style="font-weight:500;">${album.name}</div>
+                            <div style="font-size:12px;color:var(--text-secondary);">${album.description || ''}</div>
+                        </div>
+                        <div class="dir-actions">
+                            <button class="btn-icon danger" title="Delete" onclick="deleteAlbum('${album.id}')">✕</button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            } catch(e) {
+                console.error('Failed to load albums:', e);
+            }
+        }
+        
+        async function createAlbum() {
+            const name = document.getElementById('new-album-name').value.trim();
+            const desc = document.getElementById('new-album-desc').value.trim();
+            if (!name) return;
+            
+            try {
+                await fetch(`/api/albums?name=${encodeURIComponent(name)}&description=${encodeURIComponent(desc)}`, { method: 'POST' });
+                showToast('Album created');
+                document.getElementById('new-album-name').value = '';
+                document.getElementById('new-album-desc').value = '';
+                loadAlbums();
+            } catch(e) {
+                showToast('Failed to create album');
+            }
+        }
+        
+        async function deleteAlbum(albumId) {
+            if (!confirm('Delete this album? (Photos are not deleted)')) return;
+            await fetch(`/api/albums/${albumId}`, { method: 'DELETE' });
+            showToast('Album deleted');
+            loadAlbums();
+        }
+        
+        // ==================== Stats ====================
+        
+        async function updateStats() {
+            try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+                document.getElementById('stat-photos').textContent = data.photo_count;
+                document.getElementById('stat-dirs').textContent = (data.watch_dirs || []).length;
+            } catch(e) {}
+        }
+        
+        // ==================== Init ====================
+        
+        document.getElementById('new-dir-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addDirectory();
+        });
+        
+        loadPhotos();
+        loadDirectories();
+        updateStats();
+    </script>
+</body>
+</html>
