@@ -183,13 +183,22 @@ async def import_photos(path: str = Query(None, description="Specific directory 
         else:
             scanner_local = DirectoryScanner(str(import_path), config.image_extensions)
     else:
-        photos = db.scan_all_watch_dirs()
+        active_watch_dirs = [entry for entry in db.get_watch_list() if entry['active']]
+        if not active_watch_dirs:
+            return {
+                "imported": 0,
+                "errors": 0,
+                "total_scanned": 0,
+                "message": "No active watch directories found. Add or enable one first."
+            }
+
+        photos = db.scan_all_watch_dirs(image_extensions=config.image_extensions)
         if not photos:
             return {
                 "imported": 0,
                 "errors": 0,
                 "total_scanned": 0,
-                "message": "No active watch directories found. Add one first."
+                "message": "No supported photos found in active watch directories."
             }
 
     imported = 0

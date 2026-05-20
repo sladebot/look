@@ -418,16 +418,23 @@ class PhotoDatabase:
             ).rowcount
         return result > 0
 
-    def scan_all_watch_dirs(self, recursive: bool = True) -> list:
-        """Scan all watch directories for images."""
+    def scan_all_watch_dirs(self, recursive: bool = True, image_extensions: tuple = None) -> list:
+        """Scan all active watch directories for supported image files."""
         from scanner import DirectoryScanner
+
+        if image_extensions is None:
+            image_extensions = (
+                ".jpg", ".jpeg", ".png", ".heic", ".heif",
+                ".arw", ".cr2", ".nef", ".orf", ".raf", ".pef", ".dng"
+            )
+
         all_photos = []
         watch_dirs = self.get_watch_list()
 
         for entry in watch_dirs:
             if not entry['active']:
                 continue
-            s = DirectoryScanner(entry['path'], ())
+            s = DirectoryScanner(entry['path'], image_extensions)
             photos = s.scan(recursive=recursive)
             all_photos.extend(photos)
 
