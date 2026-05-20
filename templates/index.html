@@ -910,16 +910,13 @@
                     <option value="tag">Has Tag</option>
                     <option value="keyword">Has Keyword</option>
                     <option value="is_favorite">Is Favorite</option>
-                    <option value="folder">In Folder</option>
                 </select>
                 <select class="rule-op" data-rule-id="${id}" onchange="onRuleOpChange(this)">
-                    <option value="equals">Equals</option>
                     <option value="contains">Contains</option>
+                    <option value="equals">Equals</option>
                     <option value="regex">Regex</option>
                     <option value="has">Has</option>
                     <option value="has_any">Has Any</option>
-                    <option value="before">Before</option>
-                    <option value="after">After</option>
                 </select>
                 <input type="text" class="rule-value" data-rule-id="${id}" placeholder="Value" oninput="updateRulePreview()" onchange="updateRulePreview()" />
                 <input type="date" class="rule-value-date" data-rule-id="${id}" style="display:none;" oninput="updateRulePreview()" onchange="updateRulePreview()" />
@@ -985,7 +982,7 @@
                 const list = document.getElementById('smart-albums-list');
                 list.innerHTML = '';
                 
-                const albums = data.smart_albums || [];
+                const albums = data.collections || data.smart_albums || [];
                 if (albums.length > 0) {
                     section.style.display = 'block';
                     albums.forEach(album => {
@@ -1030,15 +1027,16 @@
                 const valInput = row.querySelector('.rule-value');
                 const dateInput = row.querySelector('.rule-value-date');
                 const value = (field.startsWith('date_')) ? (dateInput.value || '') : (valInput.value || '');
-                if (value) rules.push({ [field]: { [op]: value } });
+                if (value) rules.push({ field, op, value });
             });
             
             try {
-                const res = await fetch('/api/smart-collections', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, description: desc, rules })
+                const params = new URLSearchParams({
+                    name,
+                    description: desc,
+                    rule_spec: JSON.stringify({ rules })
                 });
+                const res = await fetch(`/api/smart-collections?${params.toString()}`, { method: 'POST' });
                 if (res.ok) {
                     showToast(`Smart album "${name}" created`);
                     document.getElementById('smart-album-name').value = '';
@@ -1065,7 +1063,7 @@
         
         async function evaluateSmartAlbum(albumId) {
             try {
-                await fetch(`/api/smart-collections/${albumId}/evaluate`, { method: 'POST' });
+                await fetch(`/api/smart-collections/${albumId}/eval`, { method: 'POST' });
                 showToast('Album evaluated');
                 loadSmartAlbums();
             } catch(e) {
@@ -1075,7 +1073,7 @@
         
         async function viewSmartAlbumPhotos(albumId) {
             try {
-                const res = await fetch(`/api/smart-collections/${albumId}/photos?limit=50`);
+                const res = await fetch(`/api/smart-collections/${albumId}`);
                 const data = await res.json();
                 const photos = data.photos || [];
                 const gallery = document.getElementById('gallery');
@@ -1107,7 +1105,6 @@
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 document.querySelector('[data-tab="photos"]').classList.add('active');
                 document.getElementById('tab-photos').classList.add('active');
-                loadPhotos(0);
             } catch(e) {
                 showToast('Failed to load smart album photos');
             }
@@ -1132,12 +1129,12 @@
             results.innerHTML = '<div class="empty-state"><p>Scanning photos for duplicates using perceptual hashing...</p></div>';
             
             try {
-                const res = await fetch('/api/dedup/scan', { method: 'POST' });
+                const res = await fetch('/api/dedup/scan');
                 const data = await res.json();
                 btn.disabled = false;
                 
                 if (data.groups && data.groups.length > 0) {
-                    status.textContent = `Found ${data.groups.length} duplicate group(s) with ${data.total_duplicates || 0} photos.`;
+                    status.textContent = `Found ${data.groups.length} duplicate group(s).`;
                     renderDedupGroups(data.groups);
                 } else {
                     status.textContent = 'No duplicates found. Your library looks clean!';
@@ -1157,17 +1154,18 @@
                 const div = document.createElement('div');
                 div.className = 'dedup-group';
                 
-                const photosHtml = (group.photos || []).map(photo => `
-                    <div class="dedup-photo-card" data-photo-id="${photo.id}" onclick="selectDedupKeep('${photo.id}', this)">
-                        <img src="/api/thumbnails/${photo.id}?size=200" alt="${photo.filename}" />
-                        <div class="filename">${escapeHtml(photo.filename)}</div>
+                const photos = group.photos || group;
+                const photosHtml = (photos || []).map(photo => `
+                    <div class="dedup-photo-card" data-photo-id="${photo.photo_id || photo.id}" onclick="selectDedupKeep('${photo.photo_id || photo.id}', this)">
+                        <img src="/api/thumbnails/${photo.photo_id || photo.id}?size=200" alt="${photo.filename || photo.photo_id || photo.id}" />
+                        <div class="filename">${escapeHtml(photo.filename || photo.photo_id || photo.id)}</div>
                     </div>
                 `).join('');
                 
-                const groupKey = group.hash || 'g' + idx;
+                const groupKey = group.hash || (photos[0] && photos[0].phash) || 'g' + idx;
                 div.innerHTML = `
-                    <div class="dedup-group-title">Group: ${group.hash ? group.hash.substring(0, 16) + '…' : 'Group ' + (idx+1)} (${(group.photos || []).length} photos)</div>
-                    <div class="dedup-photos" data-group-photos='${JSON.stringify(group.photos || [])}' data-group-key="${groupKey}">${photosHtml}</div>
+                    <div class="dedup-group-title">Group: ${groupKey ? String(groupKey).substring(0, 16) + '…' : 'Group ' + (idx+1)} (${(photos || []).length} photos)</div>
+                    <div class="dedup-photos" data-group-photos='${JSON.stringify(photos || [])}' data-group-key="${groupKey}">${photosHtml}</div>
                     <div class="dedup-actions">
                         <button class="dedup-keep-all-btn" onclick="archiveDedupGroup(${idx})">🗑️ Archive all but selected</button>
                         <span style="font-size:12px;color:var(--text-secondary);">Click photos to select which to keep</span>
@@ -1179,7 +1177,7 @@
         
         function selectDedupKeep(photoId, card) {
             const group = card.closest('.dedup-photos');
-            const groupKey = group ? (group.dataset.groupKey || groupKey || photoId) : photoId;
+            const groupKey = group ? (group.dataset.groupKey || photoId) : photoId;
             
             group.querySelectorAll('.dedup-photo-card').forEach(c => {
                 c.classList.remove('kept');
@@ -1204,8 +1202,8 @@
             const photosData = JSON.parse(group.querySelector('.dedup-photos').dataset.groupPhotos || '[]');
             if (photosData.length === 0) return;
             
-            const keptId = group.querySelector('.dedup-photos').dataset.selectedId || photosData[0].id;
-            const archiveIds = photosData.filter(p => p.id !== keptId).map(p => p.id);
+            const keptId = group.querySelector('.dedup-photos').dataset.selectedId || (photosData[0].photo_id || photosData[0].id);
+            const archiveIds = photosData.filter(p => (p.photo_id || p.id) !== keptId).map(p => p.photo_id || p.id);
             
             if (archiveIds.length === 0) {
                 showToast('No photos to archive (only 1 photo in this group)');
@@ -1215,10 +1213,8 @@
             if (!confirm(`Archive ${archiveIds.length} duplicate(s)? The kept photo will remain.`)) return;
             
             try {
-                const res = await fetch('/api/dedup/merge', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ archive_ids: archiveIds })
+                const res = await fetch(`/api/dedup/merge?group_id=${encodeURIComponent(groupIdx)}&keep_photo_id=${encodeURIComponent(keptId)}`, {
+                    method: 'POST'
                 });
                 if (res.ok) {
                     showToast(`Archived ${archiveIds.length} duplicate(s)`);
@@ -1237,12 +1233,12 @@
         async function autoTagPhoto() {
             if (!_currentModalPhotoId) return;
             try {
-                const res = await fetch(`/api/photos/${_currentModalPhotoId}/auto-tag`, { method: 'POST' });
+                const res = await fetch(`/api/photos/${_currentModalPhotoId}/tags/auto`, { method: 'POST' });
                 const data = await res.json();
-                if (data.tags && data.tags.length > 0) {
-                    showToast(`Auto-tagged: ${data.tags.join(', ')}`);
+                if (data.tags_added && data.tags_added.length > 0) {
+                    showToast(`Auto-tagged: ${data.tags_added.join(', ')}`);
                     await loadModalTags(_currentModalPhotoId);
-                    renderSuggestions(data.suggestions || []);
+                    getSuggestedTags(_currentModalPhotoId);
                 } else {
                     showToast('No EXIF metadata found for auto-tagging');
                 }
@@ -1282,7 +1278,7 @@
                 section.style.display = 'block';
                 if (list.children.length === 0) {
                     try {
-                        const res = await fetch(`/api/photos/${_currentModalPhotoId}/tag-history`);
+                        const res = await fetch(`/api/photos/${_currentModalPhotoId}/tags/history`);
                         const data = await res.json();
                         list.innerHTML = '';
                         (data.history || []).forEach(entry => {
@@ -1306,9 +1302,9 @@
         
         async function getSuggestedTags(photoId) {
             try {
-                const res = await fetch(`/api/photos/${photoId}/suggested-tags`);
+                const res = await fetch(`/api/photos/${photoId}/tags/suggest`);
                 const data = await res.json();
-                renderSuggestions(data.tags || []);
+                renderSuggestions(data.suggestions || data.tags || []);
             } catch(e) {}
         }
         

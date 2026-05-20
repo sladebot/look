@@ -496,17 +496,17 @@ async def get_smart_collection(album_id: str):
         album = conn.execute(
             "SELECT * FROM albums WHERE id = ? AND source = 'smart_collection'", (album_id,)
         ).fetchone()
-    if not album:
-        raise HTTPException(status_code=404, detail="Smart album not found")
+        if not album:
+            raise HTTPException(status_code=404, detail="Smart album not found")
 
-    album = dict(album)
-    # Get matched photos
-    photos = conn.execute("""
-        SELECT p.* FROM photos p
-        JOIN album_photos ap ON p.id = ap.photo_id
-        WHERE ap.album_id = ?
-        ORDER BY p.created_at DESC
-    """, (album_id,)).fetchall()
+        album = dict(album)
+        # Get matched photos
+        photos = conn.execute("""
+            SELECT p.* FROM photos p
+            JOIN album_photos ap ON p.id = ap.photo_id
+            WHERE ap.album_id = ?
+            ORDER BY p.created_at DESC
+        """, (album_id,)).fetchall()
     album['photos'] = [dict(p) for p in photos]
     return album
 

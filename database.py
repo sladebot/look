@@ -582,7 +582,8 @@ class PhotoDatabase:
         """Find groups of photos with similar perceptual hashes."""
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM content_hashes"
+                "SELECT ch.photo_id, ch.phash, p.filename, p.filepath "
+                "FROM content_hashes ch JOIN photos p ON ch.photo_id = p.id"
             ).fetchall()
             hashes = [dict(row) for row in rows]
 
