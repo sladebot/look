@@ -6,19 +6,19 @@ from datetime import datetime
 
 class PhotoDatabase:
     """SQLite database for photo library metadata."""
-    
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self.init_db()
-    
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
-    
+
     def init_db(self):
         """Initialize database schema."""
         with self._connect() as conn:
@@ -38,11 +38,11 @@ class PhotoDatabase:
                     color_tag   TEXT DEFAULT 'none',
                     is_source_jpeg INTEGER DEFAULT 0  -- 1 if this is a converted/sidecar JPEG
                 );
-                
+
                 CREATE INDEX IF NOT EXISTS idx_photos_created ON photos(created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_photos_filename ON photos(filename);
                 CREATE INDEX IF NOT EXISTS idx_photos_mime ON photos(mime_type);
-                
+
                 CREATE TABLE IF NOT EXISTS albums (
                     id          TEXT PRIMARY KEY,  -- UUID
                     name        TEXT NOT NULL,
@@ -52,7 +52,7 @@ class PhotoDatabase:
                     source      TEXT DEFAULT 'manual',  -- 'manual' | 'smart_collection' | 'imported'
                     folder      TEXT  -- optional: source folder path for import
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS album_photos (
                     album_id  TEXT,
                     photo_id  TEXT,
@@ -60,16 +60,16 @@ class PhotoDatabase:
                     FOREIGN KEY (album_id) REFERENCES albums(id),
                     FOREIGN KEY (photo_id) REFERENCES photos(id)
                 );
-                
+
                 CREATE INDEX IF NOT EXISTS idx_ap_photo ON album_photos(photo_id);
-                
+
                 CREATE TABLE IF NOT EXISTS tags (
                     photo_id  TEXT,
                     tag       TEXT,
                     PRIMARY KEY (photo_id, tag),
                     FOREIGN KEY (photo_id) REFERENCES photos(id)
                 );
-                
+
                 -- Import tracking (for migration resume)
                 CREATE TABLE IF NOT EXISTS import_log (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,29 +79,118 @@ class PhotoDatabase:
                     status      TEXT DEFAULT 'running',  -- 'running' | 'completed' | 'failed'
                     error       TEXT
                 );
-                
-                -- Watch list (folders the server monitors)
+
+                -- Watch list
                 CREATE TABLE IF NOT EXISTS watch_list (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
                     path        TEXT NOT NULL UNIQUE,
                     added_at    TEXT NOT NULL,
                     active      INTEGER DEFAULT 1  -- 1=active, 0=paused
                 );
-                
+
                 -- Server settings (key-value store)
                 CREATE TABLE IF NOT EXISTS server_settings (
                     key   TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 );
+
+                -- Smart album rule specification (JSON)
+                -- (column added via migration; ignored on first run for v0.3.x)
+                -- Column: rule_spec TEXT DEFAULT NULL on albums table
+                -- If you get a "no such column: rule_spec" error, run once:
+                --   ALTER TABLE albums ADD COLUMN rule_spec TEXT DEFAULT NULL;
+
+                -- Content hashes for deduplication (new table)
+                CREATE TABLE IF NOT EXISTS content_hashes (
+                    photo_id TEXT PRIMARY KEY,
+                    phash    TEXT NOT NULL,  -- 64-char hex perceptual hash
+                    FOREIGN KEY (photo_id) REFERENCES photos(id)
+                );
+
+                -- Tag history (new table)
+                CREATE TABLE IF NOT EXISTS tag_history (
+                    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                    photo_id TEXT NOT NULL,
+                    tag      TEXT NOT NULL,
+                    action   TEXT NOT NULL,  -- 'added' | 'removed'
+                    by_user  TEXT DEFAULT 'system',
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY (photo_id) REFERENCES photos(id)
+                );
+
+                -- Duplicate archive (new table)
+                CREATE TABLE IF NOT EXISTS duplicates (
+                    photo_id    TEXT,
+                    archived_id TEXT PRIMARY KEY,  -- moved to .trash/
+                    archive_path TEXT,
+                    duplicate_of TEXT,  -- the kept photo_id
+                    archived_at TEXT NOT NULL,
+                    FOREIGN KEY (photo_id) REFERENCES photos(id),
+                    FOREIGN KEY (duplicate_of) REFERENCES photos(id)
+                );
+
+                -- Indexes
+                CREATE INDEX IF NOT EXISTS idx_ch_phash ON content_hashes(phash);
+                CREATE INDEX IF NOT EXISTS idx_th_photo ON tag_history(photo_id);
             """)
-    
+
+        # Migration: add rule_spec column to albums (safe no-op if already exists)
+        try:
+            with self._connect() as conn:
+                conn.execute("ALTER TABLE albums ADD COLUMN rule_spec TEXT DEFAULT NULL")
+                print("[db] Migration: added rule_spec column to albums")
+        except Exception:
+            pass  # column already exists (Phase 2 database)
+
     def get_photo(self, photo_id: str) -> dict:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,)).fetchone()
             return dict(row) if row else None
-    
-    def list_photos(self, album: str = None, tag: str = None, 
-                   limit: int = 50, offset: int = 0) -> list:
+
+    def _extend_query(self, query: str, album: str, tag: str,
+                      q: str, camera: str, start_date: str, end_date: str,
+                      params: list) -> tuple:
+        """
+        Enrich the base FROM / ORDER BY query with WHERE clauses derived from
+        the optional filter parameters, returning (query, params).
+        """
+        conditions = []
+
+        if album:
+            conditions.append("ap.album_id = ?")
+            params.append(album)
+        if tag:
+            conditions.append("t.tag = ?")
+            params.append(tag)
+        if q:
+            conditions.append(
+                "(p.filename LIKE ? OR t.tag LIKE ? OR p.filepath LIKE ?)"
+            )
+            term = f"%{q}%"
+            params.extend([term, term, term])
+        if camera:
+            cond_cam = (
+                "EXTRACT_JSON(p.exif, '$.make')  LIKE ?"
+                " OR EXTRACT_JSON(p.exif, '$.model') LIKE ?"
+            )
+            conditions.append(f"({cond_cam})")
+            params.extend([f"%{camera}%", f"%{camera}%"])
+        if start_date:
+            conditions.append("p.created_at >= ?")
+            params.append(start_date)
+        if end_date:
+            conditions.append("p.created_at <= ?")
+            params.append(end_date)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        return query, params
+
+    def list_photos(self, album: str = None, tag: str = None,
+                    q: str = None, camera: str = None,
+                    start_date: str = None, end_date: str = None,
+                    limit: int = 50, offset: int = 0) -> list:
         with self._connect() as conn:
             query = """
                 SELECT p.* FROM photos p
@@ -109,111 +198,114 @@ class PhotoDatabase:
                 LEFT JOIN tags t ON p.id = t.photo_id
             """
             params = []
-            conditions = []
-            
-            if album:
-                conditions.append("ap.album_id = ?")
-                params.append(album)
-            if tag:
-                conditions.append("t.tag = ?")
-                params.append(tag)
-            
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
-            
+
+            if album or tag or q or camera or start_date or end_date:
+                query, params = self._extend_query(
+                    query, album, tag, q, camera, start_date, end_date, params
+                )
+
             query += " ORDER BY p.created_at DESC LIMIT ? OFFSET ?"
             params.extend([limit, offset])
-            
+
             rows = conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
-    
+
     def get_photo_count(self) -> int:
         with self._connect() as conn:
             return conn.execute("SELECT COUNT(*) as cnt FROM photos").fetchone()['cnt']
-    
+
     def get_albums(self) -> list:
         with self._connect() as conn:
             rows = conn.execute("SELECT * FROM albums ORDER BY name").fetchall()
             return [dict(row) for row in rows]
-    
+
     def get_album(self, album_id: str) -> dict:
         with self._connect() as conn:
             album = conn.execute("SELECT * FROM albums WHERE id = ?", (album_id,)).fetchone()
             if not album:
                 return None
-            
+
             photos = conn.execute("""
                 SELECT p.* FROM photos p
                 JOIN album_photos ap ON p.id = ap.photo_id
                 WHERE ap.album_id = ?
                 ORDER BY p.created_at DESC
             """, (album_id,)).fetchall()
-            
+
             result = dict(album)
             result['photos'] = [dict(p) for p in photos]
             return result
-    
-    def create_album(self, name: str, description: str = '', 
-                    source: str = 'manual', folder: str = None) -> str:
+
+    def create_album(self, name: str, description: str = '',
+                     source: str = 'manual', folder: str = None) -> str:
         import uuid
         now = datetime.now().isoformat()
         album_id = str(uuid.uuid4())
-        
+
         with self._connect() as conn:
             conn.execute("""
                 INSERT INTO albums (id, name, description, created_at, updated_at, source, folder)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (album_id, name, description, now, now, source, folder))
-        
+
         return album_id
-    
-    def update_album(self, album_id: str, name: str = None, 
-                    description: str = None) -> bool:
+
+    def update_album(self, album_id: str, name: str = None,
+                     description: str = None) -> bool:
         with self._connect() as conn:
             now = datetime.now().isoformat()
-            
+            changed = False
             if name:
-                conn.execute("UPDATE albums SET name = ?, updated_at = ? WHERE id = ?", 
-                           (name, now, album_id))
+                conn.execute("UPDATE albums SET name = ?, updated_at = ? WHERE id = ?",
+                             (name, now, album_id))
+                changed = True
             if description is not None:
-                conn.execute("UPDATE albums SET description = ?, updated_at = ? WHERE id = ?", 
-                           (description, now, album_id))
-            
+                conn.execute("UPDATE albums SET description = ?, updated_at = ? WHERE id = ?",
+                             (description, now, album_id))
+                changed = True
             return conn.total_changes > 0
-    
+
     def delete_album(self, album_id: str) -> bool:
         with self._connect() as conn:
             conn.execute("DELETE FROM album_photos WHERE album_id = ?", (album_id,))
             conn.execute("DELETE FROM albums WHERE id = ?", (album_id,))
             return conn.total_changes > 0
-    
+
     def add_photo_to_album(self, album_id: str, photo_id: str):
         with self._connect() as conn:
             conn.execute("""
                 INSERT OR IGNORE INTO album_photos (album_id, photo_id)
                 VALUES (?, ?)
             """, (album_id, photo_id))
-    
+
     def remove_photo_from_album(self, album_id: str, photo_id: str):
         with self._connect() as conn:
             conn.execute("""
                 DELETE FROM album_photos WHERE album_id = ? AND photo_id = ?
             """, (album_id, photo_id))
-    
+
     def get_tags(self, photo_id: str) -> list:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT tag FROM tags WHERE photo_id = ?", (photo_id,)
             ).fetchall()
             return [row['tag'] for row in rows]
-    
+
     def add_tag(self, photo_id: str, tag: str):
         with self._connect() as conn:
             conn.execute(
                 "INSERT OR IGNORE INTO tags (photo_id, tag) VALUES (?, ?)",
                 (photo_id, tag)
             )
-    
+
+    def delete_tag(self, photo_id: str, tag: str):
+        """Remove a specific tag from a photo."""
+        with self._connect() as conn:
+            conn.execute(
+                "DELETE FROM tags WHERE photo_id = ? AND tag = ?",
+                (photo_id, tag)
+            )
+
     def search_photos(self, query: str, limit: int = 50) -> list:
         with self._connect() as conn:
             search_term = f"%{query}%"
@@ -225,13 +317,13 @@ class PhotoDatabase:
                 LIMIT ?
             """, (search_term, search_term, search_term, limit)).fetchall()
             return [dict(row) for row in rows]
-    
+
     def store_photo(self, photo: dict):
         """Store or update a photo in the database."""
         with self._connect() as conn:
             conn.execute("""
-                INSERT INTO photos (id, filename, filepath, file_size, width, height, 
-                                   mime_type, created_at, indexed_at, has_thumbnail, 
+                INSERT INTO photos (id, filename, filepath, file_size, width, height,
+                                   mime_type, created_at, indexed_at, has_thumbnail,
                                    is_favorite, color_tag, is_source_jpeg)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(filepath) DO UPDATE SET
@@ -255,36 +347,36 @@ class PhotoDatabase:
                 photo.get('color_tag', 'none'),
                 1 if photo.get('is_source_jpeg') else 0
             ))
-    
+
     def mark_thumbnail(self, photo_id: str, has_thumbnail: bool = True):
         with self._connect() as conn:
             conn.execute(
                 "UPDATE photos SET has_thumbnail = ? WHERE id = ?",
                 (1 if has_thumbnail else 0, photo_id)
             )
-    
+
     def set_favorite(self, photo_id: str, is_favorite: bool = True):
         with self._connect() as conn:
             conn.execute(
                 "UPDATE photos SET is_favorite = ? WHERE id = ?",
                 (1 if is_favorite else 0, photo_id)
             )
-    
+
     def get_import_log(self) -> list:
         with self._connect() as conn:
-            return [dict(row) for row in 
+            return [dict(row) for row in
                    conn.execute("SELECT * FROM import_log ORDER BY imported_at DESC").fetchall()]
-    
-    def log_import(self, source_dir: str, status: str = 'running', 
-                  photos_imported: int = 0, error: str = None):
+
+    def log_import(self, source_dir: str, status: str = 'running',
+                   photos_imported: int = 0, error: str = None):
         with self._connect() as conn:
             conn.execute("""
                 INSERT INTO import_log (source_dir, imported_at, photos_imported, status, error)
                 VALUES (?, ?, ?, ?, ?)
             """, (source_dir, datetime.now().isoformat(), photos_imported, status, error))
-    
-    # ==================== Watch List ====================
-    
+
+    # ==================== Watch List ============================================
+
     def get_watch_list(self) -> list:
         """Return all watch directories."""
         with self._connect() as conn:
@@ -292,7 +384,7 @@ class PhotoDatabase:
                 "SELECT * FROM watch_list ORDER BY path"
             ).fetchall()
             return [dict(row) for row in rows]
-    
+
     def add_watch_dir(self, path: str) -> bool:
         """Add a directory to the watch list."""
         normalized = str(Path(path).resolve())
@@ -306,7 +398,7 @@ class PhotoDatabase:
             return True
         except sqlite3.IntegrityError:
             return False  # Already exists
-    
+
     def remove_watch_dir(self, path: str) -> bool:
         """Remove a directory from the watch list."""
         normalized = str(Path(path).resolve())
@@ -315,7 +407,7 @@ class PhotoDatabase:
                 "DELETE FROM watch_list WHERE path = ?", (normalized,)
             ).rowcount
         return result > 0
-    
+
     def set_watch_active(self, path: str, active: bool) -> bool:
         """Enable/disable a watch directory."""
         normalized = str(Path(path).resolve())
@@ -325,34 +417,232 @@ class PhotoDatabase:
                 (1 if active else 0, normalized)
             ).rowcount
         return result > 0
-    
+
     def scan_all_watch_dirs(self, recursive: bool = True) -> list:
         """Scan all watch directories for images."""
         from scanner import DirectoryScanner
         all_photos = []
         watch_dirs = self.get_watch_list()
-        
+
         for entry in watch_dirs:
             if not entry['active']:
                 continue
-            s = DirectoryScanner(entry['path'], ())  # scan everything, extensions filtered later
+            s = DirectoryScanner(entry['path'], ())
             photos = s.scan(recursive=recursive)
             all_photos.extend(photos)
-        
+
         return all_photos
-    
-    # ==================== Settings ====================
-    
+
+    # ==================== Settings =============================================
+
     def get_setting(self, key: str) -> str:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT value FROM server_settings WHERE key = ?", (key,)
             ).fetchone()
             return row['value'] if row else None
-    
+
     def set_setting(self, key: str, value: str):
         with self._connect() as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO server_settings (key, value)
                 VALUES (?, ?)
             """, (key, value))
+
+    # ==================== Smart Albums ===========================================
+
+    def get_smart_collections(self) -> list:
+        """Return all smart albums (source='smart_collection')."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM albums WHERE source = 'smart_collection' ORDER BY name"
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def update_album_rule(self, album_id: str, rule_spec: str) -> bool:
+        """Update the rule spec for a smart album."""
+        with self._connect() as conn:
+            result = conn.execute(
+                "UPDATE albums SET rule_spec = ?, updated_at = ? WHERE id = ? AND source = 'smart_collection'",
+                (rule_spec, datetime.now().isoformat(), album_id)
+            ).rowcount
+            return result > 0
+
+    def update_album_photos_for_smart(self, album_id: str, photo_ids: list) -> int:
+        """Replace all photos in a smart album with new photo_ids."""
+        with self._connect() as conn:
+            # Clear existing
+            conn.execute("DELETE FROM album_photos WHERE album_id = ?", (album_id,))
+            # Insert new
+            for pid in photo_ids:
+                conn.execute(
+                    "INSERT OR IGNORE INTO album_photos (album_id, photo_id) VALUES (?, ?)",
+                    (album_id, pid)
+                )
+            return len(photo_ids)
+
+    def re_evaluate_smart_album(self, album_id: str) -> list:
+        """Get photo IDs that match a smart album's rules."""
+        import json
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM albums WHERE id = ? AND source = 'smart_collection'", (album_id,)
+            ).fetchone()
+        if not row:
+            return []
+        album = dict(row)
+        if not album.get('rule_spec'):
+            return []
+        return self._evaluate_rules(json.loads(album['rule_spec']), album.get('max_photos', 1000))
+
+    def _evaluate_rules(self, rules: dict, max_photos: int = 1000) -> list:
+        """Evaluate rule spec and return matching photo IDs."""
+        query = """
+            SELECT DISTINCT p.id FROM photos p
+            LEFT JOIN tags t ON p.id = t.photo_id
+        """
+        conditions = []
+        params = []
+
+        rule_specs = rules.get('rules', [])
+        for rule in rule_specs:
+            field = rule.get('field')
+            op = rule.get('op', 'contains')
+            value = rule.get('value')
+
+            if not field or value is None:
+                continue
+
+            if field == 'camera':
+                cond = f"EXTRACT_JSON(p.exif, '$.model') LIKE ?"
+                if op == 'equals':
+                    cond = f"EXTRACT_JSON(p.exif, '$.model') = ?"
+                elif op == 'regex':
+                    cond = f"EXTRACT_JSON(p.exif, '$.model') REGEXP ?"
+                conditions.append(cond)
+                params.append(f'%{value}%')
+
+            elif field == 'date_after':
+                conditions.append("p.created_at >= ?")
+                params.append(value)
+            elif field == 'date_before':
+                conditions.append("p.created_at <= ?")
+                params.append(value)
+            elif field == 'date_range':
+                conditions.append("p.created_at >= ?")
+                params.append(value.get('start', ''))
+                conditions.append("p.created_at <= ?")
+                params.append(value.get('end', ''))
+            elif field == 'tag':
+                if op == 'has':
+                    conditions.append("t.tag = ?")
+                    params.append(value)
+                elif op == 'has_any':
+                    tags = value if isinstance(value, list) else [value]
+                    tag_conditions = " OR ".join(["t.tag = ?"] * len(tags))
+                    conditions.append(f"({tag_conditions})")
+                    params.extend(tags)
+            elif field == 'keyword':
+                conditions.append("p.filename LIKE ?")
+                params.append(f'%{value}%')
+            elif field == 'is_favorite':
+                if value:
+                    conditions.append("p.is_favorite = 1")
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        query += " ORDER BY p.created_at DESC LIMIT ?"
+        params.append(max_photos)
+
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [row['id'] for row in rows]
+
+    # ==================== Deduplication ==========================================
+
+    def get_content_hashes(self) -> list:
+        """Get all content hashes."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT ch.photo_id, ch.phash, p.filename, p.filepath "
+                "FROM content_hashes ch JOIN photos p ON ch.photo_id = p.id"
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def store_content_hash(self, photo_id: str, phash: str):
+        """Store or update a content hash for a photo."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO content_hashes (photo_id, phash) VALUES (?, ?)",
+                (photo_id, phash)
+            )
+
+    def find_duplicate_groups(self, tolerance: int) -> list:
+        """Find groups of photos with similar perceptual hashes."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM content_hashes"
+            ).fetchall()
+            hashes = [dict(row) for row in rows]
+
+            # Group by hamming distance
+            groups = []
+            seen = set()
+            for i, h1 in enumerate(hashes):
+                if h1['photo_id'] in seen:
+                    continue
+                group = [h1]
+                seen.add(h1['photo_id'])
+                for j, h2 in enumerate(hashes):
+                    if i == j or h2['photo_id'] in seen:
+                        continue
+                    dist = self._hamming_distance(h1['phash'], h2['phash'])
+                    if dist <= tolerance:
+                        group.append(h2)
+                        seen.add(h2['photo_id'])
+                if len(group) > 1:
+                    groups.append(group)
+            return groups
+
+    def _hamming_distance(self, s1: str, s2: str) -> int:
+        """Calculate Hamming distance between two hex strings."""
+        a, b = int(s1, 16), int(s2, 16)
+        xor = a ^ b
+        return bin(xor).count('1')
+
+    # ==================== Tag History ===========================================
+
+    def add_tag_history(self, photo_id: str, tag: str, action: str, by_user: str = 'system'):
+        """Record a tag change."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO tag_history (photo_id, tag, action, by_user, timestamp) VALUES (?, ?, ?, ?, ?)",
+                (photo_id, tag, action, by_user, datetime.now().isoformat())
+            )
+
+    def get_tag_history(self, photo_id: str) -> list:
+        """Get tag change history for a photo."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM tag_history WHERE photo_id = ? ORDER BY timestamp DESC", (photo_id,)
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_duplicate_tag_suggestions(self) -> list:
+        """Find tags that differ only in case or whitespace."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT LOWER(TRIM(tag)) as normal, tag, COUNT(*) as c "
+                "FROM tags GROUP BY LOWER(TRIM(tag)) HAVING c > 1"
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_duplicate_groups(self) -> list:
+        """Get archived duplicates."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT d.*, p.filename FROM duplicates d
+                   JOIN photos p ON d.archived_id = p.id"""
+            ).fetchall()
+            return [dict(row) for row in rows]

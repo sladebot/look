@@ -45,6 +45,22 @@ class Config:
         ".jpg", ".jpeg", ".png", ".heic", ".heif",
         ".arw", ".cr2", ".nef", ".orf", ".raf", ".pef", ".dng"
     ))
+
+    # Smart album settings
+    smart_albums_enabled: bool = os.environ.get("SMART_ALBUMS_ENABLED", "false").lower() in ("true", "1", "yes")
+    smart_album_max_photos: int = int(os.environ.get("SMART_ALBUM_MAX_PHOTOS", "1000"))
+
+    # Deduplication settings
+    dedup_enabled: bool = os.environ.get("DEDUP_ENABLED", "false").lower() in ("true", "1", "yes")
+    dedup_tolerance: int = int(os.environ.get("DEDUP_TOLERANCE", "20"))  # max hamming distance
+
+    # Tags 2.0 settings
+    tag_history_enabled: bool = os.environ.get("TAG_HISTORY_ENABLED", "true").lower() in ("true", "1", "yes")
+    auto_tag_gps: bool = os.environ.get("AUTO_TAG_GPS", "false").lower() in ("true", "1", "yes")
+    auto_tag_camera: bool = os.environ.get("AUTO_TAG_CAMERA", "false").lower() in ("true", "1", "yes")
+
+    # Filewatcher cooldown (seconds)
+    filewatcher_cooldown: str = os.environ.get("FILEWATCHER_COOLDOWN", "3")
     
     def __post_init__(self):
         """Create directories if they don't exist, populate watch_dirs."""
