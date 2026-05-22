@@ -5,32 +5,43 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 
+EXCLUDED_DIRS = {'thumbnails', 'converted', '.thumbnails', '.converted', '.trash', '.git'}
+
 class DirectoryScanner:
     """Scan a directory for photo files and return metadata."""
-    
+
     def __init__(self, photo_dir: str, image_extensions: tuple):
         self.photo_dir = Path(photo_dir).resolve()
         self.image_extensions = image_extensions
-    
+
     def scan(self, recursive: bool = True) -> List[Dict]:
-        """Scan directory for photo files."""
+        """Scan directory for photo files, skipping cache directories."""
         photos = []
-        
+
         if not self.photo_dir.exists():
             return photos
-        
+
         if recursive:
-            files = self.photo_dir.rglob('*')
+            files = self._walk_excluding_cache(self.photo_dir)
         else:
-            files = self.photo_dir.iterdir()
-        
+            files = (f for f in self.photo_dir.iterdir() if f.is_file())
+
         for filepath in files:
-            if filepath.is_file() and filepath.suffix.lower() in self.image_extensions:
+            if filepath.suffix.lower() in self.image_extensions:
                 photo = self._scan_file(filepath)
                 if photo:
                     photos.append(photo)
-        
+
         return photos
+
+    def _walk_excluding_cache(self, root: Path):
+        """Recursively yield files, skipping cache/system directories."""
+        for entry in root.iterdir():
+            if entry.is_dir():
+                if entry.name not in EXCLUDED_DIRS:
+                    yield from self._walk_excluding_cache(entry)
+            elif entry.is_file():
+                yield entry
     
     def _scan_file(self, filepath: Path) -> Optional[Dict]:
         """Scan a single file and return metadata."""
