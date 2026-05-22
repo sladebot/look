@@ -69,15 +69,12 @@ class DirectoryScanner:
             return datetime.now().isoformat()
     
     def find_sidecar_jpeg(self, arw_path: Path) -> Optional[Path]:
-        """Find a sidecar JPEG for a given .ARW file."""
-        base = arw_path.stem
-        jpg_extensions = ['.jpg', '.jpeg']
-        
-        for ext in jpg_extensions:
-            jpg_path = arw_path.with_suffix(ext)
-            if jpg_path.exists():
-                return jpg_path
-        
+        """Find a sidecar JPEG for a given RAW file (case-insensitive suffix match)."""
+        for candidate in arw_path.parent.iterdir():
+            if (candidate.stem.lower() == arw_path.stem.lower()
+                    and candidate.suffix.lower() in ('.jpg', '.jpeg')
+                    and candidate != arw_path):
+                return candidate
         return None
     
     def find_thumbnails_dir(self) -> Path:

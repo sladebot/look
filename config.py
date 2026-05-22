@@ -23,10 +23,10 @@ class Config:
     db_path: str = os.environ.get("DB_PATH", str(Path.home() / ".local" / "local-photos" / "library.db"))
     
     # Thumbnails directory (relative to photo_dir)
-    thumbnails_dir: str = ".thumbnails"
-    
+    thumbnails_dir: str = os.environ.get("THUMBNAILS_DIR", "thumbnails")
+
     # Converted RAW files (relative to photo_dir)
-    converted_dir: str = ".converted"
+    converted_dir: str = os.environ.get("CONVERTED_DIR", "converted")
     
     # API key (optional, for authentication)
     api_key: Optional[str] = os.environ.get("API_KEY", None)

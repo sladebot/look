@@ -78,7 +78,11 @@ tags_manager = TagsManager(db, config, processor)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """QA warm-up + optional file watcher on startup."""
+    """Mount static files, start optional file watcher on startup."""
+    static_dir = Path(__file__).parent / "static"
+    static_dir.mkdir(exist_ok=True)
+    _app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
     _app.state.file_watcher = None
     try:
         setting = db.get_setting('filewatcher_enabled')
@@ -114,14 +118,6 @@ def _require_api_key(request: Request):
 _API_AUTH = Depends(_require_api_key)
 
 
-# ─── QA warm-up ─────────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def startup():
-    static_dir = Path(__file__).parent / "static"
-    static_dir.mkdir(exist_ok=True)
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
-
 # ==================== API Routes ===============================================
 
 
@@ -144,10 +140,13 @@ async def get_watch_list():
 
 @app.post("/api/watch-list")
 async def add_watch_dir(path: str = Query(..., description="Path to add as watch directory"), _auth=_API_AUTH):
-    result = db.add_watch_dir(path)
+    resolved = Path(path).resolve()
+    if not resolved.is_dir():
+        raise HTTPException(status_code=400, detail=f"Path does not exist or is not a directory: {resolved}")
+    result = db.add_watch_dir(str(resolved))
     if result:
-        return {"status": "added", "path": str(Path(path).resolve())}
-    return JSONResponse(status_code=409, content={"status": "already_exists", "path": str(Path(path).resolve())})
+        return {"status": "added", "path": str(resolved)}
+    return JSONResponse(status_code=409, content={"status": "already_exists", "path": str(resolved)})
 
 
 @app.delete("/api/watch-list/{path:path}")
@@ -169,6 +168,47 @@ async def set_watch_active(path: str, active: bool = Query(..., description="tru
 
 
 # ─── import ──────────────────────────────────────────────────────────────────
+def _prepare_photo_for_import(photo_meta: dict, import_scanner: DirectoryScanner) -> dict:
+    """Process metadata and eagerly prepare JPEG previews for imported photos."""
+    original_path = photo_meta['filepath']
+    if not os.access(original_path, os.R_OK):
+        raise RuntimeError("File is not readable by the server process; fix file permissions or run the server as the file owner")
+
+    proc_result = processor.process(original_path)
+    if not proc_result:
+        raise RuntimeError("Unsupported or unreadable image file")
+
+    preview_path = original_path
+
+    if Path(original_path).suffix.lower() in decoder.raw_extensions:
+        sidecar_jpeg = import_scanner.find_sidecar_jpeg(Path(original_path))
+        if sidecar_jpeg:
+            preview_path = str(sidecar_jpeg)
+            photo_meta['is_source_jpeg'] = 1
+            photo_meta['filepath'] = preview_path
+            proc_result = processor.process(preview_path) or proc_result
+        else:
+            # No sidecar — convert via rawpy, cache as JPEG
+            converted_path = decoder.decode(original_path)
+            if not converted_path:
+                raise RuntimeError("Failed to convert RAW file to JPEG preview — check file permissions and rawpy installation")
+            preview_path = converted_path
+            converted_result = processor.process(converted_path)
+            if converted_result:
+                proc_result = {**proc_result, **converted_result, 'mime_type': proc_result.get('mime_type', 'image/x-raw')}
+
+    photo_meta['width'] = proc_result['width']
+    photo_meta['height'] = proc_result['height']
+    photo_meta['mime_type'] = proc_result['mime_type']
+    photo_meta['exif'] = proc_result.get('exif', {})
+    photo_meta['created_at'] = _best_created_at(photo_meta, photo_meta['exif'])
+
+    thumb_path = processor.get_thumbnail(preview_path, config.max_thumbnail_width)
+    photo_meta['has_thumbnail'] = bool(thumb_path and os.path.exists(thumb_path))
+
+    return photo_meta
+
+
 @app.post("/api/import")
 async def import_photos(path: str = Query(None, description="Specific directory to import (default: all active watch dirs)"), _auth=_API_AUTH):
     import_path = None
@@ -176,12 +216,10 @@ async def import_photos(path: str = Query(None, description="Specific directory 
 
     if path:
         import_path = Path(path).resolve()
-        if not import_path.exists():
-            db.add_watch_dir(path)
-            import_path = str(import_path)
-            scanner_local = DirectoryScanner(import_path, config.image_extensions)
-        else:
-            scanner_local = DirectoryScanner(str(import_path), config.image_extensions)
+        if not import_path.is_dir():
+            raise HTTPException(status_code=400, detail=f"Path does not exist or is not a directory: {import_path}")
+        db.add_watch_dir(str(import_path))
+        scanner_local = DirectoryScanner(str(import_path), config.image_extensions)
     else:
         active_watch_dirs = [entry for entry in db.get_watch_list() if entry['active']]
         if not active_watch_dirs:
@@ -203,67 +241,48 @@ async def import_photos(path: str = Query(None, description="Specific directory 
 
     imported = 0
     errors = 0
+    error_details = []
 
     if path:
         imported_photos = scanner_local.scan(recursive=True)
+        total_scanned = len(imported_photos)
         for photo_meta in imported_photos:
             try:
-                proc_result = processor.process(photo_meta['filepath'])
-                if proc_result:
-                    photo_meta['width'] = proc_result['width']
-                    photo_meta['height'] = proc_result['height']
-                    photo_meta['mime_type'] = proc_result['mime_type']
-
-                    if sidecar_jpeg := scanner_local.find_sidecar_jpeg(Path(photo_meta['filepath'])):
-                        photo_meta['is_source_jpeg'] = 1
-                        photo_meta['filepath'] = str(sidecar_jpeg)
-
-                    db.store_photo(photo_meta)
-                    imported += 1
-
-                    thumb_path = proc_result.get('thumb_path')
-                    if thumb_path and os.path.exists(thumb_path):
-                        db.mark_thumbnail(photo_meta['id'], True)
-
+                photo_meta = _prepare_photo_for_import(photo_meta, scanner_local)
+                db.store_photo(photo_meta)
+                imported += 1
             except Exception as e:
-                print(f"Error importing {photo_meta['filepath']}: {e}")
+                detail = f"{photo_meta['filepath']}: {e}"
+                print(f"Error importing {detail}")
+                error_details.append(detail)
                 errors += 1
 
         db.log_import(str(import_path), 'completed', imported, f"{errors} errors" if errors else None)
 
     else:
+        total_scanned = len(photos)
         for photo_meta in photos:
             try:
-                proc_result = processor.process(photo_meta['filepath'])
-                if proc_result:
-                    photo_meta['width'] = proc_result['width']
-                    photo_meta['height'] = proc_result['height']
-                    photo_meta['mime_type'] = proc_result['mime_type']
-
-                    # EXIF date resolution — DateTimeOriginal over file mtime
-                    photo_meta['created_at'] = _best_created_at(photo_meta, proc_result.get('exif', {}))
-
-                    single_scanner = DirectoryScanner(Path(photo_meta['filepath']).parent, config.image_extensions)
-                    if sidecar_jpeg := single_scanner.find_sidecar_jpeg(Path(photo_meta['filepath'])):
-                        photo_meta['is_source_jpeg'] = 1
-                        photo_meta['filepath'] = str(sidecar_jpeg)
-
-                    db.store_photo(photo_meta)
-                    imported += 1
-
-                    thumb_path = proc_result.get('thumb_path')
-                    if thumb_path and os.path.exists(thumb_path):
-                        db.mark_thumbnail(photo_meta['id'], True)
-
+                single_scanner = DirectoryScanner(Path(photo_meta['filepath']).parent, config.image_extensions)
+                photo_meta = _prepare_photo_for_import(photo_meta, single_scanner)
+                db.store_photo(photo_meta)
+                imported += 1
             except Exception as e:
-                print(f"Error importing {photo_meta['filepath']}: {e}")
+                detail = f"{photo_meta['filepath']}: {e}"
+                print(f"Error importing {detail}")
+                error_details.append(detail)
                 errors += 1
+
+    message = f"Imported {imported} photos from {1 if path else 'multiple'} directory/directories"
+    if errors:
+        message += f" ({errors} failed; see error_details)"
 
     return {
         "imported": imported,
         "errors": errors,
-        "total_scanned": len(photos) if path is None else scanner_local.scan_count,
-        "message": f"Imported {imported} photos from {1 if path else 'multiple'} directory/directories"
+        "total_scanned": total_scanned,
+        "message": message,
+        "error_details": error_details[:10]
     }
 
 
@@ -304,13 +323,16 @@ async def get_thumbnail(photo_id: str, size: int = Query(256, ge=128, le=1024)):
         raise HTTPException(status_code=404, detail="Photo not found")
 
     filepath = photo['filepath']
-    sidecar_jpeg = scanner.find_sidecar_jpeg(Path(filepath))
-    if sidecar_jpeg:
-        filepath = str(sidecar_jpeg)
 
+    # Resolve sidecar JPEG or convert via rawpy for RAW files
     if Path(filepath).suffix.lower() in decoder.raw_extensions:
-        converted = decoder.decode(filepath)
-        if converted:
+        sidecar_jpeg = scanner.find_sidecar_jpeg(Path(filepath))
+        if sidecar_jpeg:
+            filepath = str(sidecar_jpeg)
+        else:
+            converted = decoder.decode(filepath)
+            if not converted:
+                raise HTTPException(status_code=500, detail="RAW conversion failed — check file permissions")
             filepath = converted
 
     thumb_path = processor.get_thumbnail(filepath, size)
@@ -422,21 +444,17 @@ async def add_photo_tag(photo_id: str, tag: str = Query(..., min_length=1, max_l
 @app.delete("/api/photos/{photo_id}/tags/{tag}")
 async def remove_photo_tag(photo_id: str, tag: str, _auth=_API_AUTH):
     """Remove a single tag from a photo."""
-    from scanner import DirectoryScanner  # noqa — just import for consistency
-    # Direct DB call (PhotoDatabase needs a delete_tag method added separately)
-    with db._connect() as conn:
-        conn.execute("DELETE FROM tags WHERE photo_id = ? AND tag = ?", (photo_id, tag))
+    photo = db.get_photo(photo_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    tags_manager.remove_tag_with_history(photo_id, tag)
     return {"status": "ok", "photo_id": photo_id, "tag": tag}
 
 
 @app.get("/api/tags")
 async def all_tags():
     """Return all tags with photo counts."""
-    with db._connect() as conn:
-        rows = conn.execute(
-            "SELECT tag, COUNT(photo_id) as count FROM tags GROUP BY tag ORDER BY tag"
-        ).fetchall()
-    return {"tags": [{"tag": r['tag'], "count": r['count']} for r in rows]}
+    return {"tags": tags_manager.get_all_tags()}
 
 
 # ─── search ──────────────────────────────────────────────────────────────────

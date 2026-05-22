@@ -1,4 +1,5 @@
 """Image processor — EXIF extraction and thumbnail generation."""
+import hashlib
 import os
 from pathlib import Path
 from PIL import Image
@@ -127,16 +128,20 @@ class ImageProcessor:
         gps_ifd = exif.get('GPS', {})
         if gps_ifd:
             result['gps'] = {}
-            if 0 in gps_ifd:  # Latitude ref
-                result['gps']['lat_ref'] = gps_ifd[0].decode('utf-8', errors='ignore')
-            if 2 in gps_ifd:  # Latitude
-                lat = gps_ifd[2]
-                if lat:
-                    result['gps']['lat'] = self._convert_exif_float(lat)
-            if 4 in gps_ifd:  # Longitude
-                lon = gps_ifd[4]
-                if lon:
-                    result['gps']['lon'] = self._convert_exif_float(lon)
+            lat_ref = gps_ifd.get(1, b'N')
+            if isinstance(lat_ref, bytes):
+                lat_ref = lat_ref.decode('utf-8', errors='ignore').strip()
+            lon_ref = gps_ifd.get(3, b'E')
+            if isinstance(lon_ref, bytes):
+                lon_ref = lon_ref.decode('utf-8', errors='ignore').strip()
+            if 2 in gps_ifd:
+                lat = self._dms_to_decimal(gps_ifd[2])
+                if lat is not None:
+                    result['gps']['lat'] = lat if lat_ref != 'S' else -lat
+            if 4 in gps_ifd:
+                lon = self._dms_to_decimal(gps_ifd[4])
+                if lon is not None:
+                    result['gps']['lon'] = lon if lon_ref != 'W' else -lon
 
         # DateTimeOriginal — highest-priority date tag (36867 = EXIF IFD)
         exif_ifd = exif.get('Exif', {})
@@ -147,25 +152,25 @@ class ImageProcessor:
 
         return result
 
-    def _convert_exif_float(self, exif_value) -> float:
-        """Convert EXIF rational to float."""
+    def _dms_to_decimal(self, dms) -> float:
+        """Convert EXIF GPS DMS 3-tuple of rationals to decimal degrees."""
         try:
-            # EXIF stores as (numerator, denominator) tuples
-            if isinstance(exif_value, tuple):
-                return exif_value[0] / exif_value[1]
-            return float(exif_value)
-        except:
-            return 0.0
+            d = dms[0][0] / dms[0][1]
+            m = dms[1][0] / dms[1][1]
+            s = dms[2][0] / dms[2][1]
+            return d + m / 60 + s / 3600
+        except Exception:
+            return None
 
     def generate_thumbnail(self, source_path: str, width: int = 512) -> str:
         """Generate a thumbnail from a source image."""
         try:
-            thumb_dir = self.config.thumbnails_dir
             thumb_path = self._get_thumbnail_path(source_path, width)
 
             if os.path.exists(thumb_path):
                 return thumb_path  # Already exists
 
+            Path(thumb_path).parent.mkdir(parents=True, exist_ok=True)
             with Image.open(source_path) as img:
                 img.thumbnail((width, width), Image.LANCZOS)
                 img.save(thumb_path, 'JPEG', quality=self.config.thumbnail_quality)
@@ -175,10 +180,9 @@ class ImageProcessor:
             print(f"Error generating thumbnail: {e}")
             return None
 
-    def _get_thumbnail_path(self, source_path: str, original_width: int = None) -> str:
-        """Get the path for a thumbnail."""
-        import hashlib
-        source_hash = hashlib.sha256(source_path.encode()).hexdigest()[:16]
+    def _get_thumbnail_path(self, source_path: str, size: int = 256) -> str:
+        """Get the path for a thumbnail at a specific size."""
+        source_hash = hashlib.sha256(f"{source_path}:{size}".encode()).hexdigest()[:16]
         thumb_dir = Path(self.config.photo_dir) / self.config.thumbnails_dir
         return str(thumb_dir / f"{source_hash}.jpg")
 

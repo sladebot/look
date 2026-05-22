@@ -1,4 +1,5 @@
 """Deduplication Engine — perceptual hashing for duplicate photo detection."""
+import math
 import os
 import shutil
 from pathlib import Path
@@ -57,21 +58,24 @@ class DedupEngine:
             return None
 
     def _dct_2d(self, pixels: list) -> list:
-        """Compute 2D DCT coefficients for a 16x16 image."""
+        """Compute 2D DCT-II coefficients for a 16x16 image (8x8 output)."""
         grid = [pixels[i * 16:(i + 1) * 16] for i in range(16)]
+        N = 16
 
         coeffs = [[0.0] * 8 for _ in range(8)]
         for u in range(8):
             for v in range(8):
                 total = 0.0
-                for x in range(16):
-                    for y in range(16):
-                        total += grid[x][y] * (
-                            (0.5 if u == 0 else 1.0) ** 0.5 *
-                            (0.5 if v == 0 else 1.0) ** 0.5 *
-                            ((2 * x + 1) * u / 32.0 + (2 * y + 1) * v / 32.0)
+                cu = (1 / math.sqrt(2)) if u == 0 else 1.0
+                cv = (1 / math.sqrt(2)) if v == 0 else 1.0
+                for x in range(N):
+                    for y in range(N):
+                        total += (
+                            grid[x][y]
+                            * math.cos((2 * x + 1) * u * math.pi / (2 * N))
+                            * math.cos((2 * y + 1) * v * math.pi / (2 * N))
                         )
-                coeffs[u][v] = total
+                coeffs[u][v] = (2 / N) * cu * cv * total
         return [c for row in coeffs for c in row]
 
     def scan(self) -> List[Dict]:

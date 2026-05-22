@@ -1,4 +1,5 @@
 """Local Photo Library Server — Database"""
+import json
 import sqlite3
 from pathlib import Path
 from datetime import datetime
@@ -36,7 +37,8 @@ class PhotoDatabase:
                     has_thumbnail INTEGER DEFAULT 0,
                     is_favorite INTEGER DEFAULT 0,
                     color_tag   TEXT DEFAULT 'none',
-                    is_source_jpeg INTEGER DEFAULT 0  -- 1 if this is a converted/sidecar JPEG
+                    is_source_jpeg INTEGER DEFAULT 0,  -- 1 if this is a converted/sidecar JPEG
+                    exif        TEXT DEFAULT NULL      -- JSON blob of EXIF fields
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_photos_created ON photos(created_at DESC);
@@ -134,13 +136,20 @@ class PhotoDatabase:
                 CREATE INDEX IF NOT EXISTS idx_th_photo ON tag_history(photo_id);
             """)
 
-        # Migration: add rule_spec column to albums (safe no-op if already exists)
-        try:
-            with self._connect() as conn:
-                conn.execute("ALTER TABLE albums ADD COLUMN rule_spec TEXT DEFAULT NULL")
-                print("[db] Migration: added rule_spec column to albums")
-        except Exception:
-            pass  # column already exists (Phase 2 database)
+        # Migrations: safe no-ops if columns already exist
+        migrations = [
+            ("ALTER TABLE albums ADD COLUMN rule_spec TEXT DEFAULT NULL",
+             "[db] Migration: added rule_spec column to albums"),
+            ("ALTER TABLE photos ADD COLUMN exif TEXT DEFAULT NULL",
+             "[db] Migration: added exif column to photos"),
+        ]
+        for sql, msg in migrations:
+            try:
+                with self._connect() as conn:
+                    conn.execute(sql)
+                    print(msg)
+            except Exception:
+                pass
 
     def get_photo(self, photo_id: str) -> dict:
         with self._connect() as conn:
@@ -170,8 +179,8 @@ class PhotoDatabase:
             params.extend([term, term, term])
         if camera:
             cond_cam = (
-                "EXTRACT_JSON(p.exif, '$.make')  LIKE ?"
-                " OR EXTRACT_JSON(p.exif, '$.model') LIKE ?"
+                "json_extract(p.exif, '$.make') LIKE ?"
+                " OR json_extract(p.exif, '$.model') LIKE ?"
             )
             conditions.append(f"({cond_cam})")
             params.extend([f"%{camera}%", f"%{camera}%"])
@@ -193,7 +202,7 @@ class PhotoDatabase:
                     limit: int = 50, offset: int = 0) -> list:
         with self._connect() as conn:
             query = """
-                SELECT p.* FROM photos p
+                SELECT DISTINCT p.* FROM photos p
                 LEFT JOIN album_photos ap ON p.id = ap.photo_id
                 LEFT JOIN tags t ON p.id = t.photo_id
             """
@@ -320,12 +329,15 @@ class PhotoDatabase:
 
     def store_photo(self, photo: dict):
         """Store or update a photo in the database."""
+        exif_val = photo.get('exif')
+        exif_json = json.dumps(exif_val) if exif_val else None
+
         with self._connect() as conn:
             conn.execute("""
                 INSERT INTO photos (id, filename, filepath, file_size, width, height,
                                    mime_type, created_at, indexed_at, has_thumbnail,
-                                   is_favorite, color_tag, is_source_jpeg)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   is_favorite, color_tag, is_source_jpeg, exif)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(filepath) DO UPDATE SET
                     file_size = excluded.file_size,
                     width = excluded.width,
@@ -336,7 +348,8 @@ class PhotoDatabase:
                     has_thumbnail = excluded.has_thumbnail,
                     is_favorite = excluded.is_favorite,
                     color_tag = excluded.color_tag,
-                    is_source_jpeg = excluded.is_source_jpeg
+                    is_source_jpeg = excluded.is_source_jpeg,
+                    exif = excluded.exif
             """, (
                 photo['id'], photo['filename'], photo['filepath'],
                 photo.get('file_size'), photo.get('width'), photo.get('height'),
@@ -345,7 +358,8 @@ class PhotoDatabase:
                 1 if photo.get('has_thumbnail') else 0,
                 1 if photo.get('is_favorite') else 0,
                 photo.get('color_tag', 'none'),
-                1 if photo.get('is_source_jpeg') else 0
+                1 if photo.get('is_source_jpeg') else 0,
+                exif_json,
             ))
 
     def mark_thumbnail(self, photo_id: str, has_thumbnail: bool = True):
@@ -521,11 +535,11 @@ class PhotoDatabase:
                 continue
 
             if field == 'camera':
-                cond = f"EXTRACT_JSON(p.exif, '$.model') LIKE ?"
+                cond = f"json_extract(p.exif, '$.model') LIKE ?"
                 if op == 'equals':
-                    cond = f"EXTRACT_JSON(p.exif, '$.model') = ?"
+                    cond = f"json_extract(p.exif, '$.model') = ?"
                 elif op == 'regex':
-                    cond = f"EXTRACT_JSON(p.exif, '$.model') REGEXP ?"
+                    cond = f"json_extract(p.exif, '$.model') REGEXP ?"
                 conditions.append(cond)
                 params.append(f'%{value}%')
 

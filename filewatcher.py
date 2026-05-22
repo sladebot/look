@@ -7,6 +7,7 @@ from typing import Optional, Callable
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent
+from scanner import DirectoryScanner
 
 
 class PhotoImportHandler(FileSystemEventHandler):
@@ -24,10 +25,7 @@ class PhotoImportHandler(FileSystemEventHandler):
 
         # Supported extensions
         self._image_extensions = config.image_extensions
-        self._cooldown = config.get_setting('filewatcher_cooldown')
-        if self._cooldown is None:
-            self._cooldown = '3'
-        self._cooldown_s = int(self._cooldown)
+        self._cooldown_s = int(getattr(config, 'filewatcher_cooldown', '3'))
 
     def on_created(self, event):
         self._maybe_import(event.dest_path if isinstance(event, FileModifiedEvent) else event.src_path)
@@ -120,9 +118,10 @@ class FileWatcherManager:
                     continue
                 directory = str(entry['path'])
                 handler = PhotoImportHandler(
-                    self.config, self.processor, self.scanner, self.db, self.callback
+                    self.config, self.processor,
+                    DirectoryScanner(directory, self.config.image_extensions),
+                    self.db, self.callback
                 )
-                handler.scanner = DirectoryScanner(directory, self.config.image_extensions)
                 self._observer.schedule(handler, directory, recursive=True)
                 self._handlers[directory] = handler
             self._observer.start()

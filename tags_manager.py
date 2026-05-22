@@ -79,35 +79,27 @@ class TagsManager:
         if source_tag == target_tag:
             return {'error': 'Source and target are the same'}
 
-        # Find all photos that have the source tag
         with self.db._connect() as conn:
             rows = conn.execute(
                 "SELECT photo_id FROM tags WHERE tag = ?", (source_tag,)
             ).fetchall()
+            photo_ids = [row['photo_id'] for row in rows]
 
-        photo_ids = [row['photo_id'] for row in rows]
-
-        # Remove source tag, add target tag for each
-        count = 0
-        for pid in photo_ids:
-            try:
-                # Remove source
+            count = 0
+            for pid in photo_ids:
                 conn.execute(
                     "DELETE FROM tags WHERE photo_id = ? AND tag = ?", (pid, source_tag)
                 )
-                # Add target
                 conn.execute(
                     "INSERT OR IGNORE INTO tags (photo_id, tag) VALUES (?, ?)", (pid, target_tag)
                 )
                 count += 1
 
-                # Record history
-                if self.config.tag_history_enabled:
-                    self.db.add_tag_history(pid, source_tag, 'removed', 'merge')
-                    self.db.add_tag_history(pid, target_tag, 'added', 'merge')
-
-            except Exception as e:
-                print(f"[tags] ERROR merging for {pid}: {e}")
+        # Record history outside the transaction (non-critical)
+        if self.config.tag_history_enabled:
+            for pid in photo_ids:
+                self.db.add_tag_history(pid, source_tag, 'removed', 'merge')
+                self.db.add_tag_history(pid, target_tag, 'added', 'merge')
 
         return {
             'merged': source_tag,

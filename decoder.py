@@ -1,5 +1,6 @@
 """RAW decoder — converts ARW/CR2/NEF to JPEG using rawpy."""
 import os
+import hashlib
 from pathlib import Path
 from typing import Dict, Optional
 import rawpy
@@ -51,9 +52,9 @@ class RawDecoder:
     
     def _get_converted_path(self, filepath: str) -> str:
         """Get the path for the converted JPEG file."""
-        base = Path(filepath).stem
+        file_hash = hashlib.sha256(filepath.encode()).hexdigest()[:16]
         converted_dir = Path(self.config.photo_dir) / self.config.converted_dir
-        return str(converted_dir / f"{base}.jpg")
+        return str(converted_dir / f"{file_hash}.jpg")
     
     def get_converted_file(self, filepath: str) -> Optional[str]:
         """Get the converted file path (creates if needed)."""
