@@ -434,7 +434,7 @@ class PhotoDatabase:
 
     def scan_all_watch_dirs(self, recursive: bool = True, image_extensions: tuple = None) -> list:
         """Scan all active watch directories for supported image files."""
-        from scanner import DirectoryScanner
+        from .scanner import DirectoryScanner
 
         if image_extensions is None:
             image_extensions = (

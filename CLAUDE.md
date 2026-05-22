@@ -4,8 +4,9 @@
 
 A lightweight, self-hosted photo library server designed to run on a private network (Tailscale). Provides fast browsing, smart organization, deduplication, and tag management for local photo collections.
 
-**Primary entry point:** `server.py` (FastAPI app, 711 LOC)  
-**Run:** `python server.py`  
+**Primary entry point:** `main.py` (thin launcher) → `api/server.py` (FastAPI app)  
+**Run:** `python main.py`  
+**Alt run:** `uvicorn api.server:app`  
 **UI:** `http://localhost:8080`
 
 ---
@@ -25,17 +26,26 @@ A lightweight, self-hosted photo library server designed to run on a private net
 ## File Map
 
 ```
-server.py              FastAPI app — all route handlers, lifespan, auth middleware
-database.py            SQLite ORM-like layer — schema, migrations, all DB queries
-config.py              Configuration from env vars and DB settings table
-processor.py           Image processing pipeline — EXIF extraction, thumbnail path
-scanner.py             Filesystem scanner — recursive walk, sidecar JPEG detection
-decoder.py             RAW file conversion (ARW/CR2/NEF → JPEG via rawpy)
-filewatcher.py         watchdog-based daemon — auto-import on file creation/change
-smart_collection.py    Rule-based dynamic album evaluation
-dedup_engine.py        Perceptual hashing (pHash/DCT) and duplicate detection
-tags_manager.py        Tag CRUD, auto-tagging from EXIF, tag merging
-templates/index.html   Single-page gallery UI
+main.py                Top-level launcher — `python main.py` starts the server
+api/                   Backend Python package
+  __init__.py
+  server.py            FastAPI app — all route handlers, lifespan, auth middleware
+  config.py            Configuration from env vars and DB settings table
+  database.py          SQLite ORM-like layer — schema, migrations, all DB queries
+  processor.py         Image processing pipeline — EXIF extraction, thumbnail path
+  scanner.py           Filesystem scanner — recursive walk, sidecar JPEG detection
+  decoder.py           RAW file conversion (ARW/CR2/NEF → JPEG via rawpy)
+  filewatcher.py       watchdog-based daemon — auto-import on file creation/change
+  smart_collection.py  Rule-based dynamic album evaluation
+  dedup_engine.py      Perceptual hashing (pHash/DCT) and duplicate detection
+  tags_manager.py      Tag CRUD, auto-tagging from EXIF, tag merging
+web/                   Frontend assets
+  templates/
+    index.html         Single-page gallery UI
+  static/              CSS, JSX, JS, SVG assets
+tests/                 Test suite (root-level)
+scripts/               Utility scripts (root-level)
+requirements.txt       Python dependencies
 ```
 
 ---

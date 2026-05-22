@@ -7,7 +7,7 @@ from typing import Optional, Callable
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent
-from scanner import DirectoryScanner
+from .scanner import DirectoryScanner
 
 
 class PhotoImportHandler(FileSystemEventHandler):

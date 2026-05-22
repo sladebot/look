@@ -1,6 +1,5 @@
 """Local Photo Library Server — Main FastAPI application with web frontend."""
 import os
-import sys
 import hashlib
 import time
 from pathlib import Path
@@ -10,18 +9,15 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
-
-from config import Config
-from database import PhotoDatabase
-from scanner import DirectoryScanner
-from processor import ImageProcessor
-from decoder import RawDecoder
-from filewatcher import FileWatcherManager
-from smart_collection import SmartCollectionManager
-from dedup_engine import DedupEngine
-from tags_manager import TagsManager
+from .config import Config
+from .database import PhotoDatabase
+from .scanner import DirectoryScanner
+from .processor import ImageProcessor
+from .decoder import RawDecoder
+from .filewatcher import FileWatcherManager
+from .smart_collection import SmartCollectionManager
+from .dedup_engine import DedupEngine
+from .tags_manager import TagsManager
 
 # ─── optional EXIF date helpers ──────────────────────────────────────────────
 _EXIF_DT_TAG = 'datetime_original'
@@ -79,7 +75,7 @@ tags_manager = TagsManager(db, config, processor)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Mount static files, start optional file watcher on startup."""
-    static_dir = Path(__file__).parent / "static"
+    static_dir = Path(__file__).parent.parent / "web" / "static"
     static_dir.mkdir(exist_ok=True)
     _app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
@@ -699,10 +695,10 @@ async def update_dedup_setting(value: bool = Query(...), _auth=_API_AUTH):
 
 # ==================== Web Frontend =============================================
 
-templates_dir = Path(__file__).parent / "templates"
+templates_dir = Path(__file__).parent.parent / "web" / "templates"
 templates_dir.mkdir(exist_ok=True)
 
-static_dir = Path(__file__).parent / "static"
+static_dir = Path(__file__).parent.parent / "web" / "static"
 static_dir.mkdir(exist_ok=True)
 
 templates = Jinja2Templates(directory=str(templates_dir))
