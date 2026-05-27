@@ -95,11 +95,20 @@ class TagsManager:
                 )
                 count += 1
 
-        # Record history outside the transaction (non-critical)
-        if self.config.tag_history_enabled:
-            for pid in photo_ids:
-                self.db.add_tag_history(pid, source_tag, 'removed', 'merge')
-                self.db.add_tag_history(pid, target_tag, 'added', 'merge')
+            # Record history within the same transaction
+            if self.config.tag_history_enabled:
+                now = datetime.now().isoformat()
+                for pid in photo_ids:
+                    conn.execute(
+                        "INSERT INTO tag_history (photo_id, tag, action, by_user, timestamp) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (pid, source_tag, 'removed', 'merge', now),
+                    )
+                    conn.execute(
+                        "INSERT INTO tag_history (photo_id, tag, action, by_user, timestamp) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (pid, target_tag, 'added', 'merge', now),
+                    )
 
         return {
             'merged': source_tag,
