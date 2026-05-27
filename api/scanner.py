@@ -32,6 +32,7 @@ class DirectoryScanner:
                 if photo:
                     photos.append(photo)
 
+        self.scan_count = len(photos)
         return photos
 
     def _walk_excluding_cache(self, root: Path):
