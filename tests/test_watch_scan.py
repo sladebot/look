@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from database import PhotoDatabase
+from api.database import PhotoDatabase
 
 
 class WatchDirectoryScanTests(unittest.TestCase):
