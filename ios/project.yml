@@ -1,0 +1,26 @@
+name: Look
+targets:
+  Look:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - Look
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.sladebot.look
+      MARKETING_VERSION: "1.0.0"
+      CURRENT_PROJECT_VERSION: "1"
+      INFOPLIST_KEY_CFBundleDisplayName: "Look"
+      INFOPLIST_KEY_UIRequiredDeviceCapabilities: "arm64"
+    info:
+      path: Look/Info.plist
+      properties:
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSupportsIndirectInputEvents: true
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
