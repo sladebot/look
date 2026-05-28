@@ -562,6 +562,15 @@ async def eval_smart_collection(album_id: str):
     return {"status": "ok", "photos_matched": count}
 
 
+@app.delete("/api/smart-collections/{album_id}")
+async def delete_smart_collection(album_id: str, _auth=_API_AUTH):
+    """Delete a smart album (the album and its rules, not the photos)."""
+    success = db.delete_album(album_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Smart album not found")
+    return {"status": "ok", "album_id": album_id}
+
+
 # ─── deduplication ────────────────────────────────────────────────────────────
 @app.get("/api/dedup/scan")
 async def scan_duplicates():
