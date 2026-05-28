@@ -1,0 +1,140 @@
+name: Deploy to TestFlight
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/testflight.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deploy environment'
+        type: choice
+        options: [testflight, appstore]
+        default: testflight
+
+env:
+  SCHEME: Look
+  ARCHIVE_DIR: ios/build/Archive
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: macos-15
+    environment:
+      name: ${{ github.event.inputs.environment || 'testflight' }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: |
+          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip \
+            -o /tmp/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: /tmp/xcodegen/xcodegen/bin/xcodegen generate
+
+      - name: Setup code signing
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Create temp keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Decode and import signing certificate
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 \
+            -k "$KEYCHAIN_PATH" \
+            -P "$P12_PASSWORD" \
+            -A -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Copy provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o \
+            ~/Library/MobileDevice/Provisioning\ Profiles/build.mobileprovision
+
+          # Set as default keychain
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/["]//g')
+          security find-identity -v -p codesigning
+
+      - name: Bump build number
+        working-directory: ios
+        run: |
+          BUILD_NUMBER=$(( $(sed -n 's/.*CURRENT_PROJECT_VERSION: "\([0-9]*\)".*/\1/p' project.yml) + 1 ))
+          sed -i '' "s/CURRENT_PROJECT_VERSION: \".*\"/CURRENT_PROJECT_VERSION: \"$BUILD_NUMBER\"/" project.yml
+          /tmp/xcodegen/xcodegen/bin/xcodegen generate
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Archive
+        working-directory: ios
+        run: |
+          xcodebuild archive \
+            -scheme "${SCHEME}" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "${ARCHIVE_DIR}/${SCHEME}.xcarchive" \
+            -derivedDataPath build/DerivedData \
+            2>&1 | tee build/archive.log
+
+      - name: Export IPA
+        working-directory: ios
+        run: |
+          mkdir -p build/IPA
+          xcodebuild -exportArchive \
+            -archivePath "${ARCHIVE_DIR}/${SCHEME}.xcarchive" \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/IPA \
+            -allowProvisioningUpdates \
+            2>&1 | tee build/export.log
+
+          IPA_PATH=$(find build/IPA -name "*.ipa" | head -1)
+          echo "IPA_PATH=${IPA_PATH}" >> "$GITHUB_ENV"
+          echo "IPA_NAME=$(basename "${IPA_PATH}")" >> "$GITHUB_ENV"
+
+      - name: Upload to TestFlight
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: |
+          # Write the API key to disk
+          mkdir -p ~/private_keys
+          echo -n "$APP_STORE_CONNECT_API_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8
+
+          xcrun altool --upload-app \
+            -f "${IPA_PATH}" \
+            -t ios \
+            --apiKey "${APP_STORE_CONNECT_API_KEY_ID}" \
+            --apiIssuer "${APP_STORE_CONNECT_API_ISSUER_ID}" \
+            --verbose
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Look-IPA-${{ env.BUILD_NUMBER }}
+          path: ios/build/IPA/*.ipa
+          retention-days: 90
+
+      - name: Commit build number bump
+        if: success()
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add ios/project.yml
+          git diff --staged --quiet || git commit -m "chore: bump build number to $BUILD_NUMBER [skip ci]"
+          git push
