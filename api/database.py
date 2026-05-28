@@ -18,6 +18,19 @@ class PhotoDatabase:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
+
+        # Register json_extract fallback for SQLite < 3.38 compatibility
+        def _json_extract(data, path):
+            if not data:
+                return None
+            try:
+                obj = json.loads(data) if isinstance(data, str) else data
+                key = path.lstrip('$.')
+                return obj.get(key, None) if isinstance(obj, dict) else None
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                return None
+
+        conn.create_function("json_extract", 2, _json_extract)
         return conn
 
     def init_db(self):
