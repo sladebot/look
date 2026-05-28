@@ -535,13 +535,19 @@ class PhotoDatabase:
                 continue
 
             if field == 'camera':
-                cond = f"json_extract(p.exif, '$.model') LIKE ?"
                 if op == 'equals':
-                    cond = f"json_extract(p.exif, '$.model') = ?"
-                elif op == 'regex':
-                    cond = f"json_extract(p.exif, '$.model') REGEXP ?"
+                    cond = (
+                        f"json_extract(p.exif, '$.make') = ?"
+                        f" OR json_extract(p.exif, '$.model') = ?"
+                    )
+                    params.extend([value, value])
+                else:
+                    cond = (
+                        f"json_extract(p.exif, '$.make') LIKE ?"
+                        f" OR json_extract(p.exif, '$.model') LIKE ?"
+                    )
+                    params.extend([f'%{value}%', f'%{value}%'])
                 conditions.append(cond)
-                params.append(f'%{value}%')
 
             elif field == 'date_after':
                 conditions.append("p.created_at >= ?")
