@@ -52,11 +52,26 @@ struct PhotosGrid: View {
                         }
                     }
                     .refreshable {
-                        await store.loadPhotos(reset: true)
+                        await store.syncNow()
                     }
                 }
             }
             .navigationTitle("Look")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await store.syncNow() }
+                    } label: {
+                        if store.isSyncing {
+                            ProgressView()
+                        } else {
+                            Label("Sync & Import", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .disabled(store.isSyncing)
+                    .accessibilityLabel("Sync and import photos")
+                }
+            }
             .sheet(item: $selectedPhoto) { photo in
                 PhotoDetail(photo: photo)
             }

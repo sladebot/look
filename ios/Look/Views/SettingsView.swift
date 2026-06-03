@@ -54,6 +54,22 @@ struct SettingsView: View {
                         Spacer()
                         Text("\(store.albums.count)").foregroundColor(.secondary)
                     }
+                    HStack {
+                        Text("Auto Sync")
+                        Spacer()
+                        if store.isSyncing {
+                            ProgressView().scaleEffect(0.7)
+                        }
+                        Text(store.autoSyncEnabled ? "On" : "Off")
+                            .foregroundColor(store.autoSyncEnabled ? .green : .secondary)
+                    }
+                    if let message = store.lastSyncMessage {
+                        HStack {
+                            Text("Last Sync")
+                            Spacer()
+                            Text(message).foregroundColor(.secondary)
+                        }
+                    }
                 }
 
                 Section("About") {

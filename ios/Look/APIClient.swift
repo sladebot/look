@@ -3,16 +3,49 @@ import Foundation
 class APIClient {
     static let shared = APIClient()
 
+    #if targetEnvironment(simulator)
+    private let defaultBaseURL = "http://127.0.0.1:8765"
+    #else
+    private let defaultBaseURL = "http://10.0.0.151:8765"
+    #endif
+
+    private var activeBaseURL: String?
     var baseURL: String {
-        UserDefaults.standard.string(forKey: "server_url") ?? "http://10.0.0.151:8765"
+        activeBaseURL ?? configuredBaseURL
     }
 
     private var decoder: JSONDecoder { JSONDecoder() }
+
+    private var configuredBaseURL: String {
+        let saved = UserDefaults.standard.string(forKey: "server_url")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return saved?.isEmpty == false ? saved! : defaultBaseURL
+    }
+
+    private var baseURLCandidates: [String] {
+        [
+            configuredBaseURL,
+            defaultBaseURL,
+            "http://127.0.0.1:8765",
+            "http://localhost:8765",
+            "http://10.0.0.151:8765",
+        ].reduce(into: [String]()) { result, candidate in
+            if !result.contains(candidate) {
+                result.append(candidate)
+            }
+        }
+    }
 
     // MARK: - Health
 
     func health() async throws -> HealthResponse {
         try await get("/api/health")
+    }
+
+    func importPhotos(path: String? = nil) async throws -> ImportResponse {
+        if let path {
+            return try await post("/api/import?path=\(encode(path))")
+        }
+        return try await post("/api/import")
     }
 
     // MARK: - Photos
@@ -41,7 +74,8 @@ class APIClient {
     // MARK: - Albums
 
     func albums() async throws -> [Album] {
-        try await get("/api/albums")
+        let response: AlbumListResponse = try await get("/api/albums")
+        return response.albums
     }
 
     func albumDetail(_ id: String) async throws -> Album {
@@ -98,34 +132,40 @@ class APIClient {
     }
 
     private func get<T: Decodable>(_ path: String) async throws -> T {
-        let url = URL(string: "\(baseURL)\(path)")!
-        let (data, response) = try await URLSession.shared.data(from: url)
-        if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
-            throw APIError.httpError(httpResp.statusCode)
-        }
-        return try decoder.decode(T.self, from: data)
+        try await request(path, method: "GET")
     }
 
     private func post<T: Decodable>(_ path: String) async throws -> T {
-        let url = URL(string: "\(baseURL)\(path)")!
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        let (data, response) = try await URLSession.shared.data(for: req)
-        if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
-            throw APIError.httpError(httpResp.statusCode)
-        }
-        return try decoder.decode(T.self, from: data)
+        try await request(path, method: "POST")
     }
 
     private func delete<T: Decodable>(_ path: String) async throws -> T {
-        let url = URL(string: "\(baseURL)\(path)")!
-        var req = URLRequest(url: url)
-        req.httpMethod = "DELETE"
-        let (data, response) = try await URLSession.shared.data(for: req)
-        if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
-            throw APIError.httpError(httpResp.statusCode)
+        try await request(path, method: "DELETE")
+    }
+
+    private func request<T: Decodable>(_ path: String, method: String) async throws -> T {
+        var lastError: Error?
+
+        for candidate in baseURLCandidates {
+            guard let url = URL(string: "\(candidate)\(path)") else { continue }
+            var req = URLRequest(url: url)
+            req.httpMethod = method
+            req.timeoutInterval = 8
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: req)
+                if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
+                    throw APIError.httpError(httpResp.statusCode)
+                }
+                let decoded = try decoder.decode(T.self, from: data)
+                activeBaseURL = candidate
+                return decoded
+            } catch {
+                lastError = error
+            }
         }
-        return try decoder.decode(T.self, from: data)
+
+        throw lastError ?? APIError.httpError(0)
     }
 }
 

@@ -11,6 +11,7 @@ struct LookApp: App {
                 .task {
                     await store.checkConnection()
                     await store.loadPhotos(reset: true)
+                    store.startAutoSync()
                 }
         }
     }

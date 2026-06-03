@@ -60,7 +60,7 @@ struct PhotoDetail: View {
                                 let tag = newTag.trimmingCharacters(in: .whitespaces)
                                 guard !tag.isEmpty else { return }
                                 Task {
-                                    try? await APIClient.shared.addTag(photo.id, tag: tag)
+                                    _ = try? await APIClient.shared.addTag(photo.id, tag: tag)
                                     await loadTags()
                                     newTag = ""
                                 }
@@ -96,7 +96,7 @@ struct PhotoDetail: View {
                                         Text(tag).font(.caption)
                                         Button(action: {
                                             Task {
-                                                try? await APIClient.shared.removeTag(photo.id, tag: tag)
+                                                _ = try? await APIClient.shared.removeTag(photo.id, tag: tag)
                                                 await loadTags()
                                             }
                                         }) {
@@ -135,7 +135,7 @@ struct FlowLayout: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let rows = arrange(proposal: proposal, subviews: subviews)
-        let height = rows.last?.maxY ?? 0
+        let height = rows.flatMap { $0 }.map(\.maxY).max() ?? 0
         return CGSize(width: proposal.width ?? 0, height: height)
     }
 

@@ -26,6 +26,34 @@ struct Photo: Codable, Identifiable, Equatable {
         case exif
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        filename = try container.decode(String.self, forKey: .filename)
+        filepath = try container.decode(String.self, forKey: .filepath)
+        fileSize = try container.decodeIfPresent(Int.self, forKey: .fileSize)
+        width = try container.decodeIfPresent(Int.self, forKey: .width)
+        height = try container.decodeIfPresent(Int.self, forKey: .height)
+        mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        hasThumbnail = Self.decodeFlexibleBool(container, key: .hasThumbnail)
+        isFavorite = Self.decodeFlexibleBool(container, key: .isFavorite)
+        exif = try container.decodeIfPresent(EXIFData.self, forKey: .exif)
+    }
+
+    private static func decodeFlexibleBool(_ container: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Bool? {
+        if let value = try? container.decodeIfPresent(Bool.self, forKey: key) {
+            return value
+        }
+        if let value = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return value != 0
+        }
+        if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+            return ["1", "true", "yes"].contains(value.lowercased())
+        }
+        return nil
+    }
+
     static func == (lhs: Photo, rhs: Photo) -> Bool { lhs.id == rhs.id }
 }
 
@@ -149,6 +177,20 @@ struct HealthResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case status
         case photoCount = "photo_count"
+    }
+}
+
+struct ImportResponse: Codable {
+    let imported: Int
+    let errors: Int
+    let totalScanned: Int
+    let message: String?
+    let errorDetails: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case imported, errors, message
+        case totalScanned = "total_scanned"
+        case errorDetails = "error_details"
     }
 }
 

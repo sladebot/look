@@ -13,13 +13,22 @@ class PhotoStore: ObservableObject {
     @Published var currentOffset = 0
     @Published var totalPhotos = 0
     @Published var searchQuery = ""
+    @Published var isSyncing = false
+    @Published var lastSyncMessage: String?
+    @Published var lastAutoSyncAt: Date?
+    @Published var autoSyncEnabled = true
 
     private let client = APIClient.shared
+    private var autoSyncTask: Task<Void, Never>?
+    private let autoSyncInterval: UInt64 = 30_000_000_000
 
     func checkConnection() async {
         do {
             let health = try await client.health()
             serverConnected = health.status == "ok"
+            if let count = health.photoCount {
+                totalPhotos = count
+            }
         } catch {
             serverConnected = false
             errorMessage = error.localizedDescription
@@ -40,12 +49,77 @@ class PhotoStore: ObservableObject {
             } else {
                 photos.append(contentsOf: response.photos)
             }
-            totalPhotos = response.total
+            let loadedCount = reset ? response.photos.count : currentOffset + response.photos.count
+            totalPhotos = max(totalPhotos, response.total, loadedCount)
             currentOffset += response.photos.count
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    func syncNow(background: Bool = false) async {
+        guard !isSyncing else { return }
+        isSyncing = true
+        if !background {
+            lastSyncMessage = "Syncing photos..."
+        }
+
+        do {
+            let previousCount = totalPhotos
+            let result = try await client.importPhotos()
+            let health = try await client.health()
+            serverConnected = health.status == "ok"
+
+            let serverCount = health.photoCount ?? previousCount
+            let shouldReload = result.imported > 0 || serverCount != previousCount || photos.isEmpty
+            if shouldReload {
+                await loadPhotos(reset: true)
+                await loadAlbums()
+                totalPhotos = serverCount
+            } else {
+                totalPhotos = serverCount
+            }
+
+            lastAutoSyncAt = Date()
+            if !background || result.imported > 0 || result.errors > 0 {
+                let checked = result.totalScanned
+                let imported = result.imported
+                let errors = result.errors
+                if errors > 0 {
+                    lastSyncMessage = "Synced \(imported) photos, \(errors) errors"
+                } else if imported > 0 {
+                    lastSyncMessage = "Synced \(imported) new photos"
+                } else {
+                    lastSyncMessage = "Checked \(checked) photos"
+                }
+            }
+        } catch {
+            if !background {
+                errorMessage = error.localizedDescription
+                lastSyncMessage = "Sync failed"
+            }
+        }
+
+        isSyncing = false
+    }
+
+    func startAutoSync() {
+        guard autoSyncTask == nil else { return }
+        autoSyncEnabled = true
+        autoSyncTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: self?.autoSyncInterval ?? 30_000_000_000)
+                guard !Task.isCancelled else { break }
+                await self?.syncNow(background: true)
+            }
+        }
+    }
+
+    func stopAutoSync() {
+        autoSyncEnabled = false
+        autoSyncTask?.cancel()
+        autoSyncTask = nil
     }
 
     func loadAlbums() async {
