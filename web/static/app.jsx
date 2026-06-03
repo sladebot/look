@@ -5,6 +5,7 @@ const {
   useEffect: aaUseEffect,
   useMemo: aaUseMemo,
   useCallback: aaUseCallback,
+  useRef: aaUseRef,
 } = React;
 
 const TWEAKS_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -14,6 +15,8 @@ const TWEAKS_DEFAULTS = /*EDITMODE-BEGIN*/{
   "showStarsOnThumb": true,
   "showFavOnThumb": true
 }/*EDITMODE-END*/;
+
+const AUTO_SYNC_INTERVAL_MS = 30000;
 
 // SWATCH_COLORS is defined in look-data.js (shared global scope)
 
@@ -62,26 +65,35 @@ function App() {
   const [albumModalOpen, setAlbumModalOpen] = aaUseState(false);
   const [tweaksOpen, setTweaksOpen] = aaUseState(false);
   const [importModalOpen, setImportModalOpen] = aaUseState(false);
+  const [syncing, setSyncing] = aaUseState(false);
+  const [syncMessage, setSyncMessage] = aaUseState('');
+  const syncRunningRef = aaUseRef(false);
+  const photoCountRef = aaUseRef(0);
 
   // Simulated preview-gen progress (based on real photo count once loaded)
   const [status, setStatus] = aaUseState({ previewsDone: 0, previewsTotal: 1, libraryTB: 0 });
 
   // ── Load library from API ──────────────────────────────────────────────────
+  const reloadLibrary = aaUseCallback(async () => {
+    const lib = await Look.initLibrary();
+    setPhotos(lib.photos);
+    setAlbums(lib.albums);
+    setAlbumTree(lib.albumTree);
+
+    // Seed simulated preview progress from real photo count
+    const done = lib.photos.filter(p => p._api?.has_thumbnail).length;
+    setStatus({
+      previewsDone: done,
+      previewsTotal: lib.photos.length,
+      libraryTB: 0,
+    });
+    return lib;
+  }, []);
+
   aaUseEffect(() => {
     async function init() {
       try {
-        const lib = await Look.initLibrary();
-        setPhotos(lib.photos);
-        setAlbums(lib.albums);
-        setAlbumTree(lib.albumTree);
-
-        // Seed simulated preview progress from real photo count
-        const done = lib.photos.filter(p => p._api?.has_thumbnail).length;
-        setStatus({
-          previewsDone: done,
-          previewsTotal: lib.photos.length,
-          libraryTB: 0,
-        });
+        await reloadLibrary();
       } catch (e) {
         setLoadError(e.message || String(e));
       } finally {
@@ -89,7 +101,11 @@ function App() {
       }
     }
     init();
-  }, []);
+  }, [reloadLibrary]);
+
+  aaUseEffect(() => {
+    photoCountRef.current = photos.length;
+  }, [photos.length]);
 
   // Animate preview progress bar while generating
   aaUseEffect(() => {
@@ -224,12 +240,48 @@ function App() {
   };
 
   const handleImportDone = async () => {
-    // Reload library after a successful import
-    const lib = await Look.initLibrary();
-    setPhotos(lib.photos);
-    setAlbums(lib.albums);
-    setAlbumTree(lib.albumTree);
+    await reloadLibrary();
   };
+
+  const handleSyncLibrary = aaUseCallback(async ({ background = false } = {}) => {
+    if (syncRunningRef.current) return;
+    syncRunningRef.current = true;
+    if (!background) {
+      setSyncing(true);
+      setSyncMessage('Syncing photos…');
+    }
+    try {
+      const before = photoCountRef.current;
+      const result = await Look.apiImport();
+      const lib = await reloadLibrary();
+      const added = Math.max(0, lib.photos.length - before);
+      const imported = Number(result.imported || 0);
+      const errors = Number(result.errors || 0);
+      const main = added > 0
+        ? `${added.toLocaleString()} new photo${added === 1 ? '' : 's'} synced`
+        : `${imported.toLocaleString()} photo${imported === 1 ? '' : 's'} checked`;
+      if (!background || added > 0 || errors > 0) {
+        setSyncMessage(errors ? `${main}; ${errors} error${errors === 1 ? '' : 's'}` : main);
+      }
+    } catch (e) {
+      if (!background) {
+        setSyncMessage(`Sync failed: ${e.message || String(e)}`);
+      }
+    } finally {
+      syncRunningRef.current = false;
+      if (!background) {
+        setSyncing(false);
+      }
+    }
+  }, [reloadLibrary]);
+
+  aaUseEffect(() => {
+    if (loading || loadError) return;
+    const interval = setInterval(() => {
+      handleSyncLibrary({ background: true });
+    }, AUTO_SYNC_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [handleSyncLibrary, loading, loadError]);
 
   // Loupe navigation
   const openIdx = openId ? filtered.findIndex(p => p.id === openId) : -1;
@@ -252,6 +304,9 @@ function App() {
         setMode={setMode}
         onOpenAdmin={() => setAdminOpen(true)}
         onImport={() => setImportModalOpen(true)}
+        onSync={handleSyncLibrary}
+        syncing={syncing}
+        syncMessage={syncMessage}
       />
 
       <Sidebar

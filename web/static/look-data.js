@@ -188,7 +188,11 @@ function timeLabel(d) {
 async function apiImport(path = null) {
   const url = path ? `/api/import?path=${encodeURIComponent(path)}` : '/api/import';
   const res = await fetch(url, { method: 'POST' });
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || data.message || `/api/import failed: ${res.status}`);
+  }
+  return data;
 }
 
 async function apiHealth() {

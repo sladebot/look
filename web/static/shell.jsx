@@ -42,16 +42,16 @@ const icons = {
   phone: "M5 2h14a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z M12 18h.01",
 };
 
-function IconBtn({ d, label, active, onClick }) {
+function IconBtn({ d, label, active, onClick, disabled }) {
   return (
-    <button className={"icon-btn" + (active ? " active" : "")} title={label} aria-label={label} onClick={onClick}>
+    <button className={"icon-btn" + (active ? " active" : "")} title={label} aria-label={label} onClick={onClick} disabled={disabled}>
       <Icon d={d} size={15} />
     </button>
   );
 }
 
 // === Topbar ===
-function Topbar({ search, setSearch, view, setView, mode, setMode, onOpenAdmin, onImport }) {
+function Topbar({ search, setSearch, view, setView, mode, setMode, onOpenAdmin, onImport, onSync, syncing, syncMessage }) {
   const inputRef = useRef(null);
   useEffect(() => {
     function onKey(e) {
@@ -101,6 +101,13 @@ function Topbar({ search, setSearch, view, setView, mode, setMode, onOpenAdmin, 
         <button className={"seg-btn" + (mode === 'pro' ? ' active' : '')} onClick={() => setMode('pro')}>Pro</button>
       </div>
 
+      <IconBtn
+        d={icons.refresh}
+        label={syncMessage || (syncing ? "Syncing photos" : "Refresh library")}
+        onClick={onSync}
+        disabled={syncing}
+        active={syncing}
+      />
       <IconBtn d={icons.upload} label="Import photos" onClick={onImport} />
       {mode === 'pro' && <IconBtn d={icons.server} label="Library admin" onClick={onOpenAdmin} />}
 
