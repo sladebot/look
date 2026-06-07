@@ -1,4 +1,4 @@
-# Local Photos Server — CLAUDE.md
+# Look — CLAUDE.md
 
 ## Project Overview
 

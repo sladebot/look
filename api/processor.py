@@ -124,7 +124,8 @@ class ImageProcessor:
         if 0x0132 in img_tags:  # DateTime
             result['datetime'] = img_tags[0x0132].decode('utf-8', errors='ignore')
 
-        # GPS tags
+        # GPS tags — extract as top-level gps_lat / gps_lon for DB storage
+        # plus keep nested gps dict for the full EXIF blob.
         gps_ifd = exif.get('GPS', {})
         if gps_ifd:
             result['gps'] = {}
@@ -137,11 +138,15 @@ class ImageProcessor:
             if 2 in gps_ifd:
                 lat = self._dms_to_decimal(gps_ifd[2])
                 if lat is not None:
-                    result['gps']['lat'] = lat if lat_ref != 'S' else -lat
+                    lat_val = lat if lat_ref != 'S' else -lat
+                    result['gps']['lat'] = lat_val
+                    result['gps_lat'] = lat_val
             if 4 in gps_ifd:
                 lon = self._dms_to_decimal(gps_ifd[4])
                 if lon is not None:
-                    result['gps']['lon'] = lon if lon_ref != 'W' else -lon
+                    lon_val = lon if lon_ref != 'W' else -lon
+                    result['gps']['lon'] = lon_val
+                    result['gps_lon'] = lon_val
 
         # DateTimeOriginal — highest-priority date tag (36867 = EXIF IFD)
         exif_ifd = exif.get('Exif', {})

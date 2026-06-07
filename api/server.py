@@ -18,6 +18,9 @@ from .filewatcher import FileWatcherManager
 from .smart_collection import SmartCollectionManager
 from .dedup_engine import DedupEngine
 from .tags_manager import TagsManager
+from .task_queue import TaskQueue
+from .rate_limiter import RateLimiter
+from .migrations import MigrationManager
 
 # ─── optional EXIF date helpers ──────────────────────────────────────────────
 _EXIF_DT_TAG = 'datetime_original'
@@ -70,6 +73,30 @@ decoder = RawDecoder(config)
 smart_albums = SmartCollectionManager(db, processor)
 dedup = DedupEngine(db, config, processor)
 tags_manager = TagsManager(db, config, processor)
+task_queue = TaskQueue(db, dedup_engine=dedup)
+rate_limiter = RateLimiter(default_rate=120, default_burst=240)
+
+# Configure rate limits for heavy endpoints (rate/min, burst)
+rate_limiter.set_limit("/api/thumbnails/*", rate=30, burst=60)
+rate_limiter.set_limit("/api/full/*", rate=10, burst=20)
+rate_limiter.set_limit("/api/dedup/scan", rate=5, burst=5)
+
+# Migration manager
+migrator = MigrationManager(db)
+migrator.register([
+    {
+        "version": 1,
+        "description": "Backfill GPS columns into existing photos (migration for pre-GPS databases)",
+        "up_sql": "UPDATE photos SET gps_lat = json_extract(exif, '$.gps_lat'), gps_lon = json_extract(exif, '$.gps_lon') WHERE gps_lat IS NULL",
+    },
+    {
+        "version": 2,
+        "description": "Create GIS index for faster geospatial queries",
+        "up_sql": "CREATE INDEX IF NOT EXISTS idx_photos_gps ON photos(gps_lat, gps_lon) WHERE gps_lat IS NOT NULL",
+    },
+])
+# Apply migrations immediately at module import time (so DB has GPS columns before any routes are hit)
+migrator.apply_all()
 
 
 @asynccontextmanager
@@ -88,17 +115,47 @@ async def lifespan(_app: FastAPI):
         fw_manager = FileWatcherManager(config, processor, scanner, db)
         if fw_manager.start():
             _app.state.file_watcher = fw_manager
-            print('[local-photos-server] File watcher started.')
+            print('[look] File watcher started.')
         else:
-            print('[local-photos-server] File watcher FAILED to start — continuing without it.')
+            print('[look] File watcher FAILED to start — continuing without it.')
     yield
     fw = getattr(_app.state, 'file_watcher', None)
     if fw:
         fw.stop()
-        print('[local-photos-server] File watcher stopped.')
+        print('[look] File watcher stopped.')
+
+    # Apply pending migrations on startup
+    applied = migrator.apply_all()
+    if applied:
+        print(f'[look] Applied {len(applied)} migration(s) on startup.')
+    else:
+        print('[look] Database schema is up to date.')
 
 
 app = FastAPI(title="Local Photo Library", version="0.3.0", lifespan=lifespan)
+
+
+# ─── middleware: rate limiting ─────────────────────────────────────────────────
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Apply rate limiting to all requests."""
+    client_ip = request.client.host if request.client else "unknown"
+    endpoint = request.url.path
+
+    allowed, info = rate_limiter.allow_request(client_ip, endpoint)
+    if not allowed:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "Rate limit exceeded",
+                "retry_after": info.get("retry_after"),
+            },
+            headers={"Retry-After": str(int(info.get("retry_after", 60)))},
+        )
+
+    response = await call_next(request)
+    response.headers["X-RateLimit-Remaining"] = str(info.get("remaining", 0))
+    return response
 
 
 # ─── auth middleware ─────────────────────────────────────────────────────────
@@ -198,6 +255,11 @@ def _prepare_photo_for_import(photo_meta: dict, import_scanner: DirectoryScanner
     photo_meta['mime_type'] = proc_result['mime_type']
     photo_meta['exif'] = proc_result.get('exif', {})
     photo_meta['created_at'] = _best_created_at(photo_meta, photo_meta['exif'])
+
+    # Extract GPS coordinates from processed EXIF
+    exif_result = proc_result.get('exif', {})
+    photo_meta['gps_lat'] = exif_result.get('gps_lat')
+    photo_meta['gps_lon'] = exif_result.get('gps_lon')
 
     thumb_path = processor.get_thumbnail(preview_path, config.max_thumbnail_width)
     photo_meta['has_thumbnail'] = bool(thumb_path and os.path.exists(thumb_path))
@@ -572,14 +634,57 @@ async def delete_smart_collection(album_id: str, _auth=_API_AUTH):
 
 
 # ─── deduplication ────────────────────────────────────────────────────────────
-@app.get("/api/dedup/scan")
-async def scan_duplicates():
-    """Scan all photos for duplicates."""
+@app.post("/api/dedup/scan")
+async def submit_dedup_scan(_auth=_API_AUTH):
+    """Submit a background dedup scan task. Returns task_id for polling."""
     if not config.dedup_enabled:
         return {"status": "disabled", "message": "Deduplication is not enabled. Set DEDUP_ENABLED=true."}
 
+    task_id = task_queue.submit_task("dedup_scan", {"tolerance": config.dedup_tolerance})
+    return {"status": "submitted", "task_id": task_id}
+
+
+@app.get("/api/dedup/scan")
+async def get_dedup_scan_status(task_id: str = Query(..., description="Task ID from POST")):
+    """Get status of a submitted dedup scan (blocking scan for backwards compat if no task_id)."""
+    if not config.dedup_enabled:
+        return {"status": "disabled", "message": "Deduplication is not enabled. Set DEDUP_ENABLED=true."}
+
+    if task_id:
+        task = task_queue.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return task
+    # Backwards compat: synchronous scan (no task polling)
     groups = dedup.scan()
     return {"status": "ok", "groups": groups, "total_groups": len(groups)}
+
+
+@app.get("/api/tasks")
+async def list_tasks(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    """List all background tasks."""
+    return {"tasks": task_queue.list_tasks(limit=limit, offset=offset)}
+
+
+@app.get("/api/tasks/{task_id}")
+async def get_task_status(task_id: str):
+    """Get status of a background task."""
+    task = task_queue.get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@app.post("/api/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str, _auth=_API_AUTH):
+    """Cancel a running or pending task."""
+    success = task_queue.cancel_task(task_id)
+    if not success:
+        task = task_queue.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=409, detail=f"Cannot cancel task in state: {task['status']}")
+    return {"status": "cancelled", "task_id": task_id}
 
 
 @app.post("/api/dedup/merge")
@@ -615,6 +720,49 @@ async def update_dedup_settings(
     if tolerance is not None:
         config.dedup_tolerance = max(0, min(256, tolerance))
     return {"status": "ok", "settings": {"dedup_enabled": config.dedup_enabled, "dedup_tolerance": config.dedup_tolerance}}
+
+
+# ==================== Geospatial Queries ========================================
+
+@app.get("/api/photos/nearby")
+async def nearby_photos(
+    lat: float = Query(..., description="Latitude"),
+    lon: float = Query(..., description="Longitude"),
+    radius_km: float = Query(5.0, ge=0.01, description="Search radius in kilometers"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Find photos within radius_km of (lat, lon). Returns photos with gps_lat/gps_lon set."""
+    photos = db.geo_query(lat, lon, radius_km, limit=limit, offset=offset)
+    return {"photos": photos, "total": len(photos), "center": {"lat": lat, "lon": lon}, "radius_km": radius_km}
+
+
+# ==================== Migrations ================================================
+
+@app.get("/api/migrate")
+async def get_migration_status():
+    """Get current database schema version and pending migrations."""
+    info = migrator.get_info()
+    return info
+
+
+@app.post("/api/migrate")
+async def run_migrations(_auth=_API_AUTH):
+    """Apply all pending migrations. Requires API key."""
+    applied = migrator.apply_all()
+    return {
+        "status": "applied" if applied else "up_to_date",
+        "applied_count": len(applied),
+        "migrations": [m["description"] for m in applied],
+    }
+
+
+@app.post("/api/migrate/rollback")
+async def rollback_migrations(target_version: int = Query(..., description="Rollback to this version"),
+                              _auth=_API_AUTH):
+    """Rollback all migrations down to (not including) target_version. Requires API key."""
+    result = migrator.rollback(target_version, _auth=_API_AUTH)
+    return result
 
 
 # ─── tags 2.0 ────────────────────────────────────────────────────────────────

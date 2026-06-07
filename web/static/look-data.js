@@ -1,4 +1,4 @@
-// Look — real API data layer (wired to local-photos-server FastAPI backend)
+// Look — real API data layer (wired to look FastAPI backend)
 
 window.Look = window.Look || {};
 const Look = window.Look;

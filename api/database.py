@@ -51,7 +51,9 @@ class PhotoDatabase:
                     is_favorite INTEGER DEFAULT 0,
                     color_tag   TEXT DEFAULT 'none',
                     is_source_jpeg INTEGER DEFAULT 0,  -- 1 if this is a converted/sidecar JPEG
-                    exif        TEXT DEFAULT NULL      -- JSON blob of EXIF fields
+                    exif        TEXT DEFAULT NULL,     -- JSON blob of EXIF fields
+                    gps_lat     REAL,                  -- latitude extracted from EXIF (nullable)
+                    gps_lon     REAL                  -- longitude extracted from EXIF (nullable)
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_photos_created ON photos(created_at DESC);
@@ -147,6 +149,7 @@ class PhotoDatabase:
                 -- Indexes
                 CREATE INDEX IF NOT EXISTS idx_ch_phash ON content_hashes(phash);
                 CREATE INDEX IF NOT EXISTS idx_th_photo ON tag_history(photo_id);
+                CREATE INDEX IF NOT EXISTS idx_photos_gps ON photos(gps_lat, gps_lon) WHERE gps_lat IS NOT NULL;
             """)
 
         # Migrations: safe no-ops if columns already exist
@@ -155,6 +158,10 @@ class PhotoDatabase:
              "[db] Migration: added rule_spec column to albums"),
             ("ALTER TABLE photos ADD COLUMN exif TEXT DEFAULT NULL",
              "[db] Migration: added exif column to photos"),
+            ("ALTER TABLE photos ADD COLUMN gps_lat REAL DEFAULT NULL",
+             "[db] Migration: added gps_lat column to photos"),
+            ("ALTER TABLE photos ADD COLUMN gps_lon REAL DEFAULT NULL",
+             "[db] Migration: added gps_lon column to photos"),
         ]
         for sql, msg in migrations:
             try:
@@ -344,13 +351,16 @@ class PhotoDatabase:
         """Store or update a photo in the database."""
         exif_val = photo.get('exif')
         exif_json = json.dumps(exif_val) if exif_val else None
+        gps_lat = photo.get('gps_lat')  # top-level extracted from EXIF
+        gps_lon = photo.get('gps_lon')
 
         with self._connect() as conn:
             conn.execute("""
                 INSERT INTO photos (id, filename, filepath, file_size, width, height,
                                    mime_type, created_at, indexed_at, has_thumbnail,
-                                   is_favorite, color_tag, is_source_jpeg, exif)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   is_favorite, color_tag, is_source_jpeg, exif,
+                                   gps_lat, gps_lon)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(filepath) DO UPDATE SET
                     file_size = excluded.file_size,
                     width = excluded.width,
@@ -362,7 +372,9 @@ class PhotoDatabase:
                     is_favorite = excluded.is_favorite,
                     color_tag = excluded.color_tag,
                     is_source_jpeg = excluded.is_source_jpeg,
-                    exif = excluded.exif
+                    exif = excluded.exif,
+                    gps_lat = excluded.gps_lat,
+                    gps_lon = excluded.gps_lon
             """, (
                 photo['id'], photo['filename'], photo['filepath'],
                 photo.get('file_size'), photo.get('width'), photo.get('height'),
@@ -373,6 +385,7 @@ class PhotoDatabase:
                 photo.get('color_tag', 'none'),
                 1 if photo.get('is_source_jpeg') else 0,
                 exif_json,
+                gps_lat, gps_lon,
             ))
 
     def mark_thumbnail(self, photo_id: str, has_thumbnail: bool = True):
@@ -687,3 +700,35 @@ class PhotoDatabase:
                    JOIN photos p ON d.archived_id = p.id"""
             ).fetchall()
             return [dict(row) for row in rows]
+
+    # ==================== Geospatial Query ========================================
+
+    def geo_query(self, lat: float, lon: float, radius_km: float,
+                  limit: int = 50, offset: int = 0) -> list:
+        """Return photos within radius_km of (lat, lon) using haversine distance.
+
+        Requires gps_lat AND gps_lon to be NOT NULL.
+        Uses a subquery to avoid SQLite's restriction on HAVING for non-aggregate queries.
+        """
+        with self._connect() as conn:
+            rows = conn.execute("""
+                SELECT * FROM (
+                    SELECT p.*,
+                           6371.0 * acos(
+                               cos(radians(?)) * cos(radians(p.gps_lat)) *
+                               cos(radians(p.gps_lon) - radians(?)) +
+                               sin(radians(?)) * sin(radians(p.gps_lat))
+                           ) AS distance_km
+                      FROM photos p
+                     WHERE p.gps_lat IS NOT NULL
+                       AND p.gps_lon IS NOT NULL
+                )
+                     WHERE distance_km <= ?
+                     ORDER BY distance_km ASC
+                     LIMIT ? OFFSET ?
+            """, (lat, lon, lat, radius_km, limit, offset)).fetchall()
+            result = [dict(row) for row in rows]
+            # Round distance to 2 decimal places
+            for r in result:
+                r['distance_km'] = round(r['distance_km'], 2)
+            return result
