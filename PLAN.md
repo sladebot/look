@@ -1,4 +1,4 @@
-# Production Upgrade Plan: local-photos-server
+# Production Upgrade Plan: look
 
 ## Methodology Notes
 
