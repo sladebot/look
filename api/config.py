@@ -17,7 +17,7 @@ class Config:
     
     # Server settings
     host: str = os.environ.get("HOST", "0.0.0.0")
-    port: int = int(os.environ.get("PORT", "8080"))
+    port: int = int(os.environ.get("PORT", "5678"))
     
     # Database
     db_path: str = os.environ.get("DB_PATH", str(Path.home() / ".local" / "local-photos" / "library.db"))
