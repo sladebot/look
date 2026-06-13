@@ -37,6 +37,12 @@ class Config:
     # Max thumbnail size (pixels, width)
     max_thumbnail_width: int = int(os.environ.get("MAX_THUMBNAIL_WIDTH", "1024"))
 
+    # Fast grid thumbnails are generated before larger preview work.
+    grid_thumbnail_width: int = int(os.environ.get("GRID_THUMBNAIL_WIDTH", "512"))
+
+    # Bounded preview worker pool; keep this modest for external disks.
+    preview_workers: int = int(os.environ.get("PREVIEW_WORKERS", "4"))
+
     # RAW preview conversion uses a half-size demosaic by default; this is much
     # faster and plenty for browser previews.
     raw_preview_half_size: bool = os.environ.get("RAW_PREVIEW_HALF_SIZE", "true").lower() in ("true", "1", "yes")

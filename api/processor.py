@@ -187,13 +187,40 @@ class ImageProcessor:
 
     def _get_thumbnail_path(self, source_path: str, size: int = None) -> str:
         """Get the path for a thumbnail at a specific size."""
-        source_hash = hashlib.sha256(source_path.encode()).hexdigest()[:16]
+        source_hash = hashlib.sha256(self._thumbnail_cache_key(source_path, size).encode()).hexdigest()[:16]
         source_dir = Path(source_path).parent
         if source_dir.name == self.config.converted_dir:
             source_dir = source_dir.parent
         thumb_dir = source_dir / self.config.thumbnails_dir
         suffix = f"_{size}" if size else ""
         return str(thumb_dir / f"{source_hash}{suffix}.jpg")
+
+    def _thumbnail_cache_key(self, source_path: str, size: int = None) -> str:
+        try:
+            stat = Path(source_path).stat()
+            return "|".join([
+                source_path,
+                str(stat.st_mtime_ns),
+                str(stat.st_size),
+                str(size or ""),
+                str(self.config.thumbnail_quality),
+            ])
+        except Exception:
+            return f"{source_path}|{size or ''}|{self.config.thumbnail_quality}"
+
+    def find_existing_thumbnail(self, source_path: str, size: int = 256) -> Optional[str]:
+        """Return an existing thumbnail path without generating new work."""
+        thumb_path = self._get_thumbnail_path(source_path, size)
+        if os.path.exists(thumb_path):
+            return thumb_path
+
+        for possible_size in [1024, 512, 400, 256, 128]:
+            if possible_size < size:
+                continue
+            possible_path = self._get_thumbnail_path(source_path, possible_size)
+            if os.path.exists(possible_path):
+                return possible_path
+        return None
 
     def get_thumbnail(self, source_path: str, size: int = 256) -> Optional[str]:
         """Get or generate a thumbnail at the specified size."""

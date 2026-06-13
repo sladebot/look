@@ -5,9 +5,11 @@ import time
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Request, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
+from io import BytesIO
+from PIL import Image
 
 from .config import Config
 from .database import PhotoDatabase
@@ -19,12 +21,23 @@ from .smart_collection import SmartCollectionManager
 from .dedup_engine import DedupEngine
 from .tags_manager import TagsManager
 from .task_queue import TaskQueue
+from .preview_queue import PreviewQueue
 from .rate_limiter import RateLimiter
 from .migrations import MigrationManager
 
 # ─── optional EXIF date helpers ──────────────────────────────────────────────
 _EXIF_DT_TAG = 'datetime_original'
 _THUMB_QUALITY = int(os.environ.get('THUMBNAIL_QUALITY', '85'))
+
+
+def _make_placeholder_jpeg() -> bytes:
+    img = Image.new("RGB", (16, 16), (24, 24, 24))
+    buf = BytesIO()
+    img.save(buf, "JPEG", quality=70)
+    return buf.getvalue()
+
+
+_PLACEHOLDER_JPEG = _make_placeholder_jpeg()
 
 
 def _to_iso(val: str) -> str:
@@ -74,6 +87,7 @@ smart_albums = SmartCollectionManager(db, processor)
 dedup = DedupEngine(db, config, processor)
 tags_manager = TagsManager(db, config, processor)
 task_queue = TaskQueue(db, dedup_engine=dedup)
+preview_queue = PreviewQueue(config, processor, decoder, scanner, db)
 rate_limiter = RateLimiter(default_rate=120, default_burst=240)
 
 # Configure rate limits for heavy endpoints (rate/min, burst)
@@ -105,6 +119,7 @@ async def lifespan(_app: FastAPI):
     static_dir = Path(__file__).parent.parent / "web" / "static"
     static_dir.mkdir(exist_ok=True)
     _app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    preview_queue.start()
 
     _app.state.file_watcher = None
     try:
@@ -123,6 +138,7 @@ async def lifespan(_app: FastAPI):
     if fw:
         fw.stop()
         print('[look] File watcher stopped.')
+    preview_queue.stop()
 
     # Apply pending migrations on startup
     applied = migrator.apply_all()
@@ -222,7 +238,7 @@ async def set_watch_active(path: str, active: bool = Query(..., description="tru
 
 # ─── import ──────────────────────────────────────────────────────────────────
 def _prepare_photo_for_import(photo_meta: dict, import_scanner: DirectoryScanner) -> dict:
-    """Process metadata and eagerly prepare JPEG previews for imported photos."""
+    """Process metadata for imported photos without blocking on preview generation."""
     original_path = photo_meta['filepath']
     if not os.access(original_path, os.R_OK):
         raise RuntimeError("File is not readable by the server process; fix file permissions or run the server as the file owner")
@@ -231,24 +247,18 @@ def _prepare_photo_for_import(photo_meta: dict, import_scanner: DirectoryScanner
     if not proc_result:
         raise RuntimeError("Unsupported or unreadable image file")
 
-    preview_path = original_path
-
     if Path(original_path).suffix.lower() in decoder.raw_extensions:
         sidecar_jpeg = import_scanner.find_sidecar_jpeg(Path(original_path))
         if sidecar_jpeg:
-            preview_path = str(sidecar_jpeg)
-            photo_meta['is_source_jpeg'] = 1
-            photo_meta['filepath'] = preview_path
-            proc_result = processor.process(preview_path) or proc_result
-        else:
-            # No sidecar — convert via rawpy, cache as JPEG
-            converted_path = decoder.decode(original_path)
-            if not converted_path:
-                raise RuntimeError("Failed to convert RAW file to JPEG preview — check file permissions and rawpy installation")
-            preview_path = converted_path
-            converted_result = processor.process(converted_path)
-            if converted_result:
-                proc_result = {**proc_result, **converted_result, 'mime_type': proc_result.get('mime_type', 'image/x-raw')}
+            sidecar_result = processor.process(str(sidecar_jpeg))
+            if sidecar_result:
+                proc_result = {
+                    **proc_result,
+                    "width": sidecar_result.get("width"),
+                    "height": sidecar_result.get("height"),
+                    "exif": sidecar_result.get("exif", proc_result.get("exif", {})),
+                    "mime_type": "image/x-raw",
+                }
 
     photo_meta['width'] = proc_result['width']
     photo_meta['height'] = proc_result['height']
@@ -260,11 +270,19 @@ def _prepare_photo_for_import(photo_meta: dict, import_scanner: DirectoryScanner
     exif_result = proc_result.get('exif', {})
     photo_meta['gps_lat'] = exif_result.get('gps_lat')
     photo_meta['gps_lon'] = exif_result.get('gps_lon')
-
-    thumb_path = processor.get_thumbnail(preview_path, config.max_thumbnail_width)
-    photo_meta['has_thumbnail'] = bool(thumb_path and os.path.exists(thumb_path))
+    photo_meta['has_thumbnail'] = False
 
     return photo_meta
+
+
+def _enqueue_preview_work(photo_meta: dict, visible_priority: bool = False):
+    """Queue fast grid thumbnails before larger preview work."""
+    priority = 0 if visible_priority else 50
+    filepath = photo_meta['filepath']
+    photo_id = photo_meta['id']
+    preview_queue.enqueue_thumbnail(photo_id, filepath, config.grid_thumbnail_width, priority=priority)
+    if Path(filepath).suffix.lower() in decoder.raw_extensions:
+        preview_queue.enqueue_full(photo_id, filepath, priority=priority + 30)
 
 
 def _run_import(path: str = None, task=None) -> dict:
@@ -323,6 +341,7 @@ def _run_import(path: str = None, task=None) -> dict:
             try:
                 photo_meta = _prepare_photo_for_import(photo_meta, scanner_local)
                 db.store_photo(photo_meta)
+                _enqueue_preview_work(photo_meta)
                 imported += 1
             except Exception as e:
                 detail = f"{photo_meta['filepath']}: {e}"
@@ -349,6 +368,7 @@ def _run_import(path: str = None, task=None) -> dict:
                 single_scanner = DirectoryScanner(Path(photo_meta['filepath']).parent, config.image_extensions)
                 photo_meta = _prepare_photo_for_import(photo_meta, single_scanner)
                 db.store_photo(photo_meta)
+                _enqueue_preview_work(photo_meta)
                 imported += 1
             except Exception as e:
                 detail = f"{photo_meta['filepath']}: {e}"
@@ -436,6 +456,19 @@ async def get_photo(photo_id: str):
 
 
 # ─── thumbnail ───────────────────────────────────────────────────────────────
+def _existing_preview_path(filepath: str) -> str:
+    source = Path(filepath)
+    if source.suffix.lower() in decoder.raw_extensions:
+        sidecar = scanner.find_sidecar_jpeg(source)
+        if sidecar:
+            return str(sidecar)
+        converted = decoder.get_converted_path(filepath)
+        if os.path.exists(converted):
+            return converted
+        return ""
+    return filepath if os.path.exists(filepath) else ""
+
+
 @app.get("/api/thumbnails/{photo_id}")
 async def get_thumbnail(photo_id: str, size: int = Query(256, ge=128, le=1024)):
     photo = db.get_photo(photo_id)
@@ -443,27 +476,11 @@ async def get_thumbnail(photo_id: str, size: int = Query(256, ge=128, le=1024)):
         raise HTTPException(status_code=404, detail="Photo not found")
 
     filepath = photo['filepath']
-
-    # Resolve sidecar JPEG or convert via rawpy for RAW files
-    if Path(filepath).suffix.lower() in decoder.raw_extensions:
-        sidecar_jpeg = scanner.find_sidecar_jpeg(Path(filepath))
-        if sidecar_jpeg:
-            filepath = str(sidecar_jpeg)
-        else:
-            converted = decoder.decode(filepath)
-            if not converted:
-                raise HTTPException(status_code=500, detail="RAW conversion failed — check file permissions")
-            filepath = converted
-
-    thumb_path = processor.get_thumbnail(filepath, size)
-
-    if not thumb_path or not os.path.exists(thumb_path):
-        try:
-            thumb_path = processor.generate_thumbnail(filepath, size)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to generate thumbnail: {e}")
-        if not thumb_path or not os.path.exists(thumb_path):
-            raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
+    preview_path = _existing_preview_path(filepath)
+    thumb_path = processor.find_existing_thumbnail(preview_path, size) if preview_path else None
+    if not thumb_path:
+        preview_queue.enqueue_thumbnail(photo['id'], filepath, size, priority=0)
+        return Response(_PLACEHOLDER_JPEG, media_type="image/jpeg", headers={"X-Look-Preview": "queued"})
 
     return FileResponse(thumb_path, media_type="image/jpeg")
 

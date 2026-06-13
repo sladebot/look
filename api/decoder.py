@@ -15,7 +15,7 @@ class RawDecoder:
         self.config = config
         self.raw_extensions = ('.arw', '.cr2', '.nef', '.orf', '.raf', '.pef', '.dng')
     
-    def decode(self, filepath: str, quality: int = 85) -> Optional[str]:
+    def decode(self, filepath: str, quality: int = 85, quiet: bool = False) -> Optional[str]:
         """Decode a RAW file to JPEG and return path to the converted file."""
         try:
             ext = Path(filepath).suffix.lower()
@@ -30,6 +30,12 @@ class RawDecoder:
                 if self._is_valid_jpeg(converted_path):
                     return converted_path
                 os.remove(converted_path)
+
+            os.makedirs(os.path.dirname(converted_path), exist_ok=True)
+
+            embedded = self._extract_embedded_preview(filepath, converted_path, quality)
+            if embedded:
+                return embedded
             
             # Decode using rawpy
             with rawpy.imread(filepath) as raw:
@@ -42,9 +48,6 @@ class RawDecoder:
                 
                 img = Image.fromarray(rgb)
                 
-                # Ensure output directory exists
-                os.makedirs(os.path.dirname(converted_path), exist_ok=True)
-                
                 tmp_path = f"{converted_path}.{threading.get_ident()}.tmp.jpg"
                 img.save(tmp_path, 'JPEG', quality=quality)
                 os.replace(tmp_path, converted_path)
@@ -52,7 +55,8 @@ class RawDecoder:
                 return converted_path
                 
         except Exception as e:
-            print(f"Error decoding {filepath}: {e}")
+            if not quiet:
+                print(f"Error decoding {filepath}: {e}")
             return None
 
     def _is_valid_jpeg(self, filepath: str) -> bool:
@@ -63,12 +67,46 @@ class RawDecoder:
             return True
         except Exception:
             return False
+
+    def _extract_embedded_preview(self, filepath: str, converted_path: str, quality: int) -> Optional[str]:
+        """Extract the camera-embedded preview JPEG/bitmap without demosaicing RAW."""
+        try:
+            with rawpy.imread(filepath) as raw:
+                thumb = raw.extract_thumb()
+                tmp_path = f"{converted_path}.{threading.get_ident()}.tmp.jpg"
+                if thumb.format == rawpy.ThumbFormat.JPEG:
+                    with open(tmp_path, "wb") as f:
+                        f.write(thumb.data)
+                elif thumb.format == rawpy.ThumbFormat.BITMAP:
+                    Image.fromarray(thumb.data).save(tmp_path, "JPEG", quality=quality)
+                else:
+                    return None
+                os.replace(tmp_path, converted_path)
+                return converted_path
+        except Exception:
+            return None
     
     def _get_converted_path(self, filepath: str) -> str:
         """Get the path for the converted JPEG file."""
-        file_hash = hashlib.sha256(filepath.encode()).hexdigest()[:16]
+        file_hash = hashlib.sha256(self._cache_key(filepath).encode()).hexdigest()[:16]
         converted_dir = Path(filepath).parent / self.config.converted_dir
         return str(converted_dir / f"{file_hash}.jpg")
+
+    def _cache_key(self, filepath: str) -> str:
+        try:
+            stat = Path(filepath).stat()
+            return "|".join([
+                filepath,
+                str(stat.st_mtime_ns),
+                str(stat.st_size),
+                str(getattr(self.config, "raw_preview_half_size", True)),
+            ])
+        except Exception:
+            return filepath
+
+    def get_converted_path(self, filepath: str) -> str:
+        """Return the current cache path without generating it."""
+        return self._get_converted_path(filepath)
     
     def get_converted_file(self, filepath: str) -> Optional[str]:
         """Get the converted file path (creates if needed)."""
