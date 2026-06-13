@@ -320,7 +320,24 @@ function Chip({ active, onClick, children }) {
 
 // === Status bar ===
 function StatusBar({ status, photoCount, mode }) {
-  const pct = Math.round((status.previewsDone / status.previewsTotal) * 100);
+  const processing = status.processing;
+  const previewTotal = Math.max(0, status.previewsTotal || 0);
+  const previewDone = Math.max(0, Math.min(status.previewsDone || 0, previewTotal));
+  const showPreviewProgress = previewDone < previewTotal;
+  const showProcessing = Boolean(processing?.active);
+  const showProgress = showProcessing || showPreviewProgress;
+  const progressTotal = showProcessing ? Number(processing.total || 0) : previewTotal;
+  const progressDone = showProcessing ? Number(processing.current || 0) : previewDone;
+  const pct = progressTotal > 0 ? Math.round((progressDone / progressTotal) * 100) : 0;
+  const progressLabel = showProcessing ? processing.label : 'Generating JPEG previews';
+  const progressMeta = showProcessing
+    ? (
+      progressTotal > 0
+        ? `${progressDone.toLocaleString()} / ${progressTotal.toLocaleString()} · ${processing.imported.toLocaleString()} imported${processing.errors ? ` · ${processing.errors.toLocaleString()} errors` : ''}`
+        : `${processing.phase || 'starting'} · ${processing.imported.toLocaleString()} imported${processing.errors ? ` · ${processing.errors.toLocaleString()} errors` : ''}`
+    )
+    : `${previewDone.toLocaleString()} / ${previewTotal.toLocaleString()}`;
+
   return (
     <div className="statusbar">
       <span className="status-item">
@@ -332,12 +349,14 @@ function StatusBar({ status, photoCount, mode }) {
           <Icon d={icons.hardDrive} size={11} /> {status.libraryTB.toFixed(2)} TB · {photoCount.toLocaleString()} photos indexed
         </span>
       )}
-      {status.previewsDone < status.previewsTotal ? (
+      {showProgress ? (
         <span className="preview-progress">
           <span className="dot dot-busy" />
-          Generating JPEG previews
-          <span className="progress-track"><span className="progress-fill" style={{ width: pct + '%' }} /></span>
-          <span>{status.previewsDone.toLocaleString()} / {status.previewsTotal.toLocaleString()}</span>
+          <span className="progress-label">{progressLabel}</span>
+          <span className={"progress-track" + (progressTotal > 0 ? "" : " indeterminate")}>
+            <span className="progress-fill" style={{ width: progressTotal > 0 ? pct + '%' : '36%' }} />
+          </span>
+          <span>{progressMeta}</span>
         </span>
       ) : (
         <span className="status-item">
@@ -357,10 +376,11 @@ function ImportModal({ open, onClose, onDone }) {
   const [path, setPath] = useState('');
   const [phase, setPhase] = useState('idle'); // idle | running | done | error
   const [result, setResult] = useState(null);
+  const [taskId, setTaskId] = useState(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (open) { setPhase('idle'); setResult(null); setPath(''); }
+    if (open) { setPhase('idle'); setResult(null); setPath(''); setTaskId(null); }
   }, [open]);
 
   useEffect(() => {
@@ -371,27 +391,69 @@ function ImportModal({ open, onClose, onDone }) {
 
   const handleImport = async () => {
     const trimmed = path.trim();
-    if (!trimmed) return;
     setPhase('running');
     setResult(null);
+    setTaskId(null);
     try {
       const url = trimmed
-        ? `/api/import?path=${encodeURIComponent(trimmed)}`
-        : '/api/import';
+        ? `/api/import?background=true&path=${encodeURIComponent(trimmed)}`
+        : '/api/import?background=true';
       const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Import failed');
       setResult(data);
-      setPhase('done');
-      if ((data.imported || 0) > 0) onDone?.();
+      if (data.task_id) {
+        setTaskId(data.task_id);
+      } else {
+        setPhase('done');
+        if ((data.imported || 0) > 0) onDone?.();
+      }
     } catch (e) {
       setResult({ error: e.message });
       setPhase('error');
     }
   };
 
+  useEffect(() => {
+    if (!taskId || phase !== 'running') return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/tasks/${taskId}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) throw new Error(data.detail || 'Failed to read import task');
+        setResult(data);
+        if (data.status === 'completed') {
+          setPhase('done');
+          if ((data.result?.imported || 0) > 0) onDone?.();
+          return;
+        }
+        if (data.status === 'failed' || data.status === 'cancelled') {
+          setPhase('error');
+          return;
+        }
+        setTimeout(poll, 1500);
+      } catch (e) {
+        if (!cancelled) {
+          setResult({ error: e.message });
+          setPhase('error');
+        }
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [taskId, phase]);
+
+  const progress = result?.progress || {};
+  const importResult = result?.result || result;
+  const current = progress.current || 0;
+  const total = progress.total_scanned || 0;
+  const imported = progress.imported ?? importResult?.imported ?? 0;
+  const errors = progress.errors ?? importResult?.errors ?? 0;
+
   const steps = [
-    { label: 'Scan folder for photos',           done: phase !== 'idle' },
+    { label: 'Scan folder for photos',           done: phase !== 'idle' && (total > 0 || phase === 'done' || phase === 'error') },
     { label: 'Convert ARW/RAW → JPEG',           done: phase === 'done' || phase === 'error' },
     { label: 'Generate thumbnails',              done: phase === 'done' || phase === 'error' },
     { label: 'Add to library',                   done: phase === 'done' },
@@ -406,7 +468,7 @@ function ImportModal({ open, onClose, onDone }) {
             <div className="modal-title">Import photos</div>
             <div className="modal-sub">Scan a folder · convert RAW · generate thumbnails</div>
           </div>
-          <button className="icon-btn" onClick={onClose} disabled={phase === 'running'}>
+          <button className="icon-btn" onClick={onClose}>
             <Icon d={icons.close} size={15} />
           </button>
         </div>
@@ -466,33 +528,48 @@ function ImportModal({ open, onClose, onDone }) {
           })}
         </div>
 
+        {phase === 'running' && (
+          <div style={{ margin: '14px 18px 0', padding: '10px 12px', background: 'var(--panel)', borderRadius: 8, boxShadow: 'inset 0 0 0 1px var(--hairline)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+              {total > 0
+                ? `${current.toLocaleString()} / ${total.toLocaleString()} processed · ${imported.toLocaleString()} imported · ${errors.toLocaleString()} errors`
+                : 'Scanning folder in background...'}
+            </div>
+            {total > 0 && (
+              <div style={{ marginTop: 8, height: 4, background: 'var(--bg)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(100, Math.round((current / total) * 100))}%`, height: '100%', background: 'var(--accent)' }} />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Result */}
-        {phase === 'done' && result && (
+        {phase === 'done' && importResult && (
           <div style={{ margin: '16px 18px 0', padding: '12px 14px', background: 'rgba(95,201,122,0.1)', borderRadius: 8, boxShadow: 'inset 0 0 0 1px rgba(95,201,122,0.3)' }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--pick)', marginBottom: 4 }}>
               Import complete
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-              {result.imported} photo{result.imported !== 1 ? 's' : ''} imported
-              {result.errors > 0 && <span style={{ color: 'var(--reject)', marginLeft: 10 }}>· {result.errors} errors</span>}
+              {importResult.imported} photo{importResult.imported !== 1 ? 's' : ''} imported
+              {importResult.errors > 0 && <span style={{ color: 'var(--reject)', marginLeft: 10 }}>· {importResult.errors} errors</span>}
             </div>
-            {result.error_details?.length > 0 && (
+            {importResult.error_details?.length > 0 && (
               <ul style={{ margin: '8px 0 0', padding: '0 0 0 14px', fontSize: 11, color: 'var(--reject)', fontFamily: 'var(--font-mono)' }}>
-                {result.error_details.map((e, i) => <li key={i}>{e}</li>)}
+                {importResult.error_details.map((e, i) => <li key={i}>{e}</li>)}
               </ul>
             )}
           </div>
         )}
 
-        {phase === 'error' && result?.error && (
+        {phase === 'error' && (result?.error || result?.result?.error || result?.status === 'failed') && (
           <div style={{ margin: '16px 18px 0', padding: '12px 14px', background: 'rgba(217,106,106,0.1)', borderRadius: 8, boxShadow: 'inset 0 0 0 1px rgba(217,106,106,0.3)' }}>
-            <div style={{ fontSize: 12, color: 'var(--reject)', fontFamily: 'var(--font-mono)' }}>{result.error}</div>
+            <div style={{ fontSize: 12, color: 'var(--reject)', fontFamily: 'var(--font-mono)' }}>{result.error || result.result?.error || 'Import failed'}</div>
           </div>
         )}
 
         <div className="modal-foot" style={{ marginTop: 18 }}>
-          <button className="secondary-btn" onClick={onClose} disabled={phase === 'running'}>
-            {phase === 'done' ? 'Close' : 'Cancel'}
+          <button className="secondary-btn" onClick={onClose}>
+            {phase === 'done' || phase === 'running' ? 'Close' : 'Cancel'}
           </button>
           <div className="status-spacer" />
           <button

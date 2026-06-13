@@ -87,7 +87,7 @@ function GridView({ photos, density, view, options, mode, onOpen, selectedId, on
   return (
     <div className="grid-scroll">
       {groups.map(g => (
-        <div key={g.label}>
+        <div key={g.label} className="grid-section">
           <div className="grid-section-header">
             <span className="grid-section-title">{g.label}</span>
             <span className="grid-section-sub">

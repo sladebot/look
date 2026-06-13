@@ -170,13 +170,22 @@ function InfoPanel({ photo, mode, onSetRating, onSetFlag, albums }) {
       </div>
 
       <div className="meta-block">
-        <a className="dl-btn" href={`/api/full/${photo.id}`} download={photo.rawFilename}>
+        <a className="dl-btn" href={`/api/download/jpeg/${photo.id}`}>
           <Icon d={icons.download} size={13} />
-          {photo.raw ? 'Download original RAW' : 'Download original'}
+          Download JPG
           <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>
-            {photo.rawSizeMB} MB
+            {photo.jpegSizeMB} MB
           </span>
         </a>
+        {photo.raw && (
+          <a className="dl-btn secondary-download" href={`/api/download/raw/${photo.id}`} style={{ marginTop: 8 }}>
+            <Icon d={icons.download} size={13} />
+            Download RAW
+            <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>
+              {photo.rawSizeMB} MB
+            </span>
+          </a>
+        )}
         <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 6, lineHeight: 1.5 }}>
           Streams over Tailscale from <span style={{ fontFamily: 'var(--font-mono)' }}>mac-studio</span>.
           JPEG previews are generated locally for fast browsing.

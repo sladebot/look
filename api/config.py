@@ -36,6 +36,10 @@ class Config:
     
     # Max thumbnail size (pixels, width)
     max_thumbnail_width: int = int(os.environ.get("MAX_THUMBNAIL_WIDTH", "1024"))
+
+    # RAW preview conversion uses a half-size demosaic by default; this is much
+    # faster and plenty for browser previews.
+    raw_preview_half_size: bool = os.environ.get("RAW_PREVIEW_HALF_SIZE", "true").lower() in ("true", "1", "yes")
     
     # Log level
     log_level: str = os.environ.get("LOG_LEVEL", "info")

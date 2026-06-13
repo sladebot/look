@@ -200,6 +200,15 @@ async function apiHealth() {
   return res.json();
 }
 
+async function apiTasks(limit = 20) {
+  const res = await fetch(`/api/tasks?limit=${encodeURIComponent(limit)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || data.message || `/api/tasks failed: ${res.status}`);
+  }
+  return data.tasks || [];
+}
+
 async function apiCreateAlbum(name, description = '') {
   const res = await fetch(`/api/albums?name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}`, {
     method: 'POST',
@@ -221,6 +230,7 @@ Object.assign(Look, {
   timeLabel,
   apiImport,
   apiHealth,
+  apiTasks,
   apiCreateAlbum,
   apiAddPhotoToAlbum,
 });

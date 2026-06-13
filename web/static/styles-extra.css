@@ -18,6 +18,12 @@
 }
 .dl-btn:hover { background: #5fa8ff; }
 .dl-btn:active { transform: translateY(1px); }
+.dl-btn.secondary-download {
+  background: var(--panel-bright);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--hairline-bright);
+}
+.dl-btn.secondary-download:hover { background: var(--panel-hover); }
 
 /* === Map stub === */
 .map-stub {

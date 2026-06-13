@@ -267,15 +267,19 @@ def _prepare_photo_for_import(photo_meta: dict, import_scanner: DirectoryScanner
     return photo_meta
 
 
-@app.post("/api/import")
-async def import_photos(path: str = Query(None, description="Specific directory to import (default: all active watch dirs)"), _auth=_API_AUTH):
+def _run_import(path: str = None, task=None) -> dict:
+    """Import photos synchronously. When called from a task, update task.progress."""
     import_path = None
     photos = None
+
+    def set_progress(**updates):
+        if task is not None:
+            task.progress = {**task.progress, **updates}
 
     if path:
         import_path = Path(path).resolve()
         if not import_path.is_dir():
-            raise HTTPException(status_code=400, detail=f"Path does not exist or is not a directory: {import_path}")
+            return {"error": f"Path does not exist or is not a directory: {import_path}"}
         db.add_watch_dir(str(import_path))
         scanner_local = DirectoryScanner(str(import_path), config.image_extensions)
     else:
@@ -300,11 +304,22 @@ async def import_photos(path: str = Query(None, description="Specific directory 
     imported = 0
     errors = 0
     error_details = []
+    set_progress(phase="scanning", imported=0, errors=0, total_scanned=0)
 
     if path:
         imported_photos = scanner_local.scan(recursive=True)
         total_scanned = len(imported_photos)
-        for photo_meta in imported_photos:
+        set_progress(phase="processing", total_scanned=total_scanned)
+        for index, photo_meta in enumerate(imported_photos, start=1):
+            if task is not None and task._cancel_requested:
+                db.log_import(str(import_path), 'failed', imported, "cancelled")
+                return {
+                    "imported": imported,
+                    "errors": errors,
+                    "total_scanned": total_scanned,
+                    "message": "Import cancelled",
+                    "error_details": error_details[:10],
+                }
             try:
                 photo_meta = _prepare_photo_for_import(photo_meta, scanner_local)
                 db.store_photo(photo_meta)
@@ -314,12 +329,22 @@ async def import_photos(path: str = Query(None, description="Specific directory 
                 print(f"Error importing {detail}")
                 error_details.append(detail)
                 errors += 1
+            set_progress(current=index, imported=imported, errors=errors)
 
         db.log_import(str(import_path), 'completed', imported, f"{errors} errors" if errors else None)
 
     else:
         total_scanned = len(photos)
-        for photo_meta in photos:
+        set_progress(phase="processing", total_scanned=total_scanned)
+        for index, photo_meta in enumerate(photos, start=1):
+            if task is not None and task._cancel_requested:
+                return {
+                    "imported": imported,
+                    "errors": errors,
+                    "total_scanned": total_scanned,
+                    "message": "Import cancelled",
+                    "error_details": error_details[:10],
+                }
             try:
                 single_scanner = DirectoryScanner(Path(photo_meta['filepath']).parent, config.image_extensions)
                 photo_meta = _prepare_photo_for_import(photo_meta, single_scanner)
@@ -330,6 +355,7 @@ async def import_photos(path: str = Query(None, description="Specific directory 
                 print(f"Error importing {detail}")
                 error_details.append(detail)
                 errors += 1
+            set_progress(current=index, imported=imported, errors=errors)
 
     message = f"Imported {imported} photos from {1 if path else 'multiple'} directory/directories"
     if errors:
@@ -342,6 +368,42 @@ async def import_photos(path: str = Query(None, description="Specific directory 
         "message": message,
         "error_details": error_details[:10]
     }
+
+
+def _execute_import_task(task, params: dict) -> dict:
+    task.progress = {"phase": "queued", "current": 0, "imported": 0, "errors": 0}
+    return _run_import(params.get("path"), task=task)
+
+
+task_queue.import_handler = _execute_import_task
+
+
+@app.post("/api/import")
+async def import_photos(
+    path: str = Query(None, description="Specific directory to import (default: all active watch dirs)"),
+    background: bool = Query(True, description="Run import as a background task"),
+    _auth=_API_AUTH,
+):
+    if background:
+        params = {"path": path}
+        existing_task = task_queue.find_active_task("import", params)
+        if existing_task:
+            return {
+                "status": "already_running",
+                "task_id": existing_task["task_id"],
+                "message": "Import is already running in the background."
+            }
+        task_id = task_queue.submit_task("import", params)
+        return {
+            "status": "submitted",
+            "task_id": task_id,
+            "message": "Import is running in the background."
+        }
+
+    result = _run_import(path)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
 
 
 # ─── photo read ───────────────────────────────────────────────────────────────
@@ -400,11 +462,32 @@ async def get_thumbnail(photo_id: str, size: int = Query(256, ge=128, le=1024)):
             thumb_path = processor.generate_thumbnail(filepath, size)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to generate thumbnail: {e}")
+        if not thumb_path or not os.path.exists(thumb_path):
+            raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
 
     return FileResponse(thumb_path, media_type="image/jpeg")
 
 
 # ─── full resolution ─────────────────────────────────────────────────────────
+def _resolve_jpeg_preview(filepath: str) -> str:
+    """Return a browser-displayable JPEG/image path for a photo."""
+    source = Path(filepath)
+    sidecar_jpeg = scanner.find_sidecar_jpeg(source)
+    if sidecar_jpeg:
+        return str(sidecar_jpeg)
+
+    if source.suffix.lower() in decoder.raw_extensions:
+        converted = decoder.decode(filepath)
+        if converted:
+            return converted
+        raise RuntimeError("Failed to decode RAW file")
+
+    if os.path.exists(filepath):
+        return filepath
+
+    raise FileNotFoundError(filepath)
+
+
 @app.get("/api/full/{photo_id}")
 async def get_full_photo(photo_id: str):
     photo = db.get_photo(photo_id)
@@ -413,21 +496,47 @@ async def get_full_photo(photo_id: str):
 
     filepath = photo['filepath']
 
-    sidecar_jpeg = scanner.find_sidecar_jpeg(Path(filepath))
-    if sidecar_jpeg:
-        return FileResponse(str(sidecar_jpeg), media_type="image/jpeg")
+    try:
+        preview_path = _resolve_jpeg_preview(filepath)
+    except RuntimeError:
+        raise HTTPException(status_code=500, detail="Failed to decode RAW file")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found on disk")
 
-    if Path(filepath).suffix.lower() in decoder.raw_extensions:
-        converted = decoder.decode(filepath)
-        if converted:
-            return FileResponse(converted, media_type="image/jpeg")
-        else:
-            raise HTTPException(status_code=500, detail="Failed to decode RAW file")
+    media_type = "image/jpeg" if Path(preview_path).suffix.lower() in (".jpg", ".jpeg") else photo.get("mime_type", "application/octet-stream")
+    return FileResponse(preview_path, media_type=media_type)
 
-    if os.path.exists(filepath):
-        return FileResponse(filepath, media_type=photo['mime_type'])
 
-    raise HTTPException(status_code=404, detail="File not found on disk")
+@app.get("/api/download/jpeg/{photo_id}")
+async def download_jpeg(photo_id: str):
+    photo = db.get_photo(photo_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    try:
+        preview_path = _resolve_jpeg_preview(photo['filepath'])
+    except RuntimeError:
+        raise HTTPException(status_code=500, detail="Failed to decode RAW file")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    filename = f"{Path(photo['filename']).stem}.jpg"
+    return FileResponse(preview_path, media_type="image/jpeg", filename=filename)
+
+
+@app.get("/api/download/raw/{photo_id}")
+async def download_raw(photo_id: str):
+    photo = db.get_photo(photo_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    filepath = photo['filepath']
+    if Path(filepath).suffix.lower() not in decoder.raw_extensions:
+        raise HTTPException(status_code=404, detail="RAW original is not available for this photo")
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="RAW file not found on disk")
+
+    return FileResponse(filepath, media_type="application/octet-stream", filename=Path(filepath).name)
 
 
 # ─── albums ──────────────────────────────────────────────────────────────────

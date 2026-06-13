@@ -7,7 +7,7 @@ from typing import Optional, Callable
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent
-from .scanner import DirectoryScanner
+from .scanner import DirectoryScanner, EXCLUDED_DIRS
 
 
 class PhotoImportHandler(FileSystemEventHandler):
@@ -35,8 +35,13 @@ class PhotoImportHandler(FileSystemEventHandler):
 
     def _maybe_import(self, path: str):
         """Debounce: only import after cooldown to avoid in-progress writes."""
-        path = str(Path(path).resolve())
-        ext = Path(path).suffix.lower()
+        resolved = Path(path).resolve()
+        path = str(resolved)
+        if resolved.name.startswith('._') or '.tmp.' in resolved.name:
+            return
+        if any(part in EXCLUDED_DIRS for part in resolved.parts):
+            return
+        ext = resolved.suffix.lower()
         if ext not in self._image_extensions:
             return
         try:

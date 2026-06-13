@@ -25,6 +25,7 @@ class Task:
         self.status = TaskStatus.PENDING
         self.result: Optional[Dict[str, Any]] = None
         self.error: Optional[str] = None
+        self.progress: Dict[str, Any] = {}
         self.created_at = datetime.now().isoformat()
         self.completed_at: Optional[str] = None
         self._cancel_requested = False
@@ -37,6 +38,7 @@ class Task:
             "params": self.params,
             "result": self.result,
             "error": self.error,
+            "progress": self.progress,
             "created_at": self.created_at,
         }
         if self.completed_at:
@@ -54,9 +56,10 @@ class TaskQueue:
         # Check task.status, task.result, task.error
     """
 
-    def __init__(self, db, dedup_engine=None, _max_tasks=1000):
+    def __init__(self, db, dedup_engine=None, import_handler=None, _max_tasks=1000):
         self.db = db
         self.dedup_engine = dedup_engine
+        self.import_handler = import_handler
         self._tasks: Dict[str, Task] = {}
         self._lock = threading.Lock()
         self._workers: Dict[str, threading.Thread] = {}
@@ -116,6 +119,24 @@ class TaskQueue:
                 reverse=True
             )
             return [t.to_dict() for t in tasks[offset:offset + limit]]
+
+    def find_active_task(self, task_type: str, params: Optional[dict] = None) -> Optional[dict]:
+        """Return the newest pending/running task for a type and optional exact params."""
+        with self._lock:
+            tasks = sorted(
+                self._tasks.values(),
+                key=lambda t: t.created_at,
+                reverse=True,
+            )
+            for task in tasks:
+                if task.task_type != task_type:
+                    continue
+                if task.status not in (TaskStatus.PENDING, TaskStatus.RUNNING):
+                    continue
+                if params is not None and task.params != params:
+                    continue
+                return task.to_dict()
+        return None
 
     def _prune_old_tasks(self):
         """Remove old completed/failed/cancelled tasks, keeping the most recent."""
@@ -186,8 +207,9 @@ class TaskQueue:
 
     def _execute_import(self, task: Task, params: dict) -> dict:
         """Execute an import operation asynchronously."""
-        # Placeholder — actual import is synchronous; this just logs the request
-        return {"status": "import requested", "params": params}
+        if self.import_handler is None:
+            return {"error": "Import handler not configured"}
+        return self.import_handler(task, params)
 
     def _execute_auto_tag(self, task: Task, params: dict) -> dict:
         """Execute auto-tagging for a photo."""

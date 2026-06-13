@@ -27,6 +27,10 @@ class DirectoryScanner:
             files = (f for f in self.photo_dir.iterdir() if f.is_file())
 
         for filepath in files:
+            if filepath.name.startswith('._'):
+                continue
+            if '.tmp.' in filepath.name:
+                continue
             if filepath.suffix.lower() in self.image_extensions:
                 photo = self._scan_file(filepath)
                 if photo:

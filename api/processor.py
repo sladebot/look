@@ -188,7 +188,10 @@ class ImageProcessor:
     def _get_thumbnail_path(self, source_path: str, size: int = None) -> str:
         """Get the path for a thumbnail at a specific size."""
         source_hash = hashlib.sha256(source_path.encode()).hexdigest()[:16]
-        thumb_dir = Path(self.config.photo_dir) / self.config.thumbnails_dir
+        source_dir = Path(source_path).parent
+        if source_dir.name == self.config.converted_dir:
+            source_dir = source_dir.parent
+        thumb_dir = source_dir / self.config.thumbnails_dir
         suffix = f"_{size}" if size else ""
         return str(thumb_dir / f"{source_hash}{suffix}.jpg")
 

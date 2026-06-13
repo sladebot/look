@@ -17,6 +17,7 @@ const TWEAKS_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 const AUTO_SYNC_INTERVAL_MS = 30000;
+const STATUS_POLL_INTERVAL_MS = 1500;
 
 // SWATCH_COLORS is defined in look-data.js (shared global scope)
 
@@ -70,8 +71,12 @@ function App() {
   const syncRunningRef = aaUseRef(false);
   const photoCountRef = aaUseRef(0);
 
-  // Simulated preview-gen progress (based on real photo count once loaded)
-  const [status, setStatus] = aaUseState({ previewsDone: 0, previewsTotal: 1, libraryTB: 0 });
+  const [status, setStatus] = aaUseState({
+    previewsDone: 0,
+    previewsTotal: 1,
+    libraryTB: 0,
+    processing: null,
+  });
 
   // ── Load library from API ──────────────────────────────────────────────────
   const reloadLibrary = aaUseCallback(async () => {
@@ -80,13 +85,13 @@ function App() {
     setAlbums(lib.albums);
     setAlbumTree(lib.albumTree);
 
-    // Seed simulated preview progress from real photo count
     const done = lib.photos.filter(p => p._api?.has_thumbnail).length;
-    setStatus({
+    setStatus(prev => ({
+      ...prev,
       previewsDone: done,
       previewsTotal: lib.photos.length,
       libraryTB: 0,
-    });
+    }));
     return lib;
   }, []);
 
@@ -107,16 +112,53 @@ function App() {
     photoCountRef.current = photos.length;
   }, [photos.length]);
 
-  // Animate preview progress bar while generating
+  // Poll background task progress for import/conversion work.
   aaUseEffect(() => {
     if (loading) return;
-    const t = setInterval(() => {
-      setStatus(s => {
-        if (s.previewsDone >= s.previewsTotal) return s;
-        return { ...s, previewsDone: Math.min(s.previewsTotal, s.previewsDone + Math.floor(Math.random() * 5 + 1)) };
-      });
-    }, 1200);
-    return () => clearInterval(t);
+    let cancelled = false;
+
+    async function refreshProcessingStatus() {
+      try {
+        const tasks = await Look.apiTasks(20);
+        if (cancelled) return;
+        const active = tasks.find(t => (
+          t.task_type === 'import' &&
+          (t.status === 'running' || t.status === 'pending')
+        ));
+        setStatus(prev => {
+          if (!active) return prev.processing ? { ...prev, processing: null } : prev;
+          const progress = active.progress || {};
+          const total = Number(progress.total_scanned || progress.total || 0);
+          const current = Number(progress.current || 0);
+          const imported = Number(progress.imported || 0);
+          const errors = Number(progress.errors || 0);
+          const phase = progress.phase || active.status;
+          return {
+            ...prev,
+            processing: {
+              active: true,
+              taskId: active.task_id,
+              status: active.status,
+              phase,
+              current,
+              total,
+              imported,
+              errors,
+              label: phase === 'scanning' ? 'Scanning photos' : 'Processing photos',
+            },
+          };
+        });
+      } catch (_) {
+        if (!cancelled) setStatus(prev => prev.processing ? { ...prev, processing: null } : prev);
+      }
+    }
+
+    refreshProcessingStatus();
+    const t = setInterval(refreshProcessingStatus, STATUS_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
   }, [loading]);
 
   // Tweaks panel host protocol
@@ -251,8 +293,22 @@ function App() {
       setSyncMessage('Syncing photos…');
     }
     try {
+      const tasks = await Look.apiTasks(10);
+      const importRunning = tasks.some(t => (
+        t.task_type === 'import' &&
+        (t.status === 'running' || t.status === 'pending')
+      ));
+      if (importRunning) {
+        if (!background) setSyncMessage('Import already running');
+        return;
+      }
       const before = photoCountRef.current;
       const result = await Look.apiImport();
+      const taskId = result.task_id;
+      if (taskId) {
+        if (!background) setSyncMessage('Import started in background');
+        return;
+      }
       const lib = await reloadLibrary();
       const added = Math.max(0, lib.photos.length - before);
       const imported = Number(result.imported || 0);
