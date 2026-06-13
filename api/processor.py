@@ -2,9 +2,11 @@
 import hashlib
 import os
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageOps
 import piexif
 from typing import Dict, Optional
+
+THUMBNAIL_CACHE_VERSION = "orient2"
 
 
 class ImageProcessor:
@@ -40,7 +42,8 @@ class ImageProcessor:
         """Process standard image formats (JPEG, PNG)."""
         try:
             with Image.open(filepath) as img:
-                width, height = img.size
+                oriented = ImageOps.exif_transpose(img)
+                width, height = oriented.size
 
                 # Extract EXIF data
                 exif_data = {}
@@ -87,6 +90,7 @@ class ImageProcessor:
         """Process HEIC files (convert to JPEG)."""
         try:
             with Image.open(filepath) as img:
+                img = ImageOps.exif_transpose(img)
                 # HEIC files can be opened by Pillow if libheif is available
                 width, height = img.size
                 mime_type = 'image/jpeg'  # Will save as JPEG
@@ -177,7 +181,10 @@ class ImageProcessor:
 
             Path(thumb_path).parent.mkdir(parents=True, exist_ok=True)
             with Image.open(source_path) as img:
+                img = ImageOps.exif_transpose(img)
                 img.thumbnail((width, width), Image.LANCZOS)
+                if img.mode not in ("RGB", "L"):
+                    img = img.convert("RGB")
                 img.save(thumb_path, 'JPEG', quality=self.config.thumbnail_quality)
 
             return thumb_path
@@ -204,9 +211,10 @@ class ImageProcessor:
                 str(stat.st_size),
                 str(size or ""),
                 str(self.config.thumbnail_quality),
+                THUMBNAIL_CACHE_VERSION,
             ])
         except Exception:
-            return f"{source_path}|{size or ''}|{self.config.thumbnail_quality}"
+            return f"{source_path}|{size or ''}|{self.config.thumbnail_quality}|{THUMBNAIL_CACHE_VERSION}"
 
     def find_existing_thumbnail(self, source_path: str, size: int = 256) -> Optional[str]:
         """Return an existing thumbnail path without generating new work."""
@@ -235,7 +243,10 @@ class ImageProcessor:
             if os.path.exists(possible_path):
                 # Resize and save
                 with Image.open(possible_path) as img:
+                    img = ImageOps.exif_transpose(img)
                     img.thumbnail((size, size), Image.LANCZOS)
+                    if img.mode not in ("RGB", "L"):
+                        img = img.convert("RGB")
                     img.save(thumb_path, 'JPEG', quality=self.config.thumbnail_quality)
                 return thumb_path
 
