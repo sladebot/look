@@ -1,11 +1,17 @@
 """RAW decoder — converts ARW/CR2/NEF to JPEG using rawpy."""
 import os
 import hashlib
+import shutil
+import subprocess
+import tempfile
 import threading
+from io import BytesIO
 from pathlib import Path
 from typing import Dict, Optional
 import rawpy
-from PIL import Image
+from PIL import Image, ImageCms, ImageOps
+
+RAW_PREVIEW_CACHE_VERSION = "srgb2"
 
 
 class RawDecoder:
@@ -46,7 +52,7 @@ class RawDecoder:
                     use_camera_wb=True,
                 )
                 
-                img = Image.fromarray(rgb)
+                img = self._to_srgb(Image.fromarray(rgb))
                 
                 tmp_path = f"{converted_path}.{threading.get_ident()}.tmp.jpg"
                 img.save(tmp_path, 'JPEG', quality=quality)
@@ -55,6 +61,9 @@ class RawDecoder:
                 return converted_path
                 
         except Exception as e:
+            quicklook = self._decode_with_quicklook(filepath, converted_path, quality)
+            if quicklook:
+                return quicklook
             if not quiet:
                 print(f"Error decoding {filepath}: {e}")
             return None
@@ -75,16 +84,78 @@ class RawDecoder:
                 thumb = raw.extract_thumb()
                 tmp_path = f"{converted_path}.{threading.get_ident()}.tmp.jpg"
                 if thumb.format == rawpy.ThumbFormat.JPEG:
-                    with open(tmp_path, "wb") as f:
-                        f.write(thumb.data)
+                    with Image.open(BytesIO(thumb.data)) as img:
+                        # Embedded previews carry their own EXIF orientation tag;
+                        # bake it in since the saved JPEG drops EXIF.
+                        img = ImageOps.exif_transpose(img)
+                        self._to_srgb(img).save(tmp_path, "JPEG", quality=quality)
                 elif thumb.format == rawpy.ThumbFormat.BITMAP:
-                    Image.fromarray(thumb.data).save(tmp_path, "JPEG", quality=quality)
+                    self._to_srgb(Image.fromarray(thumb.data)).save(tmp_path, "JPEG", quality=quality)
                 else:
                     return None
                 os.replace(tmp_path, converted_path)
                 return converted_path
         except Exception:
             return None
+
+    def _decode_with_quicklook(self, filepath: str, converted_path: str, quality: int) -> Optional[str]:
+        """Use macOS Quick Look as a fallback for RAW variants rawpy cannot read."""
+        qlmanage = shutil.which("qlmanage")
+        if not qlmanage:
+            return None
+
+        output_dir = os.path.dirname(converted_path)
+        size = str(max(1024, int(getattr(self.config, "max_thumbnail_width", 1024))))
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="look-ql-", dir=output_dir) as tmpdir:
+                result = subprocess.run(
+                    [qlmanage, "-t", "-s", size, "-o", tmpdir, filepath],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    return None
+
+                candidates = [
+                    p for p in Path(tmpdir).iterdir()
+                    if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
+                ]
+                if not candidates:
+                    return None
+
+                preview = max(candidates, key=lambda p: p.stat().st_size)
+                with Image.open(preview) as img:
+                    img = self._to_srgb(img)
+                    tmp_path = f"{converted_path}.{threading.get_ident()}.tmp.jpg"
+                    img.save(tmp_path, "JPEG", quality=quality)
+                    os.replace(tmp_path, converted_path)
+
+                return converted_path
+        except Exception:
+            return None
+
+    def _to_srgb(self, img: Image.Image) -> Image.Image:
+        """Convert preview data to sRGB before caching JPEG previews."""
+        icc = img.info.get("icc_profile")
+        if icc:
+            try:
+                source_profile = ImageCms.getOpenProfile(BytesIO(icc))
+                srgb_profile = ImageCms.createProfile("sRGB")
+                return ImageCms.profileToProfile(
+                    img, source_profile, srgb_profile,
+                    outputMode="RGB",
+                )
+            except Exception:
+                pass
+
+        if img.mode == "RGB":
+            return img
+        if img.mode == "L":
+            return img.convert("RGB")
+        return img.convert("RGB")
     
     def _get_converted_path(self, filepath: str) -> str:
         """Get the path for the converted JPEG file."""
@@ -100,9 +171,10 @@ class RawDecoder:
                 str(stat.st_mtime_ns),
                 str(stat.st_size),
                 str(getattr(self.config, "raw_preview_half_size", True)),
+                RAW_PREVIEW_CACHE_VERSION,
             ])
         except Exception:
-            return filepath
+            return f"{filepath}|{RAW_PREVIEW_CACHE_VERSION}"
 
     def get_converted_path(self, filepath: str) -> str:
         """Return the current cache path without generating it."""

@@ -1,12 +1,13 @@
 """Image processor — EXIF extraction and thumbnail generation."""
 import hashlib
 import os
+from io import BytesIO
 from pathlib import Path
-from PIL import Image, ImageOps
+from PIL import Image, ImageCms, ImageOps
 import piexif
 from typing import Dict, Optional
 
-THUMBNAIL_CACHE_VERSION = "orient2"
+THUMBNAIL_CACHE_VERSION = "srgb2"
 
 
 class ImageProcessor:
@@ -182,15 +183,34 @@ class ImageProcessor:
             Path(thumb_path).parent.mkdir(parents=True, exist_ok=True)
             with Image.open(source_path) as img:
                 img = ImageOps.exif_transpose(img)
+                img = self._to_srgb(img)
                 img.thumbnail((width, width), Image.LANCZOS)
-                if img.mode not in ("RGB", "L"):
-                    img = img.convert("RGB")
                 img.save(thumb_path, 'JPEG', quality=self.config.thumbnail_quality)
 
             return thumb_path
         except Exception as e:
             print(f"Error generating thumbnail: {e}")
             return None
+
+    def _to_srgb(self, img: Image.Image) -> Image.Image:
+        """Convert image data to sRGB before writing browser/iOS thumbnails."""
+        icc = img.info.get("icc_profile")
+        if icc:
+            try:
+                source_profile = ImageCms.getOpenProfile(BytesIO(icc))
+                srgb_profile = ImageCms.createProfile("sRGB")
+                return ImageCms.profileToProfile(
+                    img, source_profile, srgb_profile,
+                    outputMode="RGB",
+                )
+            except Exception:
+                pass
+
+        if img.mode == "RGB":
+            return img
+        if img.mode == "L":
+            return img.convert("RGB")
+        return img.convert("RGB")
 
     def _get_thumbnail_path(self, source_path: str, size: int = None) -> str:
         """Get the path for a thumbnail at a specific size."""
@@ -244,9 +264,8 @@ class ImageProcessor:
                 # Resize and save
                 with Image.open(possible_path) as img:
                     img = ImageOps.exif_transpose(img)
+                    img = self._to_srgb(img)
                     img.thumbnail((size, size), Image.LANCZOS)
-                    if img.mode not in ("RGB", "L"):
-                        img = img.convert("RGB")
                     img.save(thumb_path, 'JPEG', quality=self.config.thumbnail_quality)
                 return thumb_path
 
