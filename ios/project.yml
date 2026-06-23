@@ -23,5 +23,31 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIApplicationSupportsIndirectInputEvents: true
         NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
+          NSAllowsArbitraryLoads: false
+          NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            ts.net:
+              NSExceptionAllowsInsecureHTTPLoads: true
+              NSIncludesSubdomains: true
         NSPhotoLibraryAddUsageDescription: "Look saves photos you download from your library into your Photos app."
+  LookTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - LookTests
+    dependencies:
+      - target: Look
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.sladebot.lookTests
+      GENERATE_INFOPLIST_FILE: YES
+      BUNDLE_LOADER: "$(TEST_HOST)"
+      TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Look.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Look"
+schemes:
+  Look:
+    build:
+      targets:
+        Look: all
+    test:
+      targets:
+        - LookTests

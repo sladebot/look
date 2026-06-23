@@ -1,18 +1,22 @@
 import Foundation
+import Security
 
 /// Networking layer for the Look server.
 ///
 /// Tailscale: the app talks plain HTTP to a self-hosted server on a private
-/// tailnet. App Transport Security already allows arbitrary loads (see
-/// Info.plist), so a `100.x.y.z:PORT` address or a `machine.tailnet.ts.net:PORT`
-/// MagicDNS name entered in Settings works directly. When the user has set an
-/// explicit server URL we treat it as authoritative and do NOT silently fall
-/// back to LAN/localhost guesses (a fallback on a tailnet just hides typos and
-/// can cache the wrong server). First-run defaults to the MagicDNS URL.
+/// tailnet. App Transport Security allows local networking and insecure HTTP
+/// loads for Tailscale MagicDNS `*.ts.net` names (see Info.plist), so a
+/// `100.x.y.z:PORT` address or a `machine.tailnet.ts.net:PORT` MagicDNS name
+/// entered in Settings works directly. When the user has set an explicit server
+/// URL we treat it as authoritative and do NOT silently fall back to
+/// LAN/localhost guesses (a fallback on a tailnet just hides typos and can
+/// cache the wrong server). First-run defaults to the MagicDNS URL.
 class APIClient {
     static let shared = APIClient()
 
     private let defaultBaseURL = "http://studio.taila3f2b.ts.net:5678"
+    private static let apiKeyStorageKey = "api_key"
+    private static let legacyAPIKeyDefaultsKey = "api_key"
 
     /// Cached base URL that last produced a successful response.
     private var activeBaseURL: String?
@@ -27,12 +31,31 @@ class APIClient {
         return (saved?.isEmpty == false) ? saved! : defaultBaseURL
     }
 
+    init() {
+        migrateLegacyAPIKeyIfNeeded()
+    }
+
     /// Optional API key. Sent as `X-API-Key` on every request so write
     /// endpoints work when the server has `API_KEY` configured.
     private var apiKey: String? {
-        let key = UserDefaults.standard.string(forKey: "api_key")?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (key?.isEmpty == false) ? key : nil
+        let key = storedAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return key.isEmpty ? nil : key
+    }
+
+    var storedAPIKey: String {
+        KeychainStore.string(forKey: Self.apiKeyStorageKey) ?? ""
+    }
+
+    @discardableResult
+    func saveAPIKey(_ value: String) -> Bool {
+        KeychainStore.setString(value, forKey: Self.apiKeyStorageKey)
+    }
+
+    func migrateLegacyAPIKeyIfNeeded() {
+        KeychainStore.migrateUserDefaultsString(
+            forKey: Self.legacyAPIKeyDefaultsKey,
+            toKeychainKey: Self.apiKeyStorageKey
+        )
     }
 
     /// True when the user explicitly configured a server URL.
@@ -376,6 +399,78 @@ enum APIError: LocalizedError {
             if code == 401 { return "Unauthorized — check the API key in Settings" }
             return "Server error (\(code))"
         case .decodingError(let msg): return "Data error: \(msg)"
+        }
+    }
+}
+
+enum KeychainStore {
+    private static let service = Bundle.main.bundleIdentifier ?? "com.sladebot.look"
+
+    static func string(forKey key: String) -> String? {
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching([
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: key,
+            kSecReturnData: true,
+            kSecMatchLimit: kSecMatchLimitOne
+        ] as CFDictionary, &item)
+
+        guard status == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    static func setString(_ value: String, forKey key: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return deleteString(forKey: key) }
+        guard let data = trimmed.data(using: .utf8) else { return false }
+
+        let query = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: key
+        ] as CFDictionary
+
+        let updateStatus = SecItemUpdate(query, [
+            kSecValueData: data
+        ] as CFDictionary)
+
+        if updateStatus == errSecSuccess { return true }
+        guard updateStatus == errSecItemNotFound else { return false }
+
+        let addStatus = SecItemAdd([
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: key,
+            kSecValueData: data,
+            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ] as CFDictionary, nil)
+        return addStatus == errSecSuccess
+    }
+
+    @discardableResult
+    static func deleteString(forKey key: String) -> Bool {
+        let status = SecItemDelete([
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: key
+        ] as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
+
+    static func migrateUserDefaultsString(forKey defaultsKey: String, toKeychainKey keychainKey: String) {
+        let defaults = UserDefaults.standard
+        guard let legacyValue = defaults.string(forKey: defaultsKey) else { return }
+
+        let trimmedLegacyValue = legacyValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedLegacyValue.isEmpty {
+            defaults.removeObject(forKey: defaultsKey)
+            return
+        }
+
+        if string(forKey: keychainKey) != nil || setString(trimmedLegacyValue, forKey: keychainKey) {
+            defaults.removeObject(forKey: defaultsKey)
         }
     }
 }

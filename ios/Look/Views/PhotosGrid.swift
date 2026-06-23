@@ -166,6 +166,12 @@ struct PhotosGrid: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        if store.isSyncing {
+                            syncStatusStrip
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                        }
+
                         ForEach(secs) { section in
                             Section {
                                 ForEach(PhotoLayout.rows(for: section.photos, width: width,
@@ -184,13 +190,7 @@ struct PhotosGrid: View {
                             .id(section.id)
                         }
 
-                        Text("\(visiblePhotos.count) of \(store.totalPhotos) photos")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-
-                        if store.isLoading { ProgressView().frame(maxWidth: .infinity).padding() }
+                        galleryFooter
                     }
                 }
                 .refreshable { await store.syncNow() }
@@ -304,9 +304,13 @@ struct PhotosGrid: View {
     // MARK: States
 
     private var loadingState: some View {
-        VStack {
+        VStack(spacing: 10) {
             ProgressView()
             Text("Loading photos...").font(.caption).foregroundColor(.secondary)
+            if store.isSyncing {
+                syncStatusStrip
+                    .padding(.horizontal, 24)
+            }
         }
     }
 
@@ -327,7 +331,67 @@ struct PhotosGrid: View {
                 .font(.headline)
             Text(store.photos.isEmpty ? "Import photos on the Look server first" : "Clear filters to see the full library")
                 .font(.caption).foregroundColor(.secondary)
+            if store.isSyncing {
+                syncStatusStrip
+                    .padding(.top, 4)
+            }
         }
+    }
+
+    private var galleryFooter: some View {
+        VStack(spacing: 8) {
+            if store.isLoading {
+                ProgressView()
+            }
+
+            Text(footerText)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            if !store.isSyncing, let message = store.lastSyncMessage {
+                Text(message)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            if store.hasMorePhotos && !store.isLoading {
+                Label("More photos load as you scroll", systemImage: "arrow.down.circle")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+
+    private var footerText: String {
+        if filter == .all {
+            return "\(store.photos.count) of \(store.totalPhotos) photos loaded"
+        }
+        return "\(visiblePhotos.count) matching, \(store.photos.count) of \(store.totalPhotos) photos loaded"
+    }
+
+    private var syncStatusStrip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if store.syncProgressFraction == nil {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Text(store.syncProgressMessage ?? "Syncing photos...")
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+            }
+
+            if let fraction = store.syncProgressFraction {
+                ProgressView(value: fraction)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: Toolbar

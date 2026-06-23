@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  backend-tests:
+    name: Backend pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -q
+
+  ios-build-for-testing:
+    name: iOS build for testing
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip \
+            -o /tmp/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: /tmp/xcodegen/xcodegen/bin/xcodegen generate
+
+      - name: Run tests
+        working-directory: ios
+        run: |
+          SIMULATOR_ID="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone/ {print $2; exit}')"
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No available iPhone simulator found"
+            xcrun simctl list devices available
+            exit 1
+          fi
+
+          xcrun simctl boot "$SIMULATOR_ID" || true
+
+          xcodebuild test \
+            -project Look.xcodeproj \
+            -scheme Look \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIMULATOR_ID" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO

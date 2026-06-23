@@ -3,9 +3,10 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var store: PhotoStore
     @AppStorage("server_url") private var serverURL = "http://studio.taila3f2b.ts.net:5678"
-    @AppStorage("api_key") private var apiKey = ""
+    @State private var apiKey = ""
     @State private var isTesting = false
     @State private var cacheMessage: String?
+    @State private var keychainMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -18,6 +19,7 @@ struct SettingsView: View {
                     SecureField("API key (optional)", text: $apiKey)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
+                        .textContentType(.password)
 
                     HStack {
                         Text("Status")
@@ -47,7 +49,13 @@ struct SettingsView: View {
                 } header: {
                     Text("Server Connection")
                 } footer: {
-                    Text("Enter your server's Tailscale address (a 100.x.y.z IP or a machine.tailnet.ts.net name) and port. The API key is only needed if the server sets API_KEY.")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Enter your server's Tailscale address (a 100.x.y.z IP or a machine.tailnet.ts.net name) and port. The API key is only needed if the server sets API_KEY.")
+                        if let keychainMessage {
+                            Text(keychainMessage)
+                                .foregroundColor(.red)
+                        }
+                    }
                 }
 
                 Section("Sync") {
@@ -114,7 +122,12 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .onChange(of: apiKey) { _, newValue in
+                keychainMessage = APIClient.shared.saveAPIKey(newValue) ? nil : "Could not save the API key to Keychain."
+            }
             .task {
+                APIClient.shared.migrateLegacyAPIKeyIfNeeded()
+                apiKey = APIClient.shared.storedAPIKey
                 await store.checkConnection()
                 await store.loadServerSettings()
             }

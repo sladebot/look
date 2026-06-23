@@ -12,14 +12,19 @@ class PhotoStore: ObservableObject {
     @Published var serverConnected = false
     @Published var currentOffset = 0
     @Published var totalPhotos = 0
+    @Published var hasMorePhotos = true
     @Published var searchQuery = ""
     @Published var isSyncing = false
     @Published var lastSyncMessage: String?
+    @Published var syncTask: TaskInfo?
+    @Published var syncProgressMessage: String?
+    @Published var syncProgressFraction: Double?
     @Published var lastAutoSyncAt: Date?
     @Published var autoSyncEnabled = true
 
     private let client = APIClient.shared
     private var autoSyncTask: Task<Void, Never>?
+    private var loadingPageKeys: Set<String> = []
     private let autoSyncInterval: UInt64 = 30_000_000_000
     private let pageSize = 200
 
@@ -37,55 +42,57 @@ class PhotoStore: ObservableObject {
     }
 
     func loadPhotos(reset: Bool = false) async {
-        if reset { currentOffset = 0 }
+        let query = searchQuery.isEmpty ? nil : searchQuery
+        let offset = reset ? 0 : currentOffset
+        let pageKey = "\(query ?? ""):\(offset)"
+        guard !loadingPageKeys.contains(pageKey) else { return }
+        guard reset || hasMorePhotos else { return }
+
+        loadingPageKeys.insert(pageKey)
         isLoading = true
         errorMessage = nil
+        if reset {
+            currentOffset = 0
+            hasMorePhotos = true
+        }
+        defer {
+            loadingPageKeys.remove(pageKey)
+            isLoading = !loadingPageKeys.isEmpty
+        }
+
         do {
+            let response = try await client.photos(
+                limit: pageSize, offset: offset,
+                query: query
+            )
+
             if reset {
-                var allPhotos: [Photo] = []
-                var offset = 0
-                var responseTotal = 0
-
-                while true {
-                    let response = try await client.photos(
-                        limit: pageSize, offset: offset,
-                        query: searchQuery.isEmpty ? nil : searchQuery
-                    )
-                    responseTotal = response.total
-                    allPhotos.append(contentsOf: response.photos)
-                    offset += response.photos.count
-
-                    if response.photos.count < pageSize {
-                        break
-                    }
-                }
-
-                photos = allPhotos
-                currentOffset = allPhotos.count
-                totalPhotos = max(responseTotal, allPhotos.count)
-                isLoading = false
-                return
+                photos = response.photos
+            } else {
+                appendUniquePhotos(response.photos)
             }
 
-            let response = try await client.photos(
-                limit: pageSize, offset: currentOffset,
-                query: searchQuery.isEmpty ? nil : searchQuery
-            )
-            photos.append(contentsOf: response.photos)
-            let loadedCount = currentOffset + response.photos.count
-            totalPhotos = max(totalPhotos, response.total, loadedCount)
-            currentOffset += response.photos.count
+            currentOffset = offset + response.photos.count
+            totalPhotos = max(response.total, photos.count)
+            hasMorePhotos = currentOffset < response.total && !response.photos.isEmpty
         } catch {
             errorMessage = error.localizedDescription
         }
-        isLoading = false
     }
 
     func syncNow(background: Bool = false) async {
         guard !isSyncing else { return }
         isSyncing = true
+        syncTask = nil
+        syncProgressMessage = nil
+        syncProgressFraction = nil
         if !background {
             lastSyncMessage = "Syncing photos..."
+        }
+        defer {
+            isSyncing = false
+            syncTask = nil
+            syncProgressFraction = nil
         }
 
         do {
@@ -99,6 +106,8 @@ class PhotoStore: ObservableObject {
                 let finished = await pollTask(taskId)
                 imported = finished?.result?["imported"]?.intValue ?? 0
                 errors = finished?.result?["errors"]?.intValue ?? 0
+            } else if let message = submit.message {
+                syncProgressMessage = message
             }
 
             let health = try await client.health()
@@ -111,6 +120,7 @@ class PhotoStore: ObservableObject {
                 await loadAlbums()
             }
             totalPhotos = serverCount
+            hasMorePhotos = photos.count < totalPhotos
 
             lastAutoSyncAt = Date()
             if !background || imported > 0 || errors > 0 {
@@ -122,14 +132,14 @@ class PhotoStore: ObservableObject {
                     lastSyncMessage = "Library up to date (\(serverCount) photos)"
                 }
             }
+            syncProgressMessage = lastSyncMessage
         } catch {
             if !background {
                 errorMessage = error.localizedDescription
                 lastSyncMessage = "Sync failed"
             }
+            syncProgressMessage = lastSyncMessage
         }
-
-        isSyncing = false
     }
 
     /// Poll a background task until it leaves the running/pending state (or times out).
@@ -137,6 +147,8 @@ class PhotoStore: ObservableObject {
         let deadline = Date().addingTimeInterval(TimeInterval(timeoutSeconds))
         while Date() < deadline {
             guard let task = try? await client.task(taskId) else { return nil }
+            syncTask = task
+            updateSyncProgress(from: task)
             if ["completed", "failed", "cancelled"].contains(task.status) {
                 return task
             }
@@ -249,13 +261,42 @@ class PhotoStore: ObservableObject {
     }
 
     func loadMoreIfNeeded(currentPhoto: Photo) {
-        guard !isLoading else { return }
+        guard !isLoading, hasMorePhotos else { return }
         guard photos.count >= 5 else { return }
         let thresholdIndex = photos.index(photos.endIndex, offsetBy: -5)
         if let idx = photos.firstIndex(where: { $0.id == currentPhoto.id }),
            idx >= thresholdIndex,
-           photos.count < totalPhotos {
+           hasMorePhotos {
             Task { await loadPhotos() }
+        }
+    }
+
+    private func appendUniquePhotos(_ newPhotos: [Photo]) {
+        guard !newPhotos.isEmpty else { return }
+        var seen = Set(photos.map(\.id))
+        let unique = newPhotos.filter { seen.insert($0.id).inserted }
+        photos.append(contentsOf: unique)
+    }
+
+    private func updateSyncProgress(from task: TaskInfo) {
+        let phase = task.progress?["phase"]?.stringValue
+        let current = task.progress?["current"]?.intValue
+        let total = task.progress?["total_scanned"]?.intValue
+            ?? task.progress?["total"]?.intValue
+
+        if let current, let total, total > 0 {
+            syncProgressFraction = min(1, max(0, Double(current) / Double(total)))
+            if let phase {
+                syncProgressMessage = "\(phase.capitalized) \(current) of \(total)"
+            } else {
+                syncProgressMessage = "Syncing \(current) of \(total)"
+            }
+        } else if let phase {
+            syncProgressFraction = nil
+            syncProgressMessage = phase.capitalized
+        } else {
+            syncProgressFraction = nil
+            syncProgressMessage = "Sync \(task.status)"
         }
     }
 }
