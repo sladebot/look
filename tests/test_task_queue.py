@@ -142,7 +142,6 @@ def test_cancel_nonexistent_task():
 
 
 def test_prune_old_tasks():
-def test_prune_old_tasks():
     """Exceeding _max_tasks should prune oldest completed tasks."""
     db = _make_db()
     queue = TaskQueue(db, _max_tasks=3)

@@ -222,6 +222,81 @@
   vertical-align: middle;
 }
 .admin-table td:first-child { width: 24px; }
+.watch-table td:first-child { width: auto; }
+.watch-table th:last-child,
+.watch-table td:last-child {
+  width: 168px;
+  text-align: right;
+}
+.watch-path-cell {
+  max-width: 430px;
+  overflow-wrap: anywhere;
+}
+.watch-add {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+.watch-add input,
+.watch-path-input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  box-shadow: inset 0 0 0 1px var(--hairline-bright);
+}
+.watch-path-input {
+  padding: 7px 9px;
+}
+.watch-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.watch-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+}
+.watch-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.secondary-btn.small {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.secondary-btn.icon-only {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+}
+.secondary-btn.danger {
+  color: var(--reject);
+}
+.secondary-btn.danger:hover {
+  background: rgba(255, 95, 86, 0.12);
+}
+.watch-message {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--pick);
+}
+.watch-message.error {
+  color: var(--reject);
+}
 .admin-table .badge-host {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -429,6 +504,13 @@
   .admin-grid { grid-template-columns: 1fr; }
   .admin-card-wide { grid-column: 1; }
   .bar-legend { grid-template-columns: 1fr; }
+  .watch-add { grid-template-columns: 1fr; }
+  .watch-table th:nth-child(3),
+  .watch-table td:nth-child(3) { display: none; }
+  .watch-table th:last-child,
+  .watch-table td:last-child {
+    width: 120px;
+  }
 
   .crumbs { padding: 8px 10px; gap: 8px; }
   .crumbs-title { font-size: 15px; }

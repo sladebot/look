@@ -3,6 +3,7 @@ import SwiftUI
 struct SearchView: View {
     @EnvironmentObject var store: PhotoStore
     @State private var query = ""
+    @State private var selectedPhoto: Photo?
 
     private let columns = [
         GridItem(.adaptive(minimum: 110), spacing: 2)
@@ -51,10 +52,8 @@ struct SearchView: View {
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 2) {
                             ForEach(store.photos) { photo in
-                                NavigationLink(destination: PhotoDetail(photo: photo)) {
-                                    PhotoCard(photo: photo)
-                                }
-                                .buttonStyle(.plain)
+                                PhotoCard(photo: photo)
+                                    .onTapGesture { selectedPhoto = photo }
                             }
                         }
                         .padding(2)
@@ -62,6 +61,9 @@ struct SearchView: View {
                 }
             }
             .navigationTitle("Search")
+            .fullScreenCover(item: $selectedPhoto) { photo in
+                NativePhotoViewer(photos: store.photos, initialPhoto: photo)
+            }
         }
     }
 }

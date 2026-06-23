@@ -239,6 +239,26 @@ class PhotoDatabase:
             rows = conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
 
+    def count_photos(self, album: str = None, tag: str = None,
+                     q: str = None, camera: str = None,
+                     start_date: str = None, end_date: str = None) -> int:
+        """Count photos matching the same filters used by list_photos."""
+        with self._connect() as conn:
+            query = """
+                SELECT COUNT(DISTINCT p.id) AS cnt FROM photos p
+                LEFT JOIN album_photos ap ON p.id = ap.photo_id
+                LEFT JOIN tags t ON p.id = t.photo_id
+            """
+            params = []
+
+            if album or tag or q or camera or start_date or end_date:
+                query, params = self._extend_query(
+                    query, album, tag, q, camera, start_date, end_date, params
+                )
+
+            row = conn.execute(query, params).fetchone()
+            return int(row['cnt']) if row else 0
+
     def get_photo_count(self) -> int:
         with self._connect() as conn:
             return conn.execute("SELECT COUNT(*) as cnt FROM photos").fetchone()['cnt']
@@ -363,12 +383,17 @@ class PhotoDatabase:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(filepath) DO UPDATE SET
                     file_size = excluded.file_size,
-                    width = excluded.width,
-                    height = excluded.height,
+                    -- RAW re-imports report NULL dims (unknown until decode);
+                    -- keep any dimensions we already resolved.
+                    width = COALESCE(excluded.width, photos.width),
+                    height = COALESCE(excluded.height, photos.height),
                     mime_type = excluded.mime_type,
                     created_at = excluded.created_at,
                     indexed_at = excluded.indexed_at,
-                    has_thumbnail = excluded.has_thumbnail,
+                    has_thumbnail = CASE
+                        WHEN excluded.has_thumbnail = 1 OR photos.has_thumbnail = 1 THEN 1
+                        ELSE 0
+                    END,
                     is_favorite = excluded.is_favorite,
                     color_tag = excluded.color_tag,
                     is_source_jpeg = excluded.is_source_jpeg,
@@ -438,6 +463,27 @@ class PhotoDatabase:
             return True
         except sqlite3.IntegrityError:
             return False  # Already exists
+
+    def update_watch_dir(self, path: str, new_path: str, active: bool = None):
+        """Update a watch directory path and optionally its active state."""
+        normalized = str(Path(path).resolve())
+        new_normalized = str(Path(new_path).resolve())
+        fields = ["path = ?"]
+        params = [new_normalized]
+        if active is not None:
+            fields.append("active = ?")
+            params.append(1 if active else 0)
+        params.append(normalized)
+
+        try:
+            with self._connect() as conn:
+                result = conn.execute(
+                    f"UPDATE watch_list SET {', '.join(fields)} WHERE path = ?",
+                    params,
+                ).rowcount
+            return result > 0
+        except sqlite3.IntegrityError:
+            return None  # New path already exists
 
     def remove_watch_dir(self, path: str) -> bool:
         """Remove a directory from the watch list."""

@@ -4,10 +4,10 @@
 
 A lightweight, self-hosted photo library server designed to run on a private network (Tailscale). Provides fast browsing, smart organization, deduplication, and tag management for local photo collections.
 
-**Primary entry point:** `main.py` (thin launcher) → `api/server.py` (FastAPI app)  
-**Run:** `python main.py`  
-**Alt run:** `uvicorn api.server:app`  
-**UI:** `http://localhost:8080`
+**Primary entry point:** `api/server.py` (FastAPI app)  
+**Required env:** project-local conda env at `.conda/`  
+**Run:** `./.conda/bin/python -m uvicorn api.server:app --host 0.0.0.0 --port 5678`  
+**UI:** `http://studio.taila3f2b.ts.net:5678`
 
 ---
 
@@ -26,7 +26,7 @@ A lightweight, self-hosted photo library server designed to run on a private net
 ## File Map
 
 ```
-main.py                Top-level launcher — `python main.py` starts the server
+main.py                Legacy thin launcher; prefer the uvicorn command below
 api/                   Backend Python package
   __init__.py
   server.py            FastAPI app — all route handlers, lifespan, auth middleware
@@ -64,8 +64,8 @@ requirements.txt       Python dependencies
 4. Thumbnails generated on-demand via `/api/thumbnails/{photo_id}?size=N`
 
 ### Caching
-- Thumbnails → `.thumbnails/` (sibling to photo directory)
-- RAW conversions → `.converted/` (sibling to photo directory)
+- Thumbnails → `thumbnails/` inside each watched photo directory
+- RAW JPEG previews → `converted/` inside each watched photo directory
 - Duplicates archived to `.trash/`
 
 ### Authentication
@@ -85,7 +85,7 @@ requirements.txt       Python dependencies
 ```bash
 PHOTO_DIR=/path/to/photos          # default watch directory
 HOST=0.0.0.0
-PORT=8080
+PORT=5678
 DB_PATH=~/.local/local-photos/library.db
 API_KEY=                           # leave empty to disable auth
 THUMBNAIL_QUALITY=85
@@ -119,12 +119,26 @@ FILEWATCHER_COOLDOWN=3             # seconds debounce on file events
 
 ---
 
+## Runtime
+
+Use the project-local conda environment. Do not run with the base Python.
+
+```bash
+# Create once if missing
+conda create -p ./.conda python=3.13 pip -y
+./.conda/bin/python -m pip install -r requirements.txt
+
+# Start Look
+./.conda/bin/python -m uvicorn api.server:app --host 0.0.0.0 --port 5678
+```
+
+The app stores its SQLite DB at `~/.local/local-photos/library.db`, so commands that run under a filesystem sandbox may fail with `sqlite3.OperationalError: unable to open database file`. Start the server with normal filesystem access when running from agent tooling.
+
 ## Known Issues & Technical Debt
 
 ### Critical
 - **Broad exception handling** — many `except Exception:` blocks swallow errors silently; add specific exception types and structured logging
 - **Dedup scan is synchronous** — `GET /api/dedup/scan` blocks the server thread for large libraries; needs async task queue
-- **RAW cache collision** — two RAW files with the same basename in different directories both write to `.converted/<basename>.jpg`, overwriting each other; fix by mirroring directory structure or using filepath hash
 
 ### High Priority
 - **Tag merge not atomic** (`tags_manager.py:66`) — loop runs outside a transaction; partial failure leaves inconsistent state; wrap in `with self.db._connect()`
@@ -178,10 +192,10 @@ Before adding features, consider covering:
 | Tag history / audit trail | Complete (Phase 3) |
 | Auto-tagging from EXIF | Complete (Phase 3) |
 | Tag merging | Complete (Phase 3) |
-| Async task queue | **Missing** |
+| Async task queue | Complete |
 | Automated tests | **Missing** |
 | Proper DB migrations (Alembic) | **Missing** |
-| Rate limiting | **Missing** |
+| Rate limiting | Complete |
 | GPS geocoding / geo-queries | **Missing** |
 
 ---

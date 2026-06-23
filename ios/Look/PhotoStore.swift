@@ -21,6 +21,7 @@ class PhotoStore: ObservableObject {
     private let client = APIClient.shared
     private var autoSyncTask: Task<Void, Never>?
     private let autoSyncInterval: UInt64 = 30_000_000_000
+    private let pageSize = 200
 
     func checkConnection() async {
         do {
@@ -40,16 +41,38 @@ class PhotoStore: ObservableObject {
         isLoading = true
         errorMessage = nil
         do {
+            if reset {
+                var allPhotos: [Photo] = []
+                var offset = 0
+                var responseTotal = 0
+
+                while true {
+                    let response = try await client.photos(
+                        limit: pageSize, offset: offset,
+                        query: searchQuery.isEmpty ? nil : searchQuery
+                    )
+                    responseTotal = response.total
+                    allPhotos.append(contentsOf: response.photos)
+                    offset += response.photos.count
+
+                    if response.photos.count < pageSize {
+                        break
+                    }
+                }
+
+                photos = allPhotos
+                currentOffset = allPhotos.count
+                totalPhotos = max(responseTotal, allPhotos.count)
+                isLoading = false
+                return
+            }
+
             let response = try await client.photos(
-                limit: 50, offset: currentOffset,
+                limit: pageSize, offset: currentOffset,
                 query: searchQuery.isEmpty ? nil : searchQuery
             )
-            if reset {
-                photos = response.photos
-            } else {
-                photos.append(contentsOf: response.photos)
-            }
-            let loadedCount = reset ? response.photos.count : currentOffset + response.photos.count
+            photos.append(contentsOf: response.photos)
+            let loadedCount = currentOffset + response.photos.count
             totalPhotos = max(totalPhotos, response.total, loadedCount)
             currentOffset += response.photos.count
         } catch {
@@ -67,31 +90,36 @@ class PhotoStore: ObservableObject {
 
         do {
             let previousCount = totalPhotos
-            let result = try await client.importPhotos()
+
+            // The server runs imports as a background task; submit then poll.
+            let submit = try await client.importPhotos()
+            var imported = 0
+            var errors = 0
+            if let taskId = submit.taskId {
+                let finished = await pollTask(taskId)
+                imported = finished?.result?["imported"]?.intValue ?? 0
+                errors = finished?.result?["errors"]?.intValue ?? 0
+            }
+
             let health = try await client.health()
             serverConnected = health.status == "ok"
-
             let serverCount = health.photoCount ?? previousCount
-            let shouldReload = result.imported > 0 || serverCount != previousCount || photos.isEmpty
+
+            let shouldReload = imported > 0 || serverCount != previousCount || photos.isEmpty
             if shouldReload {
                 await loadPhotos(reset: true)
                 await loadAlbums()
-                totalPhotos = serverCount
-            } else {
-                totalPhotos = serverCount
             }
+            totalPhotos = serverCount
 
             lastAutoSyncAt = Date()
-            if !background || result.imported > 0 || result.errors > 0 {
-                let checked = result.totalScanned
-                let imported = result.imported
-                let errors = result.errors
+            if !background || imported > 0 || errors > 0 {
                 if errors > 0 {
                     lastSyncMessage = "Synced \(imported) photos, \(errors) errors"
                 } else if imported > 0 {
                     lastSyncMessage = "Synced \(imported) new photos"
                 } else {
-                    lastSyncMessage = "Checked \(checked) photos"
+                    lastSyncMessage = "Library up to date (\(serverCount) photos)"
                 }
             }
         } catch {
@@ -102,6 +130,19 @@ class PhotoStore: ObservableObject {
         }
 
         isSyncing = false
+    }
+
+    /// Poll a background task until it leaves the running/pending state (or times out).
+    private func pollTask(_ taskId: String, timeoutSeconds: Int = 180) async -> TaskInfo? {
+        let deadline = Date().addingTimeInterval(TimeInterval(timeoutSeconds))
+        while Date() < deadline {
+            guard let task = try? await client.task(taskId) else { return nil }
+            if ["completed", "failed", "cancelled"].contains(task.status) {
+                return task
+            }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+        }
+        return nil
     }
 
     func startAutoSync() {
@@ -153,8 +194,63 @@ class PhotoStore: ObservableObject {
         await loadPhotos(reset: true)
     }
 
+    // MARK: - Albums
+
+    func createAlbum(name: String, description: String = "") async {
+        do {
+            _ = try await client.createAlbum(name: name, description: description)
+            await loadAlbums()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func deleteAlbum(_ id: String) async {
+        do {
+            _ = try await client.deleteAlbum(id)
+            await loadAlbums()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    // MARK: - Smart collections
+
+    func createSmartCollection(name: String, description: String, ruleSpec: String) async {
+        do {
+            _ = try await client.createSmartCollection(name: name, description: description, ruleSpec: ruleSpec)
+            await loadSmartCollections()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func deleteSmartCollection(_ id: String) async {
+        do {
+            _ = try await client.deleteSmartCollection(id)
+            await loadSmartCollections()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    // MARK: - Server settings
+
+    @Published var serverSettings: [String: String] = [:]
+
+    func loadServerSettings() async {
+        do {
+            serverSettings = try await client.settings().settings
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func boolSetting(_ key: String) -> Bool {
+        let v = serverSettings[key]?.lowercased()
+        return v == "true" || v == "1" || v == "yes"
+    }
+
+    func toggleServerSetting(_ key: String, to value: Bool) async {
+        do {
+            _ = try await client.putBoolSetting(key, value)
+            serverSettings[key] = value ? "true" : "false"
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func loadMoreIfNeeded(currentPhoto: Photo) {
         guard !isLoading else { return }
+        guard photos.count >= 5 else { return }
         let thresholdIndex = photos.index(photos.endIndex, offsetBy: -5)
         if let idx = photos.firstIndex(where: { $0.id == currentPhoto.id }),
            idx >= thresholdIndex,

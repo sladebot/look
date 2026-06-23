@@ -1,5 +1,6 @@
 # Virtualenv
 .venv/
+.conda/
 __pycache__/
 
 # Database (local only, not tracked)

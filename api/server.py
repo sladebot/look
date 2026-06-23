@@ -2,6 +2,7 @@
 import os
 import hashlib
 import time
+import threading
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Request, Depends
 from fastapi.staticfiles import StaticFiles
@@ -73,52 +74,99 @@ def _best_created_at(raw_meta: dict, exif_data: dict) -> str:
         return raw_meta.get('indexed_at', time.strftime('%Y-%m-%dT%H:%M:%S'))
 
 
-# ─── app factory / lifespan ───────────────────────────────────────────────────
-config = Config()
-db = PhotoDatabase(config.db_path)
+# ─── lazy runtime / lifespan ──────────────────────────────────────────────────
+# Keep module import side-effect-light: tests and tooling can import api.server
+# without creating the user's default photo directory or mutating the real DB.
+config = None
+db = None
+scanner = None
+processor = None
+decoder = None
+smart_albums = None
+dedup = None
+tags_manager = None
+task_queue = None
+preview_queue = None
+rate_limiter = None
+migrator = None
+_runtime_lock = threading.Lock()
 
-for d in config.watch_dirs:
-    db.add_watch_dir(d)
 
-scanner = DirectoryScanner(config.photo_dir, config.image_extensions)
-processor = ImageProcessor(config)
-decoder = RawDecoder(config)
-smart_albums = SmartCollectionManager(db, processor)
-dedup = DedupEngine(db, config, processor)
-tags_manager = TagsManager(db, config, processor)
-task_queue = TaskQueue(db, dedup_engine=dedup)
-preview_queue = PreviewQueue(config, processor, decoder, scanner, db)
-rate_limiter = RateLimiter(default_rate=120, default_burst=240)
+def _migration_specs():
+    return [
+        {
+            "version": 1,
+            "description": "Backfill GPS columns into existing photos (migration for pre-GPS databases)",
+            "up_sql": "UPDATE photos SET gps_lat = json_extract(exif, '$.gps_lat'), gps_lon = json_extract(exif, '$.gps_lon') WHERE gps_lat IS NULL",
+        },
+        {
+            "version": 2,
+            "description": "Create GIS index for faster geospatial queries",
+            "up_sql": "CREATE INDEX IF NOT EXISTS idx_photos_gps ON photos(gps_lat, gps_lon) WHERE gps_lat IS NOT NULL",
+        },
+    ]
 
-# Configure rate limits for heavy endpoints (rate/min, burst)
-rate_limiter.set_limit("/api/thumbnails/*", rate=30, burst=60)
-rate_limiter.set_limit("/api/full/*", rate=10, burst=20)
-rate_limiter.set_limit("/api/dedup/scan", rate=5, burst=5)
 
-# Migration manager
-migrator = MigrationManager(db)
-migrator.register([
-    {
-        "version": 1,
-        "description": "Backfill GPS columns into existing photos (migration for pre-GPS databases)",
-        "up_sql": "UPDATE photos SET gps_lat = json_extract(exif, '$.gps_lat'), gps_lon = json_extract(exif, '$.gps_lon') WHERE gps_lat IS NULL",
-    },
-    {
-        "version": 2,
-        "description": "Create GIS index for faster geospatial queries",
-        "up_sql": "CREATE INDEX IF NOT EXISTS idx_photos_gps ON photos(gps_lat, gps_lon) WHERE gps_lat IS NOT NULL",
-    },
-])
-# Apply migrations immediately at module import time (so DB has GPS columns before any routes are hit)
-migrator.apply_all()
+def _make_rate_limiter() -> RateLimiter:
+    limiter = RateLimiter(default_rate=120, default_burst=240)
+    limiter.set_limit("/api/thumbnails/*", rate=30, burst=60)
+    limiter.set_limit("/api/full/*", rate=10, burst=20)
+    limiter.set_limit("/api/dedup/scan", rate=5, burst=5)
+    return limiter
+
+
+def _ensure_runtime():
+    """Initialize or repair process-global runtime services lazily."""
+    global config, db, scanner, processor, decoder, smart_albums, dedup
+    global tags_manager, task_queue, preview_queue, rate_limiter, migrator
+
+    with _runtime_lock:
+        if config is None:
+            config = Config()
+        if db is None:
+            db = PhotoDatabase(config.db_path)
+            for d in config.watch_dirs:
+                db.add_watch_dir(d)
+
+        if scanner is None or getattr(scanner, "photo_dir", None) != Path(config.photo_dir).resolve():
+            scanner = DirectoryScanner(config.photo_dir, config.image_extensions)
+        if processor is None or getattr(processor, "config", None) is not config:
+            processor = ImageProcessor(config)
+        if decoder is None or getattr(decoder, "config", None) is not config:
+            decoder = RawDecoder(config)
+        if smart_albums is None or getattr(smart_albums, "db", None) is not db:
+            smart_albums = SmartCollectionManager(db, processor)
+        if dedup is None or getattr(dedup, "db", None) is not db:
+            dedup = DedupEngine(db, config, processor)
+        if tags_manager is None or getattr(tags_manager, "db", None) is not db:
+            tags_manager = TagsManager(db, config, processor)
+        if task_queue is None or getattr(task_queue, "db", None) is not db:
+            task_queue = TaskQueue(db, dedup_engine=dedup)
+        task_queue.import_handler = _execute_import_task
+
+        if preview_queue is None or getattr(preview_queue, "db", None) is not db:
+            preview_queue = PreviewQueue(config, processor, decoder, scanner, db)
+        if rate_limiter is None:
+            rate_limiter = _make_rate_limiter()
+        if migrator is None or getattr(migrator, "db", None) is not db:
+            migrator = MigrationManager(db)
+            migrator.register(_migration_specs())
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Mount static files, start optional file watcher on startup."""
+    _ensure_runtime()
     static_dir = Path(__file__).parent.parent / "web" / "static"
     static_dir.mkdir(exist_ok=True)
     _app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    applied = migrator.apply_all()
+    if applied:
+        print(f'[look] Applied {len(applied)} migration(s) on startup.')
+    else:
+        print('[look] Database schema is up to date.')
+
     preview_queue.start()
 
     _app.state.file_watcher = None
@@ -140,13 +188,6 @@ async def lifespan(_app: FastAPI):
         print('[look] File watcher stopped.')
     preview_queue.stop()
 
-    # Apply pending migrations on startup
-    applied = migrator.apply_all()
-    if applied:
-        print(f'[look] Applied {len(applied)} migration(s) on startup.')
-    else:
-        print('[look] Database schema is up to date.')
-
 
 app = FastAPI(title="Local Photo Library", version="0.3.0", lifespan=lifespan)
 
@@ -155,6 +196,7 @@ app = FastAPI(title="Local Photo Library", version="0.3.0", lifespan=lifespan)
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     """Apply rate limiting to all requests."""
+    _ensure_runtime()
     client_ip = request.client.host if request.client else "unknown"
     endpoint = request.url.path
 
@@ -177,6 +219,7 @@ async def rate_limit_middleware(request: Request, call_next):
 # ─── auth middleware ─────────────────────────────────────────────────────────
 def _require_api_key(request: Request):
     """Dependency that enforces API_KEY when one is configured."""
+    _ensure_runtime()
     if not config.api_key:
         return  # no auth configured → pass-through
     provided = request.headers.get('X-API-Key', '')
@@ -188,6 +231,26 @@ _API_AUTH = Depends(_require_api_key)
 
 
 # ==================== API Routes ===============================================
+
+
+def _refresh_file_watcher_if_running():
+    """Restart the live watcher after watch-list changes."""
+    fw = getattr(app.state, 'file_watcher', None)
+    if not fw:
+        return
+
+    try:
+        fw.stop()
+    except Exception as exc:
+        print(f"[filewatcher] ERROR stopping watcher during refresh: {exc}")
+
+    fw_manager = FileWatcherManager(config, processor, scanner, db)
+    if fw_manager.start():
+        app.state.file_watcher = fw_manager
+        print("[look] File watcher refreshed.")
+    else:
+        app.state.file_watcher = None
+        print("[look] File watcher refresh FAILED — continuing without it.")
 
 
 @app.get("/api/health")
@@ -214,6 +277,7 @@ async def add_watch_dir(path: str = Query(..., description="Path to add as watch
         raise HTTPException(status_code=400, detail=f"Path does not exist or is not a directory: {resolved}")
     result = db.add_watch_dir(str(resolved))
     if result:
+        _refresh_file_watcher_if_running()
         return {"status": "added", "path": str(resolved)}
     return JSONResponse(status_code=409, content={"status": "already_exists", "path": str(resolved)})
 
@@ -223,6 +287,7 @@ async def remove_watch_dir(path: str, _auth=_API_AUTH):
     normalized = str(Path(path).resolve())
     result = db.remove_watch_dir(normalized)
     if result:
+        _refresh_file_watcher_if_running()
         return {"status": "removed", "path": normalized}
     raise HTTPException(status_code=404, detail="Directory not in watch list")
 
@@ -232,7 +297,28 @@ async def set_watch_active(path: str, active: bool = Query(..., description="tru
     normalized = str(Path(path).resolve())
     result = db.set_watch_active(normalized, active)
     if result:
+        _refresh_file_watcher_if_running()
         return {"status": "updated", "path": normalized, "active": active}
+    raise HTTPException(status_code=404, detail="Directory not in watch list")
+
+
+@app.patch("/api/watch-list/{path:path}")
+async def update_watch_dir(
+    path: str,
+    new_path: str = Query(..., description="Replacement watch directory path"),
+    active: bool = Query(None, description="Optional active state"),
+    _auth=_API_AUTH,
+):
+    normalized = str(Path(path).resolve())
+    resolved_new = Path(new_path).resolve()
+    if not resolved_new.is_dir():
+        raise HTTPException(status_code=400, detail=f"Path does not exist or is not a directory: {resolved_new}")
+    result = db.update_watch_dir(normalized, str(resolved_new), active)
+    if result is None:
+        return JSONResponse(status_code=409, content={"status": "already_exists", "path": str(resolved_new)})
+    if result:
+        _refresh_file_watcher_if_running()
+        return {"status": "updated", "path": str(resolved_new), "previous_path": normalized, "active": active}
     raise HTTPException(status_code=404, detail="Directory not in watch list")
 
 
@@ -270,7 +356,10 @@ def _prepare_photo_for_import(photo_meta: dict, import_scanner: DirectoryScanner
     exif_result = proc_result.get('exif', {})
     photo_meta['gps_lat'] = exif_result.get('gps_lat')
     photo_meta['gps_lon'] = exif_result.get('gps_lon')
-    photo_meta['has_thumbnail'] = False
+    preview_path = _existing_preview_path(original_path)
+    photo_meta['has_thumbnail'] = bool(
+        processor.find_existing_thumbnail(preview_path, config.grid_thumbnail_width)
+    ) if preview_path else False
 
     return photo_meta
 
@@ -394,10 +483,6 @@ def _execute_import_task(task, params: dict) -> dict:
     task.progress = {"phase": "queued", "current": 0, "imported": 0, "errors": 0}
     return _run_import(params.get("path"), task=task)
 
-
-task_queue.import_handler = _execute_import_task
-
-
 @app.post("/api/import")
 async def import_photos(
     path: str = Query(None, description="Specific directory to import (default: all active watch dirs)"),
@@ -444,7 +529,32 @@ async def list_photos(
         start_date=start_date, end_date=end_date,
         limit=limit, offset=offset,
     )
-    return {"photos": photos, "total": len(photos)}
+    total = db.count_photos(
+        album=album, tag=tag, q=q, camera=camera,
+        start_date=start_date, end_date=end_date,
+    )
+    return {
+        "photos": photos,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(photos) < total,
+    }
+
+
+# NOTE: must be registered before "/api/photos/{photo_id}" or FastAPI matches
+# "nearby" as a photo_id and returns 404.
+@app.get("/api/photos/nearby")
+async def nearby_photos(
+    lat: float = Query(..., description="Latitude"),
+    lon: float = Query(..., description="Longitude"),
+    radius_km: float = Query(5.0, ge=0.01, description="Search radius in kilometers"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Find photos within radius_km of (lat, lon). Returns photos with gps_lat/gps_lon set."""
+    photos = db.geo_query(lat, lon, radius_km, limit=limit, offset=offset)
+    return {"photos": photos, "total": len(photos), "center": {"lat": lat, "lon": lon}, "radius_km": radius_km}
 
 
 @app.get("/api/photos/{photo_id}")
@@ -481,6 +591,9 @@ async def get_thumbnail(photo_id: str, size: int = Query(256, ge=128, le=1024)):
     if not thumb_path:
         preview_queue.enqueue_thumbnail(photo['id'], filepath, size, priority=0)
         return Response(_PLACEHOLDER_JPEG, media_type="image/jpeg", headers={"X-Look-Preview": "queued"})
+
+    if not photo.get('has_thumbnail'):
+        db.mark_thumbnail(photo['id'], True)
 
     return FileResponse(thumb_path, media_type="image/jpeg")
 
@@ -771,7 +884,7 @@ async def submit_dedup_scan(_auth=_API_AUTH):
 
 
 @app.get("/api/dedup/scan")
-async def get_dedup_scan_status(task_id: str = Query(..., description="Task ID from POST")):
+async def get_dedup_scan_status(task_id: str = Query(None, description="Task ID from POST")):
     """Get status of a submitted dedup scan (blocking scan for backwards compat if no task_id)."""
     if not config.dedup_enabled:
         return {"status": "disabled", "message": "Deduplication is not enabled. Set DEDUP_ENABLED=true."}
@@ -846,21 +959,6 @@ async def update_dedup_settings(
     if tolerance is not None:
         config.dedup_tolerance = max(0, min(256, tolerance))
     return {"status": "ok", "settings": {"dedup_enabled": config.dedup_enabled, "dedup_tolerance": config.dedup_tolerance}}
-
-
-# ==================== Geospatial Queries ========================================
-
-@app.get("/api/photos/nearby")
-async def nearby_photos(
-    lat: float = Query(..., description="Latitude"),
-    lon: float = Query(..., description="Longitude"),
-    radius_km: float = Query(5.0, ge=0.01, description="Search radius in kilometers"),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-):
-    """Find photos within radius_km of (lat, lon). Returns photos with gps_lat/gps_lon set."""
-    photos = db.geo_query(lat, lon, radius_km, limit=limit, offset=offset)
-    return {"photos": photos, "total": len(photos), "center": {"lat": lat, "lon": lon}, "radius_km": radius_km}
 
 
 # ==================== Migrations ================================================
@@ -1009,6 +1107,7 @@ async def serve_static(filename: str):
 if __name__ == "__main__":
     import uvicorn
 
+    _ensure_runtime()
     print(f"Starting Local Photo Library Server...")
     print(f"Watch directories: {db.get_watch_list()}")
     print(f"Database: {config.db_path}")

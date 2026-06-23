@@ -8,10 +8,21 @@ function Admin({ open, onClose, photos, status, setStatus }) {
   const [health, setHealth] = aUseState(null);
   const [importing, setImporting] = aUseState(false);
   const [importResult, setImportResult] = aUseState(null);
+  const [addPath, setAddPath] = aUseState('');
+  const [editingPath, setEditingPath] = aUseState(null);
+  const [editValue, setEditValue] = aUseState('');
+  const [storageBusy, setStorageBusy] = aUseState(null);
+  const [storageMessage, setStorageMessage] = aUseState(null);
+
+  const refreshHealth = async () => {
+    const h = await Look.apiHealth();
+    setHealth(h);
+    return h;
+  };
 
   aUseEffect(() => {
     if (!open) return;
-    Look.apiHealth().then(setHealth).catch(() => {});
+    refreshHealth().catch(() => {});
   }, [open]);
 
   if (!open) return null;
@@ -23,20 +34,87 @@ function Admin({ open, onClose, photos, status, setStatus }) {
   const photoCount = health?.photo_count ?? totalJpeg;
   const fwRunning = health?.filewatcher_running ?? false;
 
-  const triggerImport = async () => {
+  const waitForImportTask = async (taskId) => {
+    for (let i = 0; i < 300; i += 1) {
+      const task = await Look.apiTask(taskId);
+      if (task.status === 'completed') return task.result || task;
+      if (task.status === 'failed') throw new Error(task.error || 'Import task failed');
+      if (task.status === 'cancelled') throw new Error('Import task was cancelled');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    throw new Error('Import task is still running; check Tasks for progress.');
+  };
+
+  const triggerImport = async (path = null) => {
     setImporting(true);
     setImportResult(null);
     try {
-      const result = await Look.apiImport();
-      setImportResult(result);
-      // refresh health
-      const h = await Look.apiHealth();
-      setHealth(h);
+      const result = await Look.apiImport(path);
+      const finalResult = result.task_id ? await waitForImportTask(result.task_id) : result;
+      setImportResult(finalResult);
+      await refreshHealth();
     } catch (e) {
       setImportResult({ error: e.message });
     } finally {
       setImporting(false);
     }
+  };
+
+  const runStorageAction = async (key, action, successMessage) => {
+    setStorageBusy(key);
+    setStorageMessage(null);
+    try {
+      await action();
+      await refreshHealth();
+      setStorageMessage({ type: 'ok', text: successMessage });
+    } catch (e) {
+      setStorageMessage({ type: 'error', text: e.message || String(e) });
+    } finally {
+      setStorageBusy(null);
+    }
+  };
+
+  const addWatchDir = async (e) => {
+    e.preventDefault();
+    const path = addPath.trim();
+    if (!path) return;
+    await runStorageAction('add', async () => {
+      await Look.apiAddWatchDir(path);
+      setAddPath('');
+    }, 'Watch directory added.');
+  };
+
+  const startEditing = (dir) => {
+    setEditingPath(dir.path);
+    setEditValue(dir.path);
+    setStorageMessage(null);
+  };
+
+  const saveEdit = async (dir) => {
+    const nextPath = editValue.trim();
+    if (!nextPath || nextPath === dir.path) {
+      setEditingPath(null);
+      setEditValue('');
+      return;
+    }
+    await runStorageAction(`edit:${dir.path}`, async () => {
+      await Look.apiUpdateWatchDir(dir.path, nextPath, !!dir.active);
+      setEditingPath(null);
+      setEditValue('');
+    }, 'Watch directory updated.');
+  };
+
+  const removeWatchDir = async (dir) => {
+    if (!window.confirm(`Remove this watch directory?\n\n${dir.path}`)) return;
+    await runStorageAction(`remove:${dir.path}`, async () => {
+      await Look.apiRemoveWatchDir(dir.path);
+    }, 'Watch directory removed.');
+  };
+
+  const toggleWatchDir = async (dir) => {
+    await runStorageAction(`active:${dir.path}`, async () => {
+      await Look.apiSetWatchDirActive(dir.path, !dir.active);
+    }, dir.active ? 'Watch directory paused.' : 'Watch directory resumed.');
   };
 
   return (
@@ -128,20 +206,100 @@ function Admin({ open, onClose, photos, status, setStatus }) {
                 <Stat label="Photos indexed" value={photoCount.toLocaleString()} sub={`${totalRaw} with RAW originals`} />
                 <Stat label="Database" value="SQLite WAL" sub="Foreign keys · WAL mode" dot="ok" />
               </div>
+
+              <div className="admin-card admin-card-wide" style={{ marginTop: 18 }}>
+                <div className="admin-card-h">Add watch directory</div>
+                <form className="watch-add" onSubmit={addWatchDir}>
+                  <input
+                    value={addPath}
+                    onChange={e => setAddPath(e.target.value)}
+                    placeholder="/Volumes/Drive/Photos"
+                    disabled={storageBusy === 'add'}
+                    aria-label="Watch directory path"
+                  />
+                  <button className="primary-btn" disabled={!addPath.trim() || storageBusy === 'add'}>
+                    <Icon d={icons.add} size={13} />
+                    {storageBusy === 'add' ? 'Adding…' : 'Add'}
+                  </button>
+                  <button type="button" className="secondary-btn" onClick={() => triggerImport()} disabled={importing}>
+                    <Icon d={icons.refresh} size={13} />
+                    {importing ? 'Syncing…' : 'Sync active dirs'}
+                  </button>
+                </form>
+                <div className="admin-card-sub">Only active directories are included in the full sync.</div>
+                {storageMessage && (
+                  <div className={`watch-message ${storageMessage.type === 'error' ? 'error' : ''}`}>
+                    {storageMessage.text}
+                  </div>
+                )}
+              </div>
+
               <div className="admin-card admin-card-wide" style={{ marginTop: 18 }}>
                 <div className="admin-card-h">Folder map</div>
                 {watchDirs.length === 0
-                  ? <div style={{ color: 'var(--text-faint)', fontSize: 11.5 }}>No watch directories configured. Add one via the API or settings.</div>
+                  ? <div style={{ color: 'var(--text-faint)', fontSize: 11.5 }}>No watch directories configured.</div>
                   : (
-                  <table className="admin-table">
-                    <thead><tr><th>Path</th><th>Active</th><th>Added</th></tr></thead>
+                  <table className="admin-table watch-table">
+                    <thead><tr><th>Path</th><th>Active</th><th>Added</th><th>Actions</th></tr></thead>
                     <tbody>
                       {watchDirs.map((d, i) => (
                         <tr key={i}>
-                          <td className="mono">{d.path}</td>
-                          <td>{d.active ? '✓' : '—'}</td>
+                          <td className="mono watch-path-cell">
+                            {editingPath === d.path ? (
+                              <input
+                                className="watch-path-input"
+                                value={editValue}
+                                onChange={e => setEditValue(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') saveEdit(d);
+                                  if (e.key === 'Escape') {
+                                    setEditingPath(null);
+                                    setEditValue('');
+                                  }
+                                }}
+                                autoFocus
+                              />
+                            ) : d.path}
+                          </td>
+                          <td>
+                            <label className="watch-toggle">
+                              <input
+                                type="checkbox"
+                                checked={!!d.active}
+                                disabled={storageBusy === `active:${d.path}`}
+                                onChange={() => toggleWatchDir(d)}
+                              />
+                              <span>{d.active ? 'Active' : 'Paused'}</span>
+                            </label>
+                          </td>
                           <td style={{ color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', fontSize: 10.5 }}>
                             {d.added_at ? d.added_at.slice(0,10) : '—'}
+                          </td>
+                          <td>
+                            <div className="watch-actions">
+                              {editingPath === d.path ? (
+                                <>
+                                  <button className="secondary-btn small" onClick={() => saveEdit(d)} disabled={storageBusy === `edit:${d.path}`}>
+                                    Save
+                                  </button>
+                                  <button className="secondary-btn small" onClick={() => { setEditingPath(null); setEditValue(''); }}>
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button className="secondary-btn icon-only" title="Sync this directory" onClick={() => triggerImport(d.path)} disabled={importing}>
+                                    <Icon d={icons.refresh} size={13} />
+                                  </button>
+                                  <button className="secondary-btn icon-only" title="Edit path" onClick={() => startEditing(d)}>
+                                    <Icon d={icons.settings} size={13} />
+                                  </button>
+                                  <button className="secondary-btn icon-only danger" title="Remove directory" onClick={() => removeWatchDir(d)} disabled={storageBusy === `remove:${d.path}`}>
+                                    <Icon d={icons.trash} size={13} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -149,6 +307,24 @@ function Admin({ open, onClose, photos, status, setStatus }) {
                   </table>
                 )}
               </div>
+
+              {importResult && (
+                <div className="admin-card admin-card-wide" style={{ marginTop: 18 }}>
+                  <div className="admin-card-h">Last sync result</div>
+                  {importResult.error
+                    ? <div style={{ color: 'var(--reject)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{importResult.error}</div>
+                    : (
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                      {importResult.message} — {importResult.imported} imported, {importResult.errors} errors
+                      {importResult.error_details?.length > 0 && (
+                        <ul style={{ marginTop: 8, paddingLeft: 16, color: 'var(--reject)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+                          {importResult.error_details.map((e, i) => <li key={i}>{e}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -196,7 +372,7 @@ function Admin({ open, onClose, photos, status, setStatus }) {
                 <div className="admin-card-h">Tailscale access</div>
                 <p className="admin-p">
                   Look relies on Tailscale for private network access. All devices on your Tailnet can reach
-                  the server at <span className="mono">studio.taila3f2b.ts.net:8080</span>.
+                  the server at <span className="mono">studio.taila3f2b.ts.net:5678</span>.
                   Read access is open; write operations (import, settings) require an API key if configured.
                 </p>
                 <table className="admin-table">

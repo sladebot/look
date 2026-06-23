@@ -131,7 +131,7 @@ def test_glob_pattern_match():
 
 def test_reset_specific():
     """Reset should clear buckets for specific IP, endpoint, or all."""
-    limiter = RateLimiter(default_rate=60, default_burst=120)
+    limiter = RateLimiter(default_rate=60, default_burst=1)
 
     # Create some state — different endpoints get separate buckets
     limiter.allow_request("10.0.0.1", "/api/photos")

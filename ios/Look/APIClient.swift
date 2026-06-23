@@ -1,67 +1,89 @@
 import Foundation
 
+/// Networking layer for the Look server.
+///
+/// Tailscale: the app talks plain HTTP to a self-hosted server on a private
+/// tailnet. App Transport Security already allows arbitrary loads (see
+/// Info.plist), so a `100.x.y.z:PORT` address or a `machine.tailnet.ts.net:PORT`
+/// MagicDNS name entered in Settings works directly. When the user has set an
+/// explicit server URL we treat it as authoritative and do NOT silently fall
+/// back to LAN/localhost guesses (a fallback on a tailnet just hides typos and
+/// can cache the wrong server). First-run defaults to the MagicDNS URL.
 class APIClient {
     static let shared = APIClient()
 
-    #if targetEnvironment(simulator)
-    private let defaultBaseURL = "http://127.0.0.1:8765"
-    #else
-    private let defaultBaseURL = "http://10.0.0.151:8765"
-    #endif
+    private let defaultBaseURL = "http://studio.taila3f2b.ts.net:5678"
 
+    /// Cached base URL that last produced a successful response.
     private var activeBaseURL: String?
-    var baseURL: String {
-        activeBaseURL ?? configuredBaseURL
-    }
+
+    var baseURL: String { activeBaseURL ?? configuredBaseURL }
 
     private var decoder: JSONDecoder { JSONDecoder() }
 
-    private var configuredBaseURL: String {
-        let saved = UserDefaults.standard.string(forKey: "server_url")?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return saved?.isEmpty == false ? saved! : defaultBaseURL
+    var configuredBaseURL: String {
+        let saved = UserDefaults.standard.string(forKey: "server_url")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (saved?.isEmpty == false) ? saved! : defaultBaseURL
     }
 
+    /// Optional API key. Sent as `X-API-Key` on every request so write
+    /// endpoints work when the server has `API_KEY` configured.
+    private var apiKey: String? {
+        let key = UserDefaults.standard.string(forKey: "api_key")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (key?.isEmpty == false) ? key : nil
+    }
+
+    /// True when the user explicitly configured a server URL.
+    private var hasExplicitServerURL: Bool {
+        let saved = UserDefaults.standard.string(forKey: "server_url")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return saved?.isEmpty == false
+    }
+
+    /// Candidate base URLs to try, in order. When the user configured a URL we
+    /// use only that (authoritative). Otherwise we use the Tailscale default.
     private var baseURLCandidates: [String] {
-        [
-            configuredBaseURL,
-            defaultBaseURL,
-            "http://127.0.0.1:8765",
-            "http://localhost:8765",
-            "http://10.0.0.151:8765",
-        ].reduce(into: [String]()) { result, candidate in
-            if !result.contains(candidate) {
-                result.append(candidate)
-            }
+        if hasExplicitServerURL {
+            return [configuredBaseURL]
         }
+        return [defaultBaseURL]
     }
 
     // MARK: - Health
 
-    func health() async throws -> HealthResponse {
-        try await get("/api/health")
+    func health() async throws -> HealthResponse { try await get("/api/health") }
+
+    // MARK: - Import / Sync
+
+    /// Submit a background import. Returns a task envelope to poll.
+    func importPhotos(path: String? = nil) async throws -> ImportSubmitResponse {
+        var p = "/api/import?background=true"
+        if let path { p += "&path=\(encode(path))" }
+        return try await request(p, method: "POST")
     }
 
-    func importPhotos(path: String? = nil) async throws -> ImportResponse {
-        if let path {
-            return try await post("/api/import?path=\(encode(path))")
-        }
-        return try await post("/api/import")
+    /// Synchronous import (blocks until done). Used as a fallback.
+    func importPhotosSync(path: String? = nil) async throws -> ImportResponse {
+        var p = "/api/import?background=false"
+        if let path { p += "&path=\(encode(path))" }
+        return try await request(p, method: "POST", timeout: 120)
     }
 
     // MARK: - Photos
 
-    func photos(limit: Int = 50, offset: Int = 0, tag: String? = nil,
+    func photos(limit: Int = 50, offset: Int = 0, album: String? = nil, tag: String? = nil,
                 camera: String? = nil, query: String? = nil) async throws -> PhotoListResponse {
         var params = "limit=\(limit)&offset=\(offset)"
+        if let a = album { params += "&album=\(encode(a))" }
         if let t = tag { params += "&tag=\(encode(t))" }
         if let c = camera { params += "&camera=\(encode(c))" }
         if let q = query { params += "&q=\(encode(q))" }
         return try await get("/api/photos?\(params)")
     }
 
-    func photoDetail(_ id: String) async throws -> Photo {
-        try await get("/api/photos/\(id)")
-    }
+    func photoDetail(_ id: String) async throws -> Photo { try await get("/api/photos/\(id)") }
 
     func thumbnailURL(for photoId: String, size: Int = 256) -> URL {
         URL(string: "\(baseURL)/api/thumbnails/\(photoId)?size=\(size)")!
@@ -71,6 +93,14 @@ class APIClient {
         URL(string: "\(baseURL)/api/full/\(photoId)")!
     }
 
+    func downloadJPEGData(_ photoId: String) async throws -> Data {
+        try await fetchData("/api/download/jpeg/\(photoId)")
+    }
+
+    func downloadRawData(_ photoId: String) async throws -> Data {
+        try await fetchData("/api/download/raw/\(photoId)")
+    }
+
     // MARK: - Albums
 
     func albums() async throws -> [Album] {
@@ -78,18 +108,58 @@ class APIClient {
         return response.albums
     }
 
-    func albumDetail(_ id: String) async throws -> Album {
-        try await get("/api/albums/\(id)")
+    func albumDetail(_ id: String) async throws -> Album { try await get("/api/albums/\(id)") }
+
+    @discardableResult
+    func createAlbum(name: String, description: String = "") async throws -> CreateAlbumResponse {
+        try await request("/api/albums?name=\(encode(name))&description=\(encode(description))", method: "POST")
+    }
+
+    @discardableResult
+    func updateAlbum(_ id: String, name: String? = nil, description: String? = nil) async throws -> GenericStatusResponse {
+        var params: [String] = []
+        if let name { params.append("name=\(encode(name))") }
+        if let description { params.append("description=\(encode(description))") }
+        let query = params.isEmpty ? "" : "?" + params.joined(separator: "&")
+        return try await request("/api/albums/\(id)\(query)", method: "PUT")
+    }
+
+    @discardableResult
+    func deleteAlbum(_ id: String) async throws -> GenericStatusResponse {
+        try await request("/api/albums/\(id)", method: "DELETE")
+    }
+
+    @discardableResult
+    func addPhotoToAlbum(albumId: String, photoId: String) async throws -> GenericStatusResponse {
+        try await request("/api/albums/\(albumId)/photos/\(photoId)", method: "POST")
+    }
+
+    @discardableResult
+    func removePhotoFromAlbum(albumId: String, photoId: String) async throws -> GenericStatusResponse {
+        try await request("/api/albums/\(albumId)/photos/\(photoId)", method: "DELETE")
     }
 
     // MARK: - Smart Collections
 
-    func smartCollections() async throws -> SmartCollectionsResponse {
-        try await get("/api/smart-collections")
-    }
+    func smartCollections() async throws -> SmartCollectionsResponse { try await get("/api/smart-collections") }
 
     func smartCollectionDetail(_ id: String) async throws -> SmartCollection {
         try await get("/api/smart-collections/\(id)")
+    }
+
+    @discardableResult
+    func createSmartCollection(name: String, description: String = "", ruleSpec: String) async throws -> CreateAlbumResponse {
+        try await request("/api/smart-collections?name=\(encode(name))&description=\(encode(description))&rule_spec=\(encode(ruleSpec))", method: "POST")
+    }
+
+    @discardableResult
+    func evalSmartCollection(_ id: String) async throws -> GenericStatusResponse {
+        try await request("/api/smart-collections/\(id)/eval", method: "POST")
+    }
+
+    @discardableResult
+    func deleteSmartCollection(_ id: String) async throws -> GenericStatusResponse {
+        try await request("/api/smart-collections/\(id)", method: "DELETE")
     }
 
     // MARK: - Tags
@@ -98,31 +168,140 @@ class APIClient {
         try await get("/api/photos/\(photoId)/tags")
     }
 
-    func addTag(_ photoId: String, tag: String) async throws -> GenericStatusResponse {
-        try await post("/api/photos/\(photoId)/tags?tag=\(encode(tag))")
+    @discardableResult
+    func addTag(_ photoId: String, tag: String) async throws -> TagListResponse {
+        try await request("/api/photos/\(photoId)/tags?tag=\(encode(tag))", method: "POST")
     }
 
     @discardableResult
     func removeTag(_ photoId: String, tag: String) async throws -> GenericStatusResponse {
-        try await delete("/api/photos/\(photoId)/tags/\(encode(tag))")
+        try await request("/api/photos/\(photoId)/tags/\(encode(tag))", method: "DELETE")
     }
 
     func autoTag(_ photoId: String) async throws -> AutoTagResponse {
-        try await post("/api/photos/\(photoId)/tags/auto")
+        try await request("/api/photos/\(photoId)/tags/auto", method: "POST")
     }
 
     func tagSuggestions(_ photoId: String) async throws -> TagSuggestResponse {
         try await get("/api/photos/\(photoId)/tags/suggest")
     }
 
-    func allTags() async throws -> AllTagsResponse {
-        try await get("/api/tags")
+    func tagHistory(_ photoId: String) async throws -> TagHistoryResponse {
+        try await get("/api/photos/\(photoId)/tags/history")
+    }
+
+    func allTags() async throws -> AllTagsResponse { try await get("/api/tags") }
+
+    @discardableResult
+    func mergeTags(source: String, target: String) async throws -> GenericStatusResponse {
+        try await request("/api/tags/merge?source=\(encode(source))&target=\(encode(target))", method: "POST")
+    }
+
+    func duplicateTagSuggestions() async throws -> DuplicateTagsResponse {
+        try await get("/api/tags/suggest")
     }
 
     // MARK: - Search
 
-    func search(query: String) async throws -> PhotoListResponse {
+    func search(query: String) async throws -> SearchResponse {
         try await get("/api/search?q=\(encode(query))&limit=50")
+    }
+
+    // MARK: - Settings
+
+    func settings() async throws -> SettingsResponse { try await get("/api/settings") }
+
+    @discardableResult
+    func putSetting(key: String, value: String) async throws -> GenericStatusResponse {
+        try await request("/api/settings/\(encode(key))?value=\(encode(value))", method: "PUT")
+    }
+
+    /// Typed boolean toggles (dedicated endpoints with their own config side-effects).
+    @discardableResult
+    func putBoolSetting(_ key: String, _ value: Bool) async throws -> GenericStatusResponse {
+        try await request("/api/settings/\(key)?value=\(value)", method: "PUT")
+    }
+
+    // MARK: - Dedup
+
+    func dedupSettings() async throws -> DedupSettingsResponse { try await get("/api/dedup/settings") }
+
+    @discardableResult
+    func updateDedupSettings(enabled: Bool? = nil, tolerance: Int? = nil) async throws -> DedupSettingsUpdateResponse {
+        var params: [String] = []
+        if let enabled { params.append("enabled=\(enabled)") }
+        if let tolerance { params.append("tolerance=\(tolerance)") }
+        let query = params.isEmpty ? "" : "?" + params.joined(separator: "&")
+        return try await request("/api/dedup/settings\(query)", method: "PUT")
+    }
+
+    func submitDedupScan() async throws -> TaskSubmitResponse {
+        try await request("/api/dedup/scan", method: "POST")
+    }
+
+    @discardableResult
+    func mergeDuplicates(groupId: Int, keepPhotoId: String) async throws -> GenericStatusResponse {
+        try await request("/api/dedup/merge?group_id=\(groupId)&keep_photo_id=\(encode(keepPhotoId))", method: "POST")
+    }
+
+    // MARK: - Tasks
+
+    func tasks(limit: Int = 50, offset: Int = 0) async throws -> TaskListResponse {
+        try await get("/api/tasks?limit=\(limit)&offset=\(offset)")
+    }
+
+    func task(_ id: String) async throws -> TaskInfo { try await get("/api/tasks/\(id)") }
+
+    @discardableResult
+    func cancelTask(_ id: String) async throws -> GenericStatusResponse {
+        try await request("/api/tasks/\(id)/cancel", method: "POST")
+    }
+
+    // MARK: - Watch list
+
+    func watchList() async throws -> WatchListResponse { try await get("/api/watch-list") }
+
+    @discardableResult
+    func addWatchDir(_ path: String) async throws -> GenericStatusResponse {
+        try await request("/api/watch-list?path=\(encode(path))", method: "POST")
+    }
+
+    @discardableResult
+    func removeWatchDir(_ path: String) async throws -> GenericStatusResponse {
+        try await request("/api/watch-list/\(encodePathComponent(path))", method: "DELETE")
+    }
+
+    @discardableResult
+    func setWatchActive(_ path: String, active: Bool) async throws -> GenericStatusResponse {
+        try await request("/api/watch-list/\(encodePathComponent(path))/active?active=\(active)", method: "PATCH")
+    }
+
+    @discardableResult
+    func updateWatchDir(_ path: String, newPath: String, active: Bool? = nil) async throws -> GenericStatusResponse {
+        var query = "new_path=\(encode(newPath))"
+        if let active { query += "&active=\(active)" }
+        return try await request("/api/watch-list/\(encodePathComponent(path))?\(query)", method: "PATCH")
+    }
+
+    // MARK: - Geo
+
+    func nearbyPhotos(lat: Double, lon: Double, radiusKm: Double = 5.0,
+                      limit: Int = 50, offset: Int = 0) async throws -> NearbyResponse {
+        try await get("/api/photos/nearby?lat=\(lat)&lon=\(lon)&radius_km=\(radiusKm)&limit=\(limit)&offset=\(offset)")
+    }
+
+    // MARK: - Migrations
+
+    func migrationStatus() async throws -> MigrationStatusResponse { try await get("/api/migrate") }
+
+    @discardableResult
+    func runMigrations() async throws -> MigrationApplyResponse {
+        try await request("/api/migrate", method: "POST")
+    }
+
+    @discardableResult
+    func rollbackMigrations(targetVersion: Int) async throws -> GenericStatusResponse {
+        try await request("/api/migrate/rollback?target_version=\(targetVersion)", method: "POST")
     }
 
     // MARK: - HTTP helpers
@@ -131,40 +310,58 @@ class APIClient {
         s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s
     }
 
+    private func encodePathComponent(_ s: String) -> String {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
+    }
+
     private func get<T: Decodable>(_ path: String) async throws -> T {
         try await request(path, method: "GET")
     }
 
-    private func post<T: Decodable>(_ path: String) async throws -> T {
-        try await request(path, method: "POST")
+    private func request<T: Decodable>(_ path: String, method: String, timeout: TimeInterval = 12) async throws -> T {
+        let data = try await rawRequest(path, method: method, timeout: timeout)
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw APIError.decodingError(String(describing: error))
+        }
     }
 
-    private func delete<T: Decodable>(_ path: String) async throws -> T {
-        try await request(path, method: "DELETE")
+    /// Fetch raw bytes (downloads). Honors the same candidate/auth logic.
+    private func fetchData(_ path: String, timeout: TimeInterval = 60) async throws -> Data {
+        try await rawRequest(path, method: "GET", timeout: timeout)
     }
 
-    private func request<T: Decodable>(_ path: String, method: String) async throws -> T {
+    /// Core request: tries each candidate base URL until one succeeds, caches it,
+    /// and attaches the API key header when configured.
+    private func rawRequest(_ path: String, method: String, timeout: TimeInterval) async throws -> Data {
         var lastError: Error?
+        let candidates = activeBaseURL.map { [$0] + baseURLCandidates.filter { c in c != activeBaseURL } } ?? baseURLCandidates
 
-        for candidate in baseURLCandidates {
+        for candidate in candidates {
             guard let url = URL(string: "\(candidate)\(path)") else { continue }
             var req = URLRequest(url: url)
             req.httpMethod = method
-            req.timeoutInterval = 8
+            req.timeoutInterval = timeout
+            if let apiKey { req.setValue(apiKey, forHTTPHeaderField: "X-API-Key") }
 
             do {
                 let (data, response) = try await URLSession.shared.data(for: req)
-                if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
-                    throw APIError.httpError(httpResp.statusCode)
+                if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
+                    // A 4xx/5xx is a real server answer — don't keep probing other hosts.
+                    activeBaseURL = candidate
+                    throw APIError.httpError(http.statusCode)
                 }
-                let decoded = try decoder.decode(T.self, from: data)
                 activeBaseURL = candidate
-                return decoded
+                return data
+            } catch let apiErr as APIError {
+                throw apiErr
             } catch {
                 lastError = error
             }
         }
-
         throw lastError ?? APIError.httpError(0)
     }
 }
@@ -175,7 +372,9 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .httpError(let code): return "Server error (\(code))"
+        case .httpError(let code):
+            if code == 401 { return "Unauthorized — check the API key in Settings" }
+            return "Server error (\(code))"
         case .decodingError(let msg): return "Data error: \(msg)"
         }
     }

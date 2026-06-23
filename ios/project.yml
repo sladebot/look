@@ -24,3 +24,4 @@ targets:
         UIApplicationSupportsIndirectInputEvents: true
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        NSPhotoLibraryAddUsageDescription: "Look saves photos you download from your library into your Photos app."

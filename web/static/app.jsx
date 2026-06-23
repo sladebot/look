@@ -254,14 +254,25 @@ function App() {
   const setFlag   = (id, f) => setPhotos(ps => ps.map(p => p.id === id ? { ...p, flag: f }   : p));
   const toggleFav = (id)    => setPhotos(ps => ps.map(p => p.id === id ? { ...p, favorite: !p.favorite } : p));
 
-  const handleDropOnAlbum = (albumId, e) => {
+  const handleDropOnAlbum = async (albumId, e) => {
     const id = e.dataTransfer.getData('text/photo-id');
     if (!id) return;
     // Optimistic UI update
     const album = albums.find(a => a.id === albumId);
+    const previousPhoto = photos.find(p => p.id === id);
     setPhotos(ps => ps.map(p => p.id === id ? { ...p, album: albumId, albumName: album?.name || '' } : p));
-    // Persist to API
-    Look.apiAddPhotoToAlbum(albumId, id).catch(() => {});
+    try {
+      await Look.apiAddPhotoToAlbum(albumId, id);
+    } catch (err) {
+      setPhotos(ps => ps.map(p => p.id === id ? {
+        ...p,
+        album: previousPhoto?.album || null,
+        albumName: previousPhoto?.albumName || '',
+      } : p));
+      const message = err?.message || String(err);
+      setSyncMessage(`Album add failed: ${message}`);
+      console.error('Album add failed', err);
+    }
   };
 
   const handleCreateAlbum = async (name, serverAlbumId) => {

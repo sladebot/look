@@ -146,8 +146,8 @@ def test_geo_query_filters_by_radius():
         'gps_lat': 40.7128, 'gps_lon': -74.0060,
     })
 
-    # Query with 0.001 km radius — should NOT include NYC (distance > 0)
-    result = db.geo_query(lat=40.7128, lon=-74.0060, radius_km=0.0001)
+    # Query a nearby-but-different point with a tiny radius; NYC should be out.
+    result = db.geo_query(lat=40.7138, lon=-74.0060, radius_km=0.0001)
     assert len(result) == 0
 
     # Same location, 50 km radius — should include it
