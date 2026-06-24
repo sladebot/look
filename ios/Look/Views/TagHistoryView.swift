@@ -5,12 +5,23 @@ struct TagHistoryView: View {
     let photoId: String
     @State private var entries: [TagHistoryEntry] = []
     @State private var isLoading = true
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
             Group {
                 if isLoading {
                     ProgressView()
+                } else if let errorMessage {
+                    ContentUnavailableView {
+                        Label("Could not load history", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(errorMessage)
+                    } actions: {
+                        Button("Retry") {
+                            Task { await load() }
+                        }
+                    }
                 } else if entries.isEmpty {
                     ContentUnavailableView("No history", systemImage: "clock.arrow.circlepath",
                                            description: Text("No tag changes recorded for this photo."))
@@ -35,14 +46,20 @@ struct TagHistoryView: View {
             .navigationTitle("Tag History")
             .navigationBarTitleDisplayMode(.inline)
             .task { await load() }
+            .refreshable { await load() }
         }
     }
 
     private func load() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
-        if let resp = try? await APIClient.shared.tagHistory(photoId) {
+        do {
+            let resp = try await APIClient.shared.tagHistory(photoId)
             entries = resp.history
+        } catch {
+            entries = []
+            errorMessage = error.localizedDescription
         }
     }
 }

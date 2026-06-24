@@ -27,6 +27,17 @@ struct PhotoCard: View {
                     .stroke(.blue, lineWidth: 3)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(selectionMode ? "Double tap to \(isSelected ? "remove from" : "add to") selection" : "Double tap to open photo")
+        .accessibilityAddTraits(isSelected ? [.isImage, .isSelected] : .isImage)
+    }
+
+    private var accessibilityLabel: String {
+        var parts = [photo.filename]
+        if photo.isFavorite == true { parts.append("favorite") }
+        if isSelected { parts.append("selected") }
+        return parts.joined(separator: ", ")
     }
 }
 

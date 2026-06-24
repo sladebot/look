@@ -91,6 +91,16 @@ struct PhotosGrid: View {
         store.photos.filter { selectedPhotoIds.contains($0.id) }
     }
 
+    private var selectedVisibleCount: Int {
+        visiblePhotos.reduce(0) { count, photo in
+            count + (selectedPhotoIds.contains(photo.id) ? 1 : 0)
+        }
+    }
+
+    private var allVisiblePhotosSelected: Bool {
+        !visiblePhotos.isEmpty && selectedVisibleCount == visiblePhotos.count
+    }
+
     private var visiblePhotos: [Photo] {
         let filtered = store.photos.filter { photo in
             switch filter {
@@ -142,6 +152,14 @@ struct PhotosGrid: View {
             }
             .navigationTitle("Photos")
             .toolbar { toolbarContent }
+            .safeAreaInset(edge: .bottom) {
+                if selectionMode {
+                    selectionActionBar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.18), value: selectionMode)
+            .animation(.easeInOut(duration: 0.18), value: selectedPhotoIds.count)
             .fullScreenCover(item: $selectedPhoto) { photo in
                 NativePhotoViewer(photos: visiblePhotos, initialPhoto: photo)
             }
@@ -166,6 +184,8 @@ struct PhotosGrid: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        statusBanner
+
                         if store.isSyncing {
                             syncStatusStrip
                                 .padding(.horizontal, 12)
@@ -275,6 +295,10 @@ struct PhotosGrid: View {
             }
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel(for: photo, selected: isSelected))
+        .accessibilityHint(selectionMode ? "Double tap to \(isSelected ? "remove from" : "add to") selection" : "Double tap to open photo")
+        .accessibilityAddTraits(isSelected ? [.isImage, .isSelected] : .isImage)
         .onAppear { store.loadMoreIfNeeded(currentPhoto: photo) }
         .onTapGesture {
             if selectionMode { toggleSelection(photo) } else { selectedPhoto = photo }
@@ -319,6 +343,14 @@ struct PhotosGrid: View {
             Image(systemName: "wifi.slash").font(.largeTitle).foregroundColor(.secondary)
             Text("Cannot connect to Look server").font(.headline)
             Text("Check server URL in Settings").font(.caption).foregroundColor(.secondary)
+            if let message = store.errorMessage, !message.isEmpty {
+                Text(message)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .padding(.horizontal, 24)
+            }
             Button("Retry") { Task { await store.checkConnection() } }
                 .buttonStyle(.bordered)
         }
@@ -331,6 +363,15 @@ struct PhotosGrid: View {
                 .font(.headline)
             Text(store.photos.isEmpty ? "Import photos on the Look server first" : "Clear filters to see the full library")
                 .font(.caption).foregroundColor(.secondary)
+            if let message = store.errorMessage, !message.isEmpty {
+                errorStatusStrip(message)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 4)
+            } else if let message = store.lastSyncMessage, isSyncWarning(message) {
+                syncWarningStrip(message)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 4)
+            }
             if store.isSyncing {
                 syncStatusStrip
                     .padding(.top, 4)
@@ -364,6 +405,19 @@ struct PhotosGrid: View {
         .padding(.vertical, 16)
     }
 
+    @ViewBuilder
+    private var statusBanner: some View {
+        if let message = store.errorMessage, !message.isEmpty {
+            errorStatusStrip(message)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+        } else if let message = store.lastSyncMessage, isSyncWarning(message) {
+            syncWarningStrip(message)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+        }
+    }
+
     private var footerText: String {
         if filter == .all {
             return "\(store.photos.count) of \(store.totalPhotos) photos loaded"
@@ -394,6 +448,139 @@ struct PhotosGrid: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 
+    private func errorStatusStrip(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Library needs attention")
+                        .font(.caption.weight(.semibold))
+                    Text(message)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(3)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    store.errorMessage = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss error")
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    Task {
+                        await store.checkConnection()
+                        await store.loadPhotos(reset: true)
+                    }
+                } label: {
+                    Label("Retry Load", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    Task { await store.syncNow() }
+                } label: {
+                    Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.bordered)
+                .disabled(store.isSyncing)
+            }
+            .font(.caption)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func syncWarningStrip(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Sync completed with issues")
+                    .font(.caption.weight(.semibold))
+                Text(message)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            Button {
+                Task { await store.syncNow() }
+            } label: {
+                Label("Retry", systemImage: "arrow.clockwise")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(store.isSyncing)
+            .accessibilityLabel("Retry sync")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var selectionActionBar: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selectionSummary)
+                    .font(.subheadline.weight(.semibold))
+                Text("\(visiblePhotos.count) visible")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Button {
+                toggleVisibleSelection()
+            } label: {
+                Label(allVisiblePhotosSelected ? "Clear" : "Select All",
+                      systemImage: allVisiblePhotosSelected ? "xmark.circle" : "checkmark.circle")
+            }
+            .buttonStyle(.bordered)
+            .disabled(visiblePhotos.isEmpty)
+
+            Button {
+                showAddToAlbum = true
+            } label: {
+                Label("Add", systemImage: "rectangle.stack.badge.plus")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(selectedPhotoIds.isEmpty)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var selectionSummary: String {
+        let count = selectedPhotoIds.count
+        return count == 1 ? "1 photo selected" : "\(count) photos selected"
+    }
+
     // MARK: Toolbar
 
     @ToolbarContentBuilder
@@ -406,51 +593,55 @@ struct PhotosGrid: View {
                 }
             }
         }
+        ToolbarItem(placement: .principal) {
+            if selectionMode {
+                Text(selectionSummary)
+                    .font(.headline)
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             if selectionMode {
-                Button {
-                    showAddToAlbum = true
-                } label: {
-                    Label("Add", systemImage: "rectangle.stack.badge.plus")
+                Button(allVisiblePhotosSelected ? "Clear" : "All") {
+                    toggleVisibleSelection()
                 }
-                .disabled(selectedPhotoIds.isEmpty)
+                .disabled(visiblePhotos.isEmpty)
+            } else {
+                Button("Select") {
+                    selectionMode = true
+                }
+                .disabled(visiblePhotos.isEmpty)
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button(selectionMode ? "\(selectedPhotoIds.count) Selected" : "Select") {
-                selectionMode.toggle()
-                if !selectionMode { selectedPhotoIds.removeAll() }
-            }
-            .disabled(store.photos.isEmpty)
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu {
-                Picker("Filter", selection: $filter) {
-                    ForEach(PhotoGridFilter.allCases) { option in
-                        Label(option.title, systemImage: option.systemImage).tag(option)
+            if !selectionMode {
+                Menu {
+                    Picker("Filter", selection: $filter) {
+                        ForEach(PhotoGridFilter.allCases) { option in
+                            Label(option.title, systemImage: option.systemImage).tag(option)
+                        }
                     }
-                }
-                Picker("Sort", selection: $sort) {
-                    ForEach(PhotoGridSort.allCases) { option in
-                        Label(option.title, systemImage: option.systemImage).tag(option)
+                    Picker("Sort", selection: $sort) {
+                        ForEach(PhotoGridSort.allCases) { option in
+                            Label(option.title, systemImage: option.systemImage).tag(option)
+                        }
                     }
-                }
-                Divider()
-                Button { showCreateAlbum = true } label: {
-                    Label("New Album", systemImage: "rectangle.stack.badge.plus")
-                }
-                Button {
-                    Task { await store.syncNow() }
+                    Divider()
+                    Button { showCreateAlbum = true } label: {
+                        Label("New Album", systemImage: "rectangle.stack.badge.plus")
+                    }
+                    Button {
+                        Task { await store.syncNow() }
+                    } label: {
+                        if store.isSyncing {
+                            Label("Syncing", systemImage: "arrow.triangle.2.circlepath")
+                        } else {
+                            Label("Sync & Import", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .disabled(store.isSyncing)
                 } label: {
-                    if store.isSyncing {
-                        Label("Syncing", systemImage: "arrow.triangle.2.circlepath")
-                    } else {
-                        Label("Sync & Import", systemImage: "arrow.triangle.2.circlepath")
-                    }
+                    if store.isSyncing { ProgressView() } else { Image(systemName: "ellipsis.circle") }
                 }
-                .disabled(store.isSyncing)
-            } label: {
-                if store.isSyncing { ProgressView() } else { Image(systemName: "ellipsis.circle") }
             }
         }
     }
@@ -461,6 +652,26 @@ struct PhotosGrid: View {
         } else {
             selectedPhotoIds.insert(photo.id)
         }
+    }
+
+    private func toggleVisibleSelection() {
+        if allVisiblePhotosSelected {
+            selectedPhotoIds.subtract(visiblePhotos.map(\.id))
+        } else {
+            selectedPhotoIds.formUnion(visiblePhotos.map(\.id))
+        }
+    }
+
+    private func isSyncWarning(_ message: String) -> Bool {
+        let lowercased = message.lowercased()
+        return lowercased.contains("error") || lowercased.contains("failed")
+    }
+
+    private func accessibilityLabel(for photo: Photo, selected: Bool) -> String {
+        var parts = [photo.filename]
+        if photo.isFavorite == true { parts.append("favorite") }
+        if selected { parts.append("selected") }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -574,6 +785,14 @@ struct NativePhotoViewer: View {
         photos[safe: currentIndex] ?? initialPhoto
     }
 
+    private var filmstripPhotos: [Photo] {
+        guard !photos.isEmpty else { return [] }
+        let radius = 18
+        let lowerBound = max(0, currentIndex - radius)
+        let upperBound = min(photos.count, currentIndex + radius + 1)
+        return Array(photos[lowerBound..<upperBound])
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -610,6 +829,7 @@ struct NativePhotoViewer: View {
                     .font(.title2)
                     .foregroundStyle(.white, .black.opacity(0.45))
             }
+            .accessibilityLabel("Close viewer")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(currentPhoto.filename)
@@ -635,6 +855,7 @@ struct NativePhotoViewer: View {
                     .font(.title2)
                     .foregroundStyle(.white, .black.opacity(0.45))
             }
+            .accessibilityLabel("Photo actions")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -645,7 +866,7 @@ struct NativePhotoViewer: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    ForEach(photos) { photo in
+                    ForEach(filmstripPhotos) { photo in
                         CachedThumbnail(url: APIClient.shared.thumbnailURL(for: photo.id, size: 256),
                                         maxPixel: 162)
                             .frame(width: 54, height: 54)
@@ -656,6 +877,8 @@ struct NativePhotoViewer: View {
                             }
                             .id(photo.id)
                             .onTapGesture { withAnimation { currentId = photo.id } }
+                            .accessibilityLabel(filmstripAccessibilityLabel(for: photo))
+                            .accessibilityAddTraits(photo.id == currentId ? [.isImage, .isSelected] : .isImage)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -667,6 +890,14 @@ struct NativePhotoViewer: View {
             }
             .onAppear { proxy.scrollTo(currentId, anchor: .center) }
         }
+    }
+
+    private func filmstripAccessibilityLabel(for photo: Photo) -> String {
+        guard let index = photos.firstIndex(where: { $0.id == photo.id }) else {
+            return photo.filename
+        }
+        let state = photo.id == currentId ? ", selected" : ""
+        return "\(photo.filename), \(index + 1) of \(photos.count)\(state)"
     }
 }
 

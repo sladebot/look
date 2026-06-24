@@ -10,17 +10,18 @@ struct DedupView: View {
     @State private var status = ""
     @State private var isScanning = false
     @State private var loadedSettings = false
+    @State private var pendingMerge: DedupMergeRequest?
 
     var body: some View {
         List {
-            Section("Settings") {
+            Section("Server Deduplication") {
                 Toggle("Deduplication enabled", isOn: $enabled)
                     .onChange(of: enabled) { _, newValue in
-                        Task { _ = try? await APIClient.shared.updateDedupSettings(enabled: newValue) }
+                        Task { await updateSettings(enabled: newValue) }
                     }
                 Stepper("Tolerance: \(tolerance)", value: $tolerance, in: 0...64)
                     .onChange(of: tolerance) { _, newValue in
-                        Task { _ = try? await APIClient.shared.updateDedupSettings(tolerance: newValue) }
+                        Task { await updateSettings(tolerance: newValue) }
                     }
                 Text("Lower tolerance = stricter matching (Hamming distance on perceptual hash).")
                     .font(.caption2).foregroundColor(.secondary)
@@ -52,7 +53,11 @@ struct DedupView: View {
                             Text(photo.filename ?? photo.photoId).font(.caption).lineLimit(1)
                             Spacer()
                             Button("Keep") {
-                                Task { await merge(groupIndex: index, keep: photo.photoId) }
+                                pendingMerge = DedupMergeRequest(
+                                    groupIndex: index,
+                                    keepPhotoId: photo.photoId,
+                                    filename: photo.filename ?? photo.photoId
+                                )
                             }
                             .font(.caption).buttonStyle(.borderedProminent)
                         }
@@ -63,12 +68,35 @@ struct DedupView: View {
         .navigationTitle("Duplicates")
         .task {
             if !loadedSettings {
-                if let s = try? await APIClient.shared.dedupSettings() {
+                do {
+                    let s = try await APIClient.shared.dedupSettings()
                     enabled = s.dedupEnabled
                     tolerance = s.dedupTolerance
+                    status = ""
+                } catch {
+                    status = "Could not load settings: \(error.localizedDescription)"
                 }
                 loadedSettings = true
             }
+        }
+        .alert(item: $pendingMerge) { request in
+            Alert(
+                title: Text("Merge Duplicate Group?"),
+                message: Text("Keep \"\(request.filename)\" and archive the other photos in this group to .trash/."),
+                primaryButton: .destructive(Text("Merge")) {
+                    Task { await merge(groupIndex: request.groupIndex, keep: request.keepPhotoId) }
+                },
+                secondaryButton: .cancel()
+            )
+        }
+    }
+
+    private func updateSettings(enabled: Bool? = nil, tolerance: Int? = nil) async {
+        do {
+            _ = try await APIClient.shared.updateDedupSettings(enabled: enabled, tolerance: tolerance)
+            status = "Settings updated"
+        } catch {
+            status = "Settings update failed: \(error.localizedDescription)"
         }
     }
 
@@ -76,8 +104,12 @@ struct DedupView: View {
         isScanning = true
         status = "Submitting scan…"
         defer { isScanning = false }
-        guard let submit = try? await APIClient.shared.submitDedupScan() else {
-            status = "Failed to start scan"; return
+        let submit: TaskSubmitResponse
+        do {
+            submit = try await APIClient.shared.submitDedupScan()
+        } catch {
+            status = "Failed to start scan: \(error.localizedDescription)"
+            return
         }
         guard let taskId = submit.taskId else {
             status = submit.status == "disabled" ? "Enable deduplication first" : "No task id returned"
@@ -86,14 +118,22 @@ struct DedupView: View {
         status = "Scanning…"
         // Poll task until done.
         for _ in 0..<120 {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            guard let task = try? await APIClient.shared.task(taskId) else { continue }
-            if ["completed", "failed", "cancelled"].contains(task.status) {
-                groups = Self.parseGroups(task.result)
-                status = task.status == "completed"
-                    ? "Found \(groups.count) duplicate group(s)"
-                    : "Scan \(task.status)"
+            do {
+                try await Task.sleep(nanoseconds: 1_500_000_000)
+                let task = try await APIClient.shared.task(taskId)
+                if ["completed", "failed", "cancelled"].contains(task.status) {
+                    groups = Self.parseGroups(task.result)
+                    status = task.status == "completed"
+                        ? "Found \(groups.count) duplicate group(s)"
+                        : "Scan \(task.status)"
+                    return
+                }
+            } catch is CancellationError {
+                status = "Scan polling cancelled"
                 return
+            } catch {
+                status = "Waiting for scan status: \(error.localizedDescription)"
+                continue
             }
         }
         status = "Scan timed out"
@@ -101,6 +141,10 @@ struct DedupView: View {
 
     private func merge(groupIndex: Int, keep: String) async {
         do {
+            guard groups.indices.contains(groupIndex) else {
+                status = "Merge failed: duplicate group changed. Scan again."
+                return
+            }
             _ = try await APIClient.shared.mergeDuplicates(groupId: groupIndex, keepPhotoId: keep)
             groups.remove(at: groupIndex)
             status = "Merged group — duplicates archived to .trash/"
@@ -124,14 +168,34 @@ struct DedupView: View {
     }
 }
 
+private struct DedupMergeRequest: Identifiable {
+    let groupIndex: Int
+    let keepPhotoId: String
+    let filename: String
+    var id: String { "\(groupIndex)-\(keepPhotoId)" }
+}
+
 // MARK: - Background tasks
 
 struct TasksView: View {
     @State private var tasks: [TaskInfo] = []
     @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var pendingCancel: TaskInfo?
 
     var body: some View {
         List {
+            if let errorMessage {
+                Section {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    Button("Retry") {
+                        Task { await load() }
+                    }
+                    .font(.caption)
+                }
+            }
             if tasks.isEmpty && !isLoading {
                 ContentUnavailableView("No background tasks", systemImage: "list.bullet.rectangle")
             }
@@ -154,10 +218,7 @@ struct TasksView: View {
                     }
                     if ["pending", "running"].contains(task.status) {
                         Button("Cancel", role: .destructive) {
-                            Task {
-                                _ = try? await APIClient.shared.cancelTask(task.taskId)
-                                await load()
-                            }
+                            pendingCancel = task
                         }
                         .font(.caption)
                     }
@@ -168,6 +229,16 @@ struct TasksView: View {
         .overlay { if isLoading { ProgressView() } }
         .task { await load() }
         .refreshable { await load() }
+        .alert(item: $pendingCancel) { task in
+            Alert(
+                title: Text("Cancel Task?"),
+                message: Text("Cancel \(task.taskType ?? "task") \(task.taskId)?"),
+                primaryButton: .destructive(Text("Cancel Task")) {
+                    Task { await cancel(task) }
+                },
+                secondaryButton: .cancel()
+            )
+        }
     }
 
     private func statusBadge(_ status: String) -> some View {
@@ -180,8 +251,23 @@ struct TasksView: View {
 
     private func load() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
-        if let resp = try? await APIClient.shared.tasks() { tasks = resp.tasks }
+        do {
+            let resp = try await APIClient.shared.tasks()
+            tasks = resp.tasks
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func cancel(_ task: TaskInfo) async {
+        do {
+            _ = try await APIClient.shared.cancelTask(task.taskId)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -194,10 +280,11 @@ struct WatchListView: View {
     @State private var message: String?
     @State private var editingDirectory: WatchDirectory?
     @State private var busyPath: String?
+    @State private var pendingRemoval: WatchDirectory?
 
     var body: some View {
         List {
-            Section("Add directory") {
+            Section("Server Watch Directories") {
                 HStack {
                     TextField("/path/on/server", text: $newPath)
                         .autocapitalization(.none).disableAutocorrection(true)
@@ -231,12 +318,12 @@ struct WatchListView: View {
                         Button { Task { await sync(dir) } } label: {
                             Label("Sync Directory", systemImage: "arrow.triangle.2.circlepath")
                         }
-                        Button(role: .destructive) { Task { await remove(dir.path) } } label: {
+                        Button(role: .destructive) { pendingRemoval = dir } label: {
                             Label("Remove", systemImage: "trash")
                         }
                     }
                     .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) { Task { await remove(dir.path) } } label: {
+                        Button(role: .destructive) { pendingRemoval = dir } label: {
                             Label("Remove", systemImage: "trash")
                         }
                         Button { editingDirectory = dir } label: {
@@ -252,8 +339,9 @@ struct WatchListView: View {
                     }
                 }
                 .onDelete { idx in
-                    let paths = idx.map { directories[$0].path }
-                    Task { for p in paths { await remove(p) } }
+                    if let first = idx.first {
+                        pendingRemoval = directories[first]
+                    }
                 }
             }
         }
@@ -266,12 +354,28 @@ struct WatchListView: View {
                 await load()
             }
         }
+        .alert(item: $pendingRemoval) { dir in
+            Alert(
+                title: Text("Remove Watch Directory?"),
+                message: Text("Stop watching \(dir.path). Existing photos remain in the library."),
+                primaryButton: .destructive(Text("Remove")) {
+                    Task { await remove(dir.path) }
+                },
+                secondaryButton: .cancel()
+            )
+        }
     }
 
     private func load() async {
         isLoading = true
         defer { isLoading = false }
-        if let resp = try? await APIClient.shared.watchList() { directories = resp.directories }
+        do {
+            let resp = try await APIClient.shared.watchList()
+            directories = resp.directories
+            message = nil
+        } catch {
+            message = "Could not load watch directories: \(error.localizedDescription)"
+        }
     }
     private func add() async {
         do {
@@ -281,12 +385,22 @@ struct WatchListView: View {
         } catch { message = error.localizedDescription }
     }
     private func remove(_ path: String) async {
-        _ = try? await APIClient.shared.removeWatchDir(path)
-        await load()
+        do {
+            _ = try await APIClient.shared.removeWatchDir(path)
+            message = "Removed \(path)"
+            await load()
+        } catch {
+            message = error.localizedDescription
+        }
     }
     private func setActive(_ dir: WatchDirectory, _ active: Bool) async {
-        _ = try? await APIClient.shared.setWatchActive(dir.path, active: active)
-        await load()
+        do {
+            _ = try await APIClient.shared.setWatchActive(dir.path, active: active)
+            message = active ? "Watching \(dir.path)" : "Paused \(dir.path)"
+            await load()
+        } catch {
+            message = error.localizedDescription
+        }
     }
     private func sync(_ dir: WatchDirectory) async {
         busyPath = dir.path
@@ -371,9 +485,21 @@ struct MigrationsView: View {
     @State private var info: MigrationStatusResponse?
     @State private var message: String?
     @State private var isLoading = true
+    @State private var confirmApply = false
 
     var body: some View {
         List {
+            if let message, info == nil {
+                Section {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    Button("Retry") {
+                        Task { await load() }
+                    }
+                    .font(.caption)
+                }
+            }
             if let info {
                 Section("Schema") {
                     HStack { Text("Current version"); Spacer()
@@ -391,7 +517,9 @@ struct MigrationsView: View {
                     }
                 }
                 Section {
-                    Button("Apply pending migrations") { Task { await apply() } }
+                    Button("Apply pending migrations", role: .destructive) {
+                        confirmApply = true
+                    }
                         .disabled(info.pending.isEmpty)
                     if let message { Text(message).font(.caption).foregroundColor(.secondary) }
                 }
@@ -400,20 +528,36 @@ struct MigrationsView: View {
         .navigationTitle("Migrations")
         .overlay { if isLoading { ProgressView() } }
         .task { await load() }
+        .refreshable { await load() }
+        .alert("Apply Pending Migrations?", isPresented: $confirmApply) {
+            Button("Apply", role: .destructive) {
+                Task { await apply() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This changes the server database schema. Make sure the server is healthy before continuing.")
+        }
     }
 
     private func load() async {
         isLoading = true
         defer { isLoading = false }
-        info = try? await APIClient.shared.migrationStatus()
+        do {
+            info = try await APIClient.shared.migrationStatus()
+            message = nil
+        } catch {
+            info = nil
+            message = error.localizedDescription
+        }
     }
     private func apply() async {
-        if let resp = try? await APIClient.shared.runMigrations() {
+        do {
+            let resp = try await APIClient.shared.runMigrations()
             message = resp.status == "applied"
                 ? "Applied \(resp.appliedCount ?? 0) migration(s)" : "Already up to date"
             await load()
-        } else {
-            message = "Migration failed (API key required?)"
+        } catch {
+            message = "Migration failed: \(error.localizedDescription)"
         }
     }
 }
@@ -426,6 +570,7 @@ struct TagCleanupView: View {
     @State private var target = ""
     @State private var message: String?
     @State private var isLoading = true
+    @State private var pendingMerge: TagMergeRequest?
 
     var body: some View {
         List {
@@ -434,7 +579,12 @@ struct TagCleanupView: View {
                     .autocapitalization(.none).disableAutocorrection(true)
                 TextField("Target tag (kept)", text: $target)
                     .autocapitalization(.none).disableAutocorrection(true)
-                Button("Merge") { Task { await merge() } }
+                Button("Merge", role: .destructive) {
+                    pendingMerge = TagMergeRequest(
+                        source: source.trimmingCharacters(in: .whitespacesAndNewlines),
+                        target: target.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                }
                     .disabled(source.trimmingCharacters(in: .whitespaces).isEmpty
                               || target.trimmingCharacters(in: .whitespaces).isEmpty)
                 if let message { Text(message).font(.caption).foregroundColor(.secondary) }
@@ -456,23 +606,45 @@ struct TagCleanupView: View {
         .navigationTitle("Tag Cleanup")
         .overlay { if isLoading { ProgressView() } }
         .task { await load() }
+        .refreshable { await load() }
+        .alert(item: $pendingMerge) { request in
+            Alert(
+                title: Text("Merge Tags?"),
+                message: Text("Replace \"\(request.source)\" with \"\(request.target)\" on matching photos. This cannot be undone from the app."),
+                primaryButton: .destructive(Text("Merge")) {
+                    Task { await merge(request) }
+                },
+                secondaryButton: .cancel()
+            )
+        }
     }
 
     private func load() async {
         isLoading = true
         defer { isLoading = false }
-        if let resp = try? await APIClient.shared.duplicateTagSuggestions() {
+        do {
+            let resp = try await APIClient.shared.duplicateTagSuggestions()
             duplicates = resp.suggestions
+            message = nil
+        } catch {
+            duplicates = []
+            message = "Could not load tag suggestions: \(error.localizedDescription)"
         }
     }
-    private func merge() async {
+    private func merge(_ request: TagMergeRequest) async {
         do {
             _ = try await APIClient.shared.mergeTags(
-                source: source.trimmingCharacters(in: .whitespaces),
-                target: target.trimmingCharacters(in: .whitespaces))
-            message = "Merged '\(source)' → '\(target)'"
+                source: request.source,
+                target: request.target)
+            message = "Merged '\(request.source)' into '\(request.target)'"
             source = ""; target = ""
             await load()
         } catch { message = error.localizedDescription }
     }
+}
+
+private struct TagMergeRequest: Identifiable {
+    let source: String
+    let target: String
+    var id: String { "\(source)-\(target)" }
 }

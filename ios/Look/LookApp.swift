@@ -16,11 +16,6 @@ struct LookApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
-                .task {
-                    await store.checkConnection()
-                    await store.loadPhotos(reset: true)
-                    store.startAutoSync()
-                }
         }
     }
 }

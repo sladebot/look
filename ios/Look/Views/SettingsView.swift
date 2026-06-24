@@ -2,7 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var store: PhotoStore
-    @AppStorage("server_url") private var serverURL = "http://studio.taila3f2b.ts.net:5678"
+    @AppStorage(ConnectionSetupStorage.serverURLKey) private var serverURL = ConnectionSetupStorage.defaultServerURL
+    @AppStorage(ConnectionSetupStorage.hasSuccessfulConnectionKey) private var hasSuccessfulConnection = false
     @State private var apiKey = ""
     @State private var isTesting = false
     @State private var cacheMessage: String?
@@ -14,11 +15,11 @@ struct SettingsView: View {
                 Section {
                     TextField("http://machine.tailnet.ts.net:5678", text: $serverURL)
                         .keyboardType(.URL)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                     SecureField("API key (optional)", text: $apiKey)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                         .textContentType(.password)
 
                     HStack {
@@ -34,11 +35,7 @@ struct SettingsView: View {
                     }
 
                     Button {
-                        isTesting = true
-                        Task {
-                            await store.checkConnection()
-                            isTesting = false
-                        }
+                        testConnection()
                     } label: {
                         HStack {
                             if isTesting { ProgressView().scaleEffect(0.7) }
@@ -128,9 +125,41 @@ struct SettingsView: View {
             .task {
                 APIClient.shared.migrateLegacyAPIKeyIfNeeded()
                 apiKey = APIClient.shared.storedAPIKey
-                await store.checkConnection()
+                if hasSuccessfulConnection {
+                    await store.checkConnection()
+                    if !store.serverConnected {
+                        hasSuccessfulConnection = false
+                    }
+                }
                 await store.loadServerSettings()
             }
+        }
+    }
+
+    private func testConnection() {
+        keychainMessage = nil
+        let trimmedURL = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmedURL), url.scheme != nil, url.host != nil else {
+            store.serverConnected = false
+            hasSuccessfulConnection = false
+            store.errorMessage = "Enter a valid server URL, including http:// or https://."
+            return
+        }
+        guard APIClient.shared.saveAPIKey(apiKey) else {
+            keychainMessage = "Could not save the API key to Keychain."
+            return
+        }
+
+        serverURL = trimmedURL
+        isTesting = true
+        Task {
+            await store.checkConnection()
+            hasSuccessfulConnection = store.serverConnected
+            if store.serverConnected {
+                store.errorMessage = nil
+                await store.loadServerSettings()
+            }
+            isTesting = false
         }
     }
 

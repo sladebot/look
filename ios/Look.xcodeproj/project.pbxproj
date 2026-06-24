@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A49FFEDF69274E2AB82B7900 /* ConnectionSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6339814E64954BE6845B5492 /* ConnectionSetupView.swift */; };
 		097D84F65F1F6BC7A603805B /* PhotosGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 406A30CD26384FB80F95C418 /* PhotosGrid.swift */; };
 		0A116008EA6980AC08B635D2 /* PhotoDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC86B295FEFA2DEB07E7724 /* PhotoDetail.swift */; };
 		188EC8FCAAB4754F92765702 /* SmartAlbumsList.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECD4931308E766C6FF52798A /* SmartAlbumsList.swift */; };
@@ -42,6 +43,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		6339814E64954BE6845B5492 /* ConnectionSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSetupView.swift; sourceTree = "<group>"; };
 		056DEE9FB68A41B40C546B5A /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		18BF5A283B62382D53C367EB /* TagHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagHistoryView.swift; sourceTree = "<group>"; };
 		2529A6404895C51F3E844F95 /* AlbumDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumDetail.swift; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 		8D377441D736E7AD45BA5FAF /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				6339814E64954BE6845B5492 /* ConnectionSetupView.swift */,
 				553E208E6D382D6CF3F92157 /* AddToAlbumSheet.swift */,
 				D4F0A203C0E661F881777EFE /* AdminViews.swift */,
 				2529A6404895C51F3E844F95 /* AlbumDetail.swift */,
@@ -224,6 +227,7 @@
 				1A7228462F573FA90CDD5444 /* AdminViews.swift in Sources */,
 				1B5735B2BF4E93B4CA8ADEF2 /* AlbumDetail.swift in Sources */,
 				599F0B83C521F06556081FB7 /* AlbumsList.swift in Sources */,
+				A49FFEDF69274E2AB82B7900 /* ConnectionSetupView.swift in Sources */,
 				70674C05A1789F4B5D5637B8 /* ContentView.swift in Sources */,
 				3C756A7E668F40525E5D15DF /* FullScreenImage.swift in Sources */,
 				75D3A0D3591DFF8BE3D5153A /* ImageSaver.swift in Sources */,
