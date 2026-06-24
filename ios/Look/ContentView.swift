@@ -34,41 +34,7 @@ struct ContentView: View {
     @State private var didLoadApplicationData = false
     @State private var selectedTab: LookTab = .photos
 
-    init() {
-        let paper = UIColor(red: 31 / 255, green: 35 / 255, blue: 39 / 255, alpha: 1)
-        let graphite = UIColor(red: 238 / 255, green: 243 / 255, blue: 246 / 255, alpha: 1)
-        let cyan = UIColor(red: 46 / 255, green: 168 / 255, blue: 255 / 255, alpha: 1)
-
-        // Keep chrome on the same quiet surface as the gallery. The previous
-        // default material turned the top region white and the tab bar glassy
-        // over thumbnails, which made the contact-sheet surface feel split.
-        let tab = UITabBarAppearance()
-        tab.configureWithOpaqueBackground()
-        tab.backgroundColor = paper
-        tab.shadowColor = UIColor.black.withAlphaComponent(0.10)
-        tab.stackedLayoutAppearance.selected.iconColor = cyan
-        tab.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: cyan]
-        tab.stackedLayoutAppearance.normal.iconColor = graphite.withAlphaComponent(0.70)
-        tab.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: graphite.withAlphaComponent(0.70)]
-        tab.inlineLayoutAppearance = tab.stackedLayoutAppearance
-        tab.compactInlineLayoutAppearance = tab.stackedLayoutAppearance
-        UITabBar.appearance().isTranslucent = false
-        UITabBar.appearance().backgroundColor = paper
-        UITabBar.appearance().barTintColor = paper
-        UITabBar.appearance().tintColor = cyan
-        UITabBar.appearance().unselectedItemTintColor = graphite.withAlphaComponent(0.70)
-        UITabBar.appearance().standardAppearance = tab
-        UITabBar.appearance().scrollEdgeAppearance = tab
-
-        let nav = UINavigationBarAppearance()
-        nav.configureWithOpaqueBackground()
-        nav.backgroundColor = paper
-        nav.shadowColor = UIColor.black.withAlphaComponent(0.35)
-        nav.largeTitleTextAttributes = [.foregroundColor: graphite]
-        nav.titleTextAttributes = [.foregroundColor: graphite]
-        UINavigationBar.appearance().standardAppearance = nav
-        UINavigationBar.appearance().scrollEdgeAppearance = nav
-    }
+    init() {}
 
     var body: some View {
         Group {
@@ -97,72 +63,33 @@ struct ContentView: View {
     }
 
     private var appTabs: some View {
-        ZStack(alignment: .bottom) {
-            activeTabView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        TabView(selection: $selectedTab) {
+            PhotosGrid()
                 .ignoresSafeArea(.container, edges: .bottom)
+                .tabItem { Label(LookTab.photos.title, systemImage: LookTab.photos.systemImage) }
+                .tag(LookTab.photos)
 
-            lookTabBar
+            LibraryView()
+                .ignoresSafeArea(.container, edges: .bottom)
+                .tabItem { Label(LookTab.library.title, systemImage: LookTab.library.systemImage) }
+                .tag(LookTab.library)
+
+            SearchView()
+                .ignoresSafeArea(.container, edges: .bottom)
+                .tabItem { Label(LookTab.search.title, systemImage: LookTab.search.systemImage) }
+                .tag(LookTab.search)
+
+            SettingsView()
+                .ignoresSafeArea(.container, edges: .bottom)
+                .tabItem { Label(LookTab.settings.title, systemImage: LookTab.settings.systemImage) }
+                .tag(LookTab.settings)
         }
         .tint(LookTheme.ColorToken.cyan)
         .background(LookTheme.ColorToken.paper.ignoresSafeArea())
-        .preferredColorScheme(.dark)
-    }
-
-    @ViewBuilder
-    private var activeTabView: some View {
-        switch selectedTab {
-        case .photos:
-            PhotosGrid()
-        case .library:
-            LibraryView()
-        case .search:
-            SearchView()
-        case .settings:
-            SettingsView()
-        }
-    }
-
-    private var lookTabBar: some View {
-        HStack(spacing: 0) {
-            ForEach(LookTab.allCases) { tab in
-                Button {
-                    selectedTab = tab
-                } label: {
-                    VStack(spacing: 5) {
-                        Image(systemName: tab.systemImage)
-                            .font(.system(size: 24, weight: .semibold))
-                            .frame(height: 28)
-                        Text(tab.title)
-                            .font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(selectedTab == tab ? LookTheme.ColorToken.graphite : LookTheme.ColorToken.graphite.opacity(0.72))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background {
-                        if selectedTab == tab {
-                            Capsule()
-                                .fill(LookTheme.ColorToken.graphite.opacity(0.13))
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
-            }
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .background(.ultraThinMaterial)
-        .background(LookTheme.ColorToken.paper.opacity(0.80))
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(LookTheme.ColorToken.mist.opacity(0.45))
-                .frame(height: 1)
-        }
+        .toolbarBackground(.automatic, for: .tabBar)
+        .toolbarColorScheme(.dark, for: .tabBar)
         .ignoresSafeArea(.container, edges: .bottom)
+        .preferredColorScheme(.dark)
     }
 
     private func performInitialConnectionCheck() async {

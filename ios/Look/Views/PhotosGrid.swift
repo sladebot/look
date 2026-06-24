@@ -14,7 +14,6 @@ private func photoAspect(_ photo: Photo) -> CGFloat {
 
 struct PhotoSection: Identifiable {
     let id: String
-    let title: String
     let photos: [Photo]
 }
 
@@ -123,9 +122,7 @@ struct PhotosGrid: View {
             if buckets[key] == nil { buckets[key] = []; order.append(key) }
             buckets[key]?.append(photo)
         }
-        return order.map { key in
-            PhotoSection(id: key, title: sectionTitle(forKey: key), photos: buckets[key] ?? [])
-        }
+        return order.map { key in PhotoSection(id: key, photos: buckets[key] ?? []) }
     }
 
     var body: some View {
@@ -145,15 +142,12 @@ struct PhotosGrid: View {
                     gallery(secs)
                 }
             }
-            .navigationTitle("")
+            .navigationTitle(selectionMode ? selectionSummary : "Photos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
             .lookScreenBackground()
-            .toolbarBackground(LookTheme.ColorToken.paper, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(.automatic, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbarBackground(LookTheme.ColorToken.paper, for: .tabBar)
-            .toolbarBackground(.visible, for: .tabBar)
             .toolbarColorScheme(.dark, for: .tabBar)
             .safeAreaInset(edge: .bottom) {
                 if selectionMode {
@@ -188,8 +182,7 @@ struct PhotosGrid: View {
             let contentWidth = max(1, width - horizontalInset)
             let target = max(104, contentWidth / (width > 600 ? 4.8 : 3.35))
             ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: LookTheme.Spacing.tight, pinnedViews: [.sectionHeaders]) {
-                    galleryHeader
+                LazyVStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
                     statusBanner
 
                     if store.isSyncing {
@@ -199,20 +192,16 @@ struct PhotosGrid: View {
                     }
 
                     ForEach(secs) { section in
-                        Section {
-                            ForEach(PhotoLayout.rows(for: section.photos, width: contentWidth,
-                                                     target: target, spacing: spacing,
-                                                     aspect: photoAspect)) { row in
-                                HStack(spacing: spacing) {
-                                    ForEach(row.items) { item in
-                                        cell(item, rowHeight: row.height)
-                                    }
+                        ForEach(PhotoLayout.rows(for: section.photos, width: contentWidth,
+                                                 target: target, spacing: spacing,
+                                                 aspect: photoAspect)) { row in
+                            HStack(spacing: spacing) {
+                                ForEach(row.items) { item in
+                                    cell(item, rowHeight: row.height)
                                 }
                             }
-                            .padding(.horizontal, LookTheme.Spacing.tight)
-                        } header: {
-                            sectionHeader(section)
                         }
+                        .padding(.horizontal, LookTheme.Spacing.tight)
                         .id(section.id)
                     }
 
@@ -222,31 +211,11 @@ struct PhotosGrid: View {
             }
             .scrollIndicators(.hidden)
             .contentMargins(.bottom, 0, for: .scrollContent)
-            .background(LookTheme.ColorToken.paper.ignoresSafeArea())
+            .background(LookTheme.ColorToken.paper)
             .refreshable { await store.syncNow() }
             .ignoresSafeArea(.container, edges: .bottom)
         }
         .background(LookTheme.ColorToken.paper.ignoresSafeArea())
-    }
-
-    private var galleryHeader: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("Photos")
-                .font(.system(size: 44, weight: .bold, design: .default))
-                .foregroundStyle(LookTheme.ColorToken.graphite)
-                .lineLimit(1)
-
-            Spacer(minLength: LookTheme.Spacing.medium)
-
-            Text("\(store.photos.count)")
-                .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.58))
-                .monospacedDigit()
-        }
-        .padding(.horizontal, LookTheme.Spacing.screen)
-        .padding(.top, LookTheme.Spacing.large)
-        .padding(.bottom, LookTheme.Spacing.medium)
-        .background(LookTheme.ColorToken.paper)
     }
 
     private func cell(_ item: JustifiedItem, rowHeight: CGFloat) -> some View {
@@ -311,31 +280,6 @@ struct PhotosGrid: View {
             guard !selectionMode else { return }
             selectionMode = true
             selectedPhotoIds = [photo.id]
-        }
-    }
-
-    private func sectionHeader(_ section: PhotoSection) -> some View {
-        HStack(alignment: .lastTextBaseline, spacing: LookTheme.Spacing.small) {
-            Text(section.title.uppercased())
-                .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.84))
-
-            Text("\(section.photos.count)")
-                .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.60))
-                .monospacedDigit()
-
-            Spacer()
-        }
-        .padding(.horizontal, LookTheme.Spacing.screen)
-        .padding(.top, LookTheme.Spacing.medium)
-        .padding(.bottom, LookTheme.Spacing.small)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LookTheme.ColorToken.paper)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(LookTheme.ColorToken.mist)
-                .frame(height: 1)
         }
     }
 
@@ -619,12 +563,6 @@ struct PhotosGrid: View {
                 }
             }
         }
-        ToolbarItem(placement: .principal) {
-            if selectionMode {
-                Text(selectionSummary)
-                    .font(.headline)
-            }
-        }
         ToolbarItem(placement: .topBarTrailing) {
             if selectionMode {
                 Button(allVisiblePhotosSelected ? "Clear" : "All") {
@@ -800,20 +738,6 @@ private func dayKey(_ photo: Photo) -> String {
     let date = photoDate(photo)
     if date == .distantPast { return "unknown" }
     return dayKeyFormatter.string(from: date)
-}
-
-private func sectionTitle(forKey key: String) -> String {
-    guard key != "unknown", let date = dayKeyFormatter.date(from: key) else { return "Undated" }
-    let cal = Calendar.current
-    if cal.isDateInToday(date) { return "Today" }
-    if cal.isDateInYesterday(date) { return "Yesterday" }
-    let f = DateFormatter()
-    if cal.component(.year, from: date) == cal.component(.year, from: Date()) {
-        f.dateFormat = "EEEE, MMM d"
-    } else {
-        f.dateFormat = "EEEE, MMM d, yyyy"
-    }
-    return f.string(from: date)
 }
 
 // MARK: - Immersive viewer
