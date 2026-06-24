@@ -9,28 +9,42 @@ struct PhotoCard: View {
 
     var body: some View {
         CachedThumbnail(url: APIClient.shared.thumbnailURL(for: photo.id, size: 256), contentMode: .fill)
-        .aspectRatio(1, contentMode: .fill)
-        .cornerRadius(8)
-        .overlay(alignment: .topTrailing) {
-            if selectionMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(isSelected ? .white : .white.opacity(0.8),
-                                     isSelected ? .blue : .black.opacity(0.35))
-                    .padding(6)
+            .aspectRatio(1, contentMode: .fill)
+            .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.thumbnail, style: .continuous))
+            .background(LookTheme.ColorToken.darkroom)
+            .overlay(alignment: .bottomLeading) {
+                if photo.isFavorite == true && !selectionMode {
+                    Image(systemName: "heart.fill")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(6)
+                        .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
+                }
             }
-        }
-        .overlay {
-            if isSelected {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(.blue, lineWidth: 3)
+            .overlay {
+                if isSelected {
+                    Color.black.opacity(0.16)
+                }
             }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(selectionMode ? "Double tap to \(isSelected ? "remove from" : "add to") selection" : "Double tap to open photo")
-        .accessibilityAddTraits(isSelected ? [.isImage, .isSelected] : .isImage)
+            .overlay(alignment: .topTrailing) {
+                if selectionMode {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3.weight(.semibold))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(isSelected ? .white : .white.opacity(0.9),
+                                         isSelected ? LookTheme.ColorToken.cyan : .black.opacity(0.38))
+                        .padding(6)
+                        .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                }
+            }
+            .lookFilmRail(
+                color: isSelected ? LookTheme.ColorToken.cyan : LookTheme.ColorToken.darkroom,
+                isActive: isSelected
+            )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityHint(selectionMode ? "Double tap to \(isSelected ? "remove from" : "add to") selection" : "Double tap to open photo")
+            .accessibilityAddTraits(isSelected ? [.isImage, .isSelected] : .isImage)
     }
 
     private var accessibilityLabel: String {

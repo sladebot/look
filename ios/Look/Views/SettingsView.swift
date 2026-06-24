@@ -8,117 +8,24 @@ struct SettingsView: View {
     @State private var isTesting = false
     @State private var cacheMessage: String?
     @State private var keychainMessage: String?
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("http://machine.tailnet.ts.net:5678", text: $serverURL)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    SecureField("API key (optional)", text: $apiKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .textContentType(.password)
-
-                    HStack {
-                        Text("Status")
-                        Spacer()
-                        if store.serverConnected {
-                            Label("Connected", systemImage: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                        } else {
-                            Label("Disconnected", systemImage: "xmark.circle.fill")
-                                .foregroundColor(.red)
-                        }
-                    }
-
-                    Button {
-                        testConnection()
-                    } label: {
-                        HStack {
-                            if isTesting { ProgressView().scaleEffect(0.7) }
-                            Text("Test Connection")
-                        }
-                    }
-                    .disabled(isTesting)
-                } header: {
-                    Text("Server Connection")
-                } footer: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Enter your server's Tailscale address (a 100.x.y.z IP or a machine.tailnet.ts.net name) and port. The API key is only needed if the server sets API_KEY.")
-                        if let keychainMessage {
-                            Text(keychainMessage)
-                                .foregroundColor(.red)
-                        }
-                    }
+            ScrollView {
+                VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
+                    connectionPanel
+                    syncPanel
+                    libraryPanel
+                    featuresPanel
+                    toolsPanel
+                    aboutPanel
                 }
-
-                Section("Sync") {
-                    Toggle("Auto Sync", isOn: Binding(
-                        get: { store.autoSyncEnabled },
-                        set: { on in if on { store.startAutoSync() } else { store.stopAutoSync() } }
-                    ))
-                    Button {
-                        Task { await store.syncNow() }
-                    } label: {
-                        HStack {
-                            if store.isSyncing { ProgressView().scaleEffect(0.7) }
-                            Text("Sync & Import Now")
-                        }
-                    }
-                    .disabled(store.isSyncing)
-                    if let message = store.lastSyncMessage {
-                        HStack {
-                            Text("Last Sync")
-                            Spacer()
-                            Text(message).foregroundColor(.secondary)
-                        }
-                    }
-                }
-
-                Section("Thumbnail Cache") {
-                    LabeledContent("Limit", value: "256 MB disk, 64 MB memory")
-                    Button(role: .destructive) {
-                        URLCache.shared.removeAllCachedResponses()
-                        cacheMessage = "Thumbnail cache cleared"
-                    } label: {
-                        Label("Clear Thumbnail Cache", systemImage: "trash")
-                    }
-                    if let cacheMessage {
-                        Text(cacheMessage).font(.caption).foregroundColor(.secondary)
-                    }
-                }
-
-                Section("Library Info") {
-                    LabeledContent("Photos", value: "\(store.totalPhotos)")
-                    LabeledContent("Albums", value: "\(store.albums.count)")
-                    LabeledContent("Smart Albums", value: "\(store.smartCollections.count)")
-                }
-
-                Section("Server Features") {
-                    serverToggle("Smart Albums", key: "smart_albums_enabled")
-                    serverToggle("Deduplication", key: "dedup_enabled")
-                    serverToggle("Tag History", key: "tag_history_enabled")
-                    serverToggle("Auto-tag GPS", key: "auto_tag_gps")
-                    serverToggle("Auto-tag Camera", key: "auto_tag_camera")
-                }
-
-                Section("Tools") {
-                    NavigationLink { DedupView() } label: { Label("Duplicates", systemImage: "square.on.square") }
-                    NavigationLink { TasksView() } label: { Label("Background Tasks", systemImage: "list.bullet.rectangle") }
-                    NavigationLink { WatchListView() } label: { Label("Watch Directories", systemImage: "folder.badge.gearshape") }
-                    NavigationLink { TagCleanupView() } label: { Label("Tag Cleanup", systemImage: "tag") }
-                    NavigationLink { MigrationsView() } label: { Label("Migrations", systemImage: "cylinder.split.1x2") }
-                }
-
-                Section("About") {
-                    LabeledContent("App", value: "Look")
-                    LabeledContent("Version", value: "1.1.0")
-                }
+                .padding(LookTheme.Spacing.screen)
             }
+            .lookScreenBackground()
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.large)
             .onChange(of: apiKey) { _, newValue in
                 keychainMessage = APIClient.shared.saveAPIKey(newValue) ? nil : "Could not save the API key to Keychain."
             }
@@ -134,6 +41,212 @@ struct SettingsView: View {
                 await store.loadServerSettings()
             }
         }
+    }
+
+    private var connectionPanel: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            panelHeader(
+                title: "Server Connection",
+                subtitle: "Use the Tailnet address this iPhone can reach.",
+                systemImage: "point.3.connected.trianglepath.dotted"
+            )
+
+            connectionStatusBanner
+
+            VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+                fieldLabel("Server URL", detail: "Tailscale IP or MagicDNS")
+                TextField("http://machine.tailnet.ts.net:5678", text: $serverURL)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textContentType(.URL)
+                    .focused($focusedField, equals: .serverURL)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .apiKey }
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+                fieldLabel("API key", detail: "Optional")
+                SecureField("Required only when the server sets API_KEY", text: $apiKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textContentType(.password)
+                    .focused($focusedField, equals: .apiKey)
+                    .submitLabel(.go)
+                    .onSubmit { testConnection() }
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            Text("Examples: http://100.86.254.112:5678 or http://studio.tailnet-name.ts.net:5678")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                testConnection()
+            } label: {
+                HStack {
+                    if isTesting {
+                        ProgressView()
+                            .tint(.white)
+                    }
+                    Text(isTesting ? "Testing Connection" : "Test Connection")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(isTesting || serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .lookPanel()
+    }
+
+    @ViewBuilder
+    private var connectionStatusBanner: some View {
+        if let keychainMessage {
+            LookStatusBanner(
+                title: "API key was not saved",
+                message: keychainMessage,
+                tone: .error
+            )
+        } else if isTesting {
+            LookStatusBanner(
+                title: "Checking Look server",
+                message: "Testing the private-network route before saving this connection state.",
+                tone: .info
+            )
+        } else if store.serverConnected {
+            LookStatusBanner(
+                title: "Connected",
+                message: "Library tabs are using \(serverURL.trimmingCharacters(in: .whitespacesAndNewlines)).",
+                tone: .success
+            )
+        } else {
+            LookStatusBanner(
+                title: "Disconnected",
+                message: store.errorMessage ?? "Reconnect to the Tailnet or test a different server URL.",
+                tone: .warning
+            )
+        }
+    }
+
+    private var syncPanel: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            panelHeader(
+                title: "Sync",
+                subtitle: "Keep the iOS library view current with the server.",
+                systemImage: "arrow.triangle.2.circlepath"
+            )
+
+            Toggle("Auto Sync", isOn: Binding(
+                get: { store.autoSyncEnabled },
+                set: { on in if on { store.startAutoSync() } else { store.stopAutoSync() } }
+            ))
+
+            Button {
+                Task { await store.syncNow() }
+            } label: {
+                HStack {
+                    if store.isSyncing { ProgressView().scaleEffect(0.8) }
+                    Text(store.isSyncing ? "Syncing" : "Sync and Import Now")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(store.isSyncing)
+
+            if let message = store.lastSyncMessage {
+                settingsRow("Last Sync", value: message, systemImage: "clock")
+            }
+        }
+        .lookPanel()
+    }
+
+    private var libraryPanel: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            panelHeader(
+                title: "Library",
+                subtitle: "Local app totals and thumbnail cache controls.",
+                systemImage: "photo.stack"
+            )
+
+            VStack(spacing: LookTheme.Spacing.small) {
+                settingsRow("Photos", value: "\(store.totalPhotos)", systemImage: "photo")
+                settingsRow("Albums", value: "\(store.albums.count)", systemImage: "rectangle.stack")
+                settingsRow("Smart Albums", value: "\(store.smartCollections.count)", systemImage: "sparkles.rectangle.stack")
+                settingsRow("Thumbnail Cache", value: "256 MB disk, 64 MB memory", systemImage: "externaldrive")
+            }
+
+            Button(role: .destructive) {
+                URLCache.shared.removeAllCachedResponses()
+                cacheMessage = "Thumbnail cache cleared"
+            } label: {
+                Label("Clear Thumbnail Cache", systemImage: "trash")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+
+            if let cacheMessage {
+                Text(cacheMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .lookPanel()
+    }
+
+    private var featuresPanel: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            panelHeader(
+                title: "Server Features",
+                subtitle: "These settings are stored on the Look server.",
+                systemImage: "slider.horizontal.3"
+            )
+
+            VStack(spacing: LookTheme.Spacing.small) {
+                serverToggle("Smart Albums", key: "smart_albums_enabled")
+                serverToggle("Deduplication", key: "dedup_enabled")
+                serverToggle("Tag History", key: "tag_history_enabled")
+                serverToggle("Auto-tag GPS", key: "auto_tag_gps")
+                serverToggle("Auto-tag Camera", key: "auto_tag_camera")
+            }
+        }
+        .lookPanel()
+    }
+
+    private var toolsPanel: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            panelHeader(
+                title: "Tools",
+                subtitle: "Server maintenance and library organization.",
+                systemImage: "wrench.and.screwdriver"
+            )
+
+            VStack(spacing: LookTheme.Spacing.tight) {
+                toolLink("Duplicates", systemImage: "square.on.square") { DedupView() }
+                toolLink("Background Tasks", systemImage: "list.bullet.rectangle") { TasksView() }
+                toolLink("Watch Directories", systemImage: "folder.badge.gearshape") { WatchListView() }
+                toolLink("Tag Cleanup", systemImage: "tag") { TagCleanupView() }
+                toolLink("Migrations", systemImage: "cylinder.split.1x2") { MigrationsView() }
+            }
+        }
+        .lookPanel()
+    }
+
+    private var aboutPanel: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            panelHeader(
+                title: "About",
+                subtitle: "App build information.",
+                systemImage: "info.circle"
+            )
+
+            settingsRow("App", value: "Look", systemImage: "camera.aperture")
+            settingsRow("Version", value: "1.1.0", systemImage: "number")
+        }
+        .lookPanel()
     }
 
     private func testConnection() {
@@ -168,5 +281,78 @@ struct SettingsView: View {
             get: { store.boolSetting(key) },
             set: { newValue in Task { await store.toggleServerSetting(key, to: newValue) } }
         ))
+    }
+
+    private func panelHeader(title: String, subtitle: String, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
+            Image(systemName: systemImage)
+                .foregroundStyle(LookTheme.ColorToken.cyan)
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func fieldLabel(_ title: String, detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Spacer()
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func settingsRow(_ title: String, value: String, systemImage: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+                .accessibilityHidden(true)
+            Text(title)
+            Spacer(minLength: LookTheme.Spacing.small)
+            Text(value)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+        .font(.subheadline)
+    }
+
+    private func toolLink<Destination: View>(
+        _ title: String,
+        systemImage: String,
+        @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        NavigationLink {
+            destination()
+        } label: {
+            HStack(spacing: LookTheme.Spacing.small) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(LookTheme.ColorToken.cyan)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private enum Field {
+        case serverURL
+        case apiKey
     }
 }

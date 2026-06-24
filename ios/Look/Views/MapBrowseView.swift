@@ -13,6 +13,8 @@ struct MapBrowseView: View {
     @State private var hasLoaded = false
     @State private var errorMessage: String?
 
+    private let nearbyRadiusKm = 50.0
+
     private var geotagged: [Photo] {
         photos.filter { $0.hasLocation }
     }
@@ -39,50 +41,62 @@ struct MapBrowseView: View {
 
             VStack(spacing: 8) {
                 if let errorMessage {
-                    VStack(spacing: 8) {
-                        Label("Map search failed", systemImage: "exclamationmark.triangle")
-                            .font(.caption.bold())
-                        Text(errorMessage)
-                            .font(.caption2)
-                            .multilineTextAlignment(.center)
-                        Button("Retry") {
-                            Task { await loadNearby() }
-                        }
-                        .font(.caption)
+                    LookStatusBanner(
+                        title: "Map search failed",
+                        message: errorMessage,
+                        tone: .error,
+                        actionTitle: "Retry"
+                    ) {
+                        Task { await loadNearby() }
                     }
-                    .padding(12)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     .padding(.horizontal)
                 }
-                if isLoading { ProgressView().padding(.bottom, 2) }
+
+                if isLoading {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text(hasLoaded ? "Searching area" : "Loading map photos")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                }
+
                 Button {
                     Task { await loadNearby() }
                 } label: {
                     Label("Search this area", systemImage: "location.magnifyingglass")
-                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
                         .background(.ultraThinMaterial, in: Capsule())
                 }
                 .disabled(isLoading)
-                Text("\(geotagged.count) geotagged photos")
-                    .font(.caption2).foregroundColor(.secondary)
+
+                LookChip(
+                    title: "\(geotagged.count) geotagged photo\(geotagged.count == 1 ? "" : "s")",
+                    systemImage: "mappin.and.ellipse",
+                    tint: LookTheme.ColorToken.graphite
+                )
                     .padding(.bottom, 8)
             }
         }
         .overlay {
             if isLoading && !hasLoaded {
-                ProgressView("Loading map photos")
-                    .padding()
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                LookLoadingState(title: "Loading map photos", message: "Finding photos with GPS metadata.")
+                    .background(.ultraThinMaterial)
             } else if hasLoaded && geotagged.isEmpty && errorMessage == nil {
-                ContentUnavailableView {
-                    Label("No geotagged photos", systemImage: "map")
-                } description: {
-                    Text("Search this area or sync photos that include GPS metadata.")
-                } actions: {
-                    Button("Search this area") {
-                        Task { await loadNearby() }
-                    }
+                LookEmptyState(
+                    title: "No geotagged photos",
+                    systemImage: "map",
+                    message: "Search this area or sync photos that include GPS metadata.",
+                    actionTitle: "Search This Area"
+                ) {
+                    Task { await loadNearby() }
                 }
+                .background(.ultraThinMaterial)
                 .padding()
             }
         }
@@ -119,7 +133,7 @@ struct MapBrowseView: View {
         defer { isLoading = false }
         do {
             let resp = try await APIClient.shared.nearbyPhotos(
-                lat: center.latitude, lon: center.longitude, radiusKm: 50)
+                lat: center.latitude, lon: center.longitude, radiusKm: nearbyRadiusKm)
             // Merge with any already-loaded geotagged photos (dedup by id).
             var seen = Set(photos.map(\.id))
             for p in resp.photos where !seen.contains(p.id) {
@@ -149,18 +163,31 @@ private struct PhotoMapCallout: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 5) {
                 CachedThumbnail(url: APIClient.shared.thumbnailURL(for: photo.id, size: 128), maxPixel: 128)
-                    .frame(width: 52, height: 52)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .frame(width: 58, height: 58)
+                    .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(.white, lineWidth: 2)
+                        RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
+                            .stroke(Color(.systemBackground), lineWidth: 2)
                     }
-                    .shadow(radius: 3)
-                Image(systemName: "mappin.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.red)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white, LookTheme.ColorToken.danger)
+                            .background(Circle().fill(Color(.systemBackground)))
+                            .offset(x: 5, y: 5)
+                    }
+                    .shadow(color: .black.opacity(0.24), radius: 5, y: 3)
+
+                Text(photo.filename)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: 96)
+                    .background(.ultraThinMaterial, in: Capsule())
             }
         }
         .buttonStyle(.plain)

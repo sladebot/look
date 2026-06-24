@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1A93994BCB6A421BB2DEFB69 /* LookDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2425216D4BD3434E85095AE7 /* LookDesignSystem.swift */; };
 		A49FFEDF69274E2AB82B7900 /* ConnectionSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6339814E64954BE6845B5492 /* ConnectionSetupView.swift */; };
 		097D84F65F1F6BC7A603805B /* PhotosGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 406A30CD26384FB80F95C418 /* PhotosGrid.swift */; };
 		0A116008EA6980AC08B635D2 /* PhotoDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC86B295FEFA2DEB07E7724 /* PhotoDetail.swift */; };
@@ -43,6 +44,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2425216D4BD3434E85095AE7 /* LookDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookDesignSystem.swift; sourceTree = "<group>"; };
 		6339814E64954BE6845B5492 /* ConnectionSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSetupView.swift; sourceTree = "<group>"; };
 		056DEE9FB68A41B40C546B5A /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		18BF5A283B62382D53C367EB /* TagHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagHistoryView.swift; sourceTree = "<group>"; };
@@ -108,6 +110,7 @@
 		8D377441D736E7AD45BA5FAF /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				2425216D4BD3434E85095AE7 /* LookDesignSystem.swift */,
 				6339814E64954BE6845B5492 /* ConnectionSetupView.swift */,
 				553E208E6D382D6CF3F92157 /* AddToAlbumSheet.swift */,
 				D4F0A203C0E661F881777EFE /* AdminViews.swift */,
@@ -232,6 +235,7 @@
 				3C756A7E668F40525E5D15DF /* FullScreenImage.swift in Sources */,
 				75D3A0D3591DFF8BE3D5153A /* ImageSaver.swift in Sources */,
 				BA05724923607D4D662DAC38 /* LibraryView.swift in Sources */,
+				1A93994BCB6A421BB2DEFB69 /* LookDesignSystem.swift in Sources */,
 				956FD243ACAE7041DBDB8DB8 /* LookApp.swift in Sources */,
 				C8BB9F3DE59028F85EE64101 /* MapBrowseView.swift in Sources */,
 				C8DB8D485DF66CC5891B4618 /* Models.swift in Sources */,

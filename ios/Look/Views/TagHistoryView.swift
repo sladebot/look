@@ -9,44 +9,47 @@ struct TagHistoryView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading {
-                    ProgressView()
-                } else if let errorMessage {
-                    ContentUnavailableView {
-                        Label("Could not load history", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(errorMessage)
-                    } actions: {
-                        Button("Retry") {
-                            Task { await load() }
-                        }
-                    }
-                } else if entries.isEmpty {
-                    ContentUnavailableView("No history", systemImage: "clock.arrow.circlepath",
-                                           description: Text("No tag changes recorded for this photo."))
-                } else {
-                    List(entries) { entry in
-                        HStack {
-                            Image(systemName: entry.action == "removed" ? "minus.circle" : "plus.circle")
-                                .foregroundColor(entry.action == "removed" ? .red : .green)
-                            VStack(alignment: .leading) {
-                                Text(entry.tag).font(.body)
-                                Text("\(entry.action) • \(entry.timestamp)")
-                                    .font(.caption2).foregroundColor(.secondary)
-                            }
-                            if let user = entry.byUser {
-                                Spacer()
-                                Text(user).font(.caption2).foregroundColor(.secondary)
-                            }
-                        }
-                    }
+            content
+                .navigationTitle("Tag History")
+                .navigationBarTitleDisplayMode(.inline)
+                .task { await load() }
+                .refreshable { await load() }
+                .lookScreenBackground()
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isLoading {
+            LookLoadingState(title: "Loading tag history", message: "Reading the audit trail for this photo.")
+        } else if let errorMessage {
+            VStack {
+                LookStatusBanner(
+                    title: "Could not load history",
+                    message: errorMessage,
+                    tone: .error,
+                    actionTitle: "Retry"
+                ) {
+                    Task { await load() }
                 }
+                .padding()
+                Spacer()
             }
-            .navigationTitle("Tag History")
-            .navigationBarTitleDisplayMode(.inline)
-            .task { await load() }
-            .refreshable { await load() }
+        } else if entries.isEmpty {
+            LookEmptyState(
+                title: "No tag history",
+                systemImage: "clock.arrow.circlepath",
+                message: "No tag changes have been recorded for this photo."
+            )
+        } else {
+            List(entries) { entry in
+                TagHistoryRow(entry: entry)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
     }
 
@@ -61,5 +64,54 @@ struct TagHistoryView: View {
             entries = []
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct TagHistoryRow: View {
+    let entry: TagHistoryEntry
+
+    private var isRemoval: Bool {
+        entry.action == "removed"
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
+            Image(systemName: isRemoval ? "minus.circle.fill" : "plus.circle.fill")
+                .font(.title3)
+                .foregroundStyle(isRemoval ? LookTheme.ColorToken.danger : .green)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(entry.tag)
+                        .font(.body.weight(.semibold))
+                        .lineLimit(2)
+
+                    Spacer(minLength: LookTheme.Spacing.small)
+
+                    LookChip(
+                        title: isRemoval ? "Removed" : "Added",
+                        systemImage: isRemoval ? "minus" : "plus",
+                        tint: isRemoval ? LookTheme.ColorToken.danger : .green
+                    )
+                }
+
+                HStack(spacing: LookTheme.Spacing.tight) {
+                    Label(entry.timestamp, systemImage: "clock")
+                    if let user = entry.byUser, !user.isEmpty {
+                        Label(user, systemImage: "person.crop.circle")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(LookTheme.Spacing.medium)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
+                .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

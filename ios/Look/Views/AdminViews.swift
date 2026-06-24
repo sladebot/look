@@ -27,6 +27,17 @@ struct DedupView: View {
                     .font(.caption2).foregroundColor(.secondary)
             }
 
+            if loadedSettings && !enabled {
+                Section {
+                    LookStatusBanner(
+                        title: "Deduplication is disabled",
+                        message: "Enable server deduplication before starting a scan.",
+                        tone: .warning
+                    )
+                }
+                .listRowSeparator(.hidden)
+            }
+
             Section {
                 Button {
                     Task { await scan() }
@@ -38,8 +49,22 @@ struct DedupView: View {
                 }
                 .disabled(isScanning || !enabled)
                 if !status.isEmpty {
-                    Text(status).font(.caption).foregroundColor(.secondary)
+                    AdminStatusBanner(message: status)
                 }
+            }
+
+            if loadedSettings && groups.isEmpty && !isScanning {
+                Section {
+                    LookEmptyState(
+                        title: "No duplicate groups loaded",
+                        systemImage: "square.on.square",
+                        message: enabled
+                            ? "Run a scan to review photos with matching perceptual hashes."
+                            : "Enable deduplication to scan the library."
+                    )
+                    .frame(minHeight: 220)
+                }
+                .listRowSeparator(.hidden)
             }
 
             ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
@@ -82,8 +107,8 @@ struct DedupView: View {
         .alert(item: $pendingMerge) { request in
             Alert(
                 title: Text("Merge Duplicate Group?"),
-                message: Text("Keep \"\(request.filename)\" and archive the other photos in this group to .trash/."),
-                primaryButton: .destructive(Text("Merge")) {
+                message: Text("Keep \"\(request.filename)\" in the library and move every other photo in this duplicate group to the server .trash folder."),
+                primaryButton: .destructive(Text("Archive Duplicates")) {
                     Task { await merge(groupIndex: request.groupIndex, keep: request.keepPhotoId) }
                 },
                 secondaryButton: .cancel()
@@ -187,24 +212,29 @@ struct TasksView: View {
         List {
             if let errorMessage {
                 Section {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                    Button("Retry") {
+                    AdminStatusBanner(message: errorMessage, title: "Could not load tasks", actionTitle: "Retry") {
                         Task { await load() }
                     }
-                    .font(.caption)
                 }
+                .listRowSeparator(.hidden)
             }
             if tasks.isEmpty && !isLoading {
-                ContentUnavailableView("No background tasks", systemImage: "list.bullet.rectangle")
+                Section {
+                    LookEmptyState(
+                        title: "No background tasks",
+                        systemImage: "list.bullet.rectangle",
+                        message: "Scans, imports, and other server jobs will appear here."
+                    )
+                    .frame(minHeight: 240)
+                }
+                .listRowSeparator(.hidden)
             }
             ForEach(tasks) { task in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(task.taskType ?? "task").font(.headline)
                         Spacer()
-                        statusBadge(task.status)
+                        LookChip(title: task.status, systemImage: statusIcon(task.status), tint: statusColor(task.status))
                     }
                     if let phase = task.progress?["phase"]?.stringValue {
                         Text("Phase: \(phase)").font(.caption).foregroundColor(.secondary)
@@ -226,13 +256,18 @@ struct TasksView: View {
             }
         }
         .navigationTitle("Tasks")
-        .overlay { if isLoading { ProgressView() } }
+        .overlay {
+            if isLoading && tasks.isEmpty {
+                LookLoadingState(title: "Loading tasks", message: "Checking the server queue.")
+                    .background(Color(.systemGroupedBackground).opacity(0.92))
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
         .alert(item: $pendingCancel) { task in
             Alert(
                 title: Text("Cancel Task?"),
-                message: Text("Cancel \(task.taskType ?? "task") \(task.taskId)?"),
+                message: Text("Stop \(task.taskType ?? "task") \(task.taskId). Any work already completed on the server will remain."),
                 primaryButton: .destructive(Text("Cancel Task")) {
                     Task { await cancel(task) }
                 },
@@ -241,12 +276,20 @@ struct TasksView: View {
         }
     }
 
-    private func statusBadge(_ status: String) -> some View {
-        let color: Color = status == "completed" ? .green
-            : status == "failed" ? .red
-            : status == "running" ? .blue : .secondary
-        return Text(status).font(.caption2).padding(.horizontal, 8).padding(.vertical, 3)
-            .background(color.opacity(0.15)).foregroundColor(color).cornerRadius(8)
+    private func statusColor(_ status: String) -> Color {
+        status == "completed" ? .green
+            : status == "failed" ? LookTheme.ColorToken.danger
+            : status == "running" ? LookTheme.ColorToken.cyan : .secondary
+    }
+
+    private func statusIcon(_ status: String) -> String {
+        switch status {
+        case "completed": return "checkmark.circle.fill"
+        case "failed": return "xmark.octagon.fill"
+        case "running": return "arrow.triangle.2.circlepath"
+        case "pending": return "clock.fill"
+        default: return "circle.fill"
+        }
     }
 
     private func load() async {
@@ -291,25 +334,25 @@ struct WatchListView: View {
                     Button("Add") { Task { await add() } }
                         .disabled(newPath.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                if let message { Text(message).font(.caption).foregroundColor(.secondary) }
+                if let message {
+                    AdminStatusBanner(message: message)
+                }
             }
             Section("Watched directories") {
                 if directories.isEmpty && !isLoading {
-                    Text("None").font(.caption).foregroundColor(.secondary)
+                    LookEmptyState(
+                        title: "No watched directories",
+                        systemImage: "folder.badge.plus",
+                        message: "Add a server path to make it available for imports and file watching."
+                    )
+                    .frame(minHeight: 220)
                 }
                 ForEach(directories) { dir in
                     Toggle(isOn: Binding(
                         get: { dir.active },
                         set: { newValue in Task { await setActive(dir, newValue) } }
                     )) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(dir.path).font(.caption).lineLimit(2)
-                            if busyPath == dir.path {
-                                Text("Working...").font(.caption2).foregroundColor(.secondary)
-                            } else if let added = dir.addedAt {
-                                Text("Added \(added.prefix(10))").font(.caption2).foregroundColor(.secondary)
-                            }
-                        }
+                        WatchDirectoryRow(directory: dir, isBusy: busyPath == dir.path)
                     }
                     .contextMenu {
                         Button { editingDirectory = dir } label: {
@@ -346,7 +389,12 @@ struct WatchListView: View {
             }
         }
         .navigationTitle("Watch Directories")
-        .overlay { if isLoading { ProgressView() } }
+        .overlay {
+            if isLoading && directories.isEmpty {
+                LookLoadingState(title: "Loading directories", message: "Reading the server watch list.")
+                    .background(Color(.systemGroupedBackground).opacity(0.92))
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
         .sheet(item: $editingDirectory) { dir in
@@ -357,7 +405,7 @@ struct WatchListView: View {
         .alert(item: $pendingRemoval) { dir in
             Alert(
                 title: Text("Remove Watch Directory?"),
-                message: Text("Stop watching \(dir.path). Existing photos remain in the library."),
+                message: Text("Stop watching \(dir.path). Existing photos stay in the library, but new changes in this folder will no longer be picked up."),
                 primaryButton: .destructive(Text("Remove")) {
                     Task { await remove(dir.path) }
                 },
@@ -442,8 +490,9 @@ private struct EditWatchDirectorySheet: View {
                 }
                 if let errorMessage {
                     Section {
-                        Text(errorMessage).foregroundColor(.red)
+                        LookStatusBanner(title: "Could not save directory", message: errorMessage, tone: .error)
                     }
+                    .listRowSeparator(.hidden)
                 }
             }
             .navigationTitle("Edit Watch Directory")
@@ -491,14 +540,11 @@ struct MigrationsView: View {
         List {
             if let message, info == nil {
                 Section {
-                    Label(message, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                    Button("Retry") {
+                    AdminStatusBanner(message: message, title: "Could not load migrations", actionTitle: "Retry") {
                         Task { await load() }
                     }
-                    .font(.caption)
                 }
+                .listRowSeparator(.hidden)
             }
             if let info {
                 Section("Schema") {
@@ -507,7 +553,11 @@ struct MigrationsView: View {
                 }
                 Section("Pending (\(info.pending.count))") {
                     if info.pending.isEmpty {
-                        Text("Up to date").font(.caption).foregroundColor(.secondary)
+                        LookStatusBanner(
+                            title: "Schema is up to date",
+                            message: "There are no pending server migrations.",
+                            tone: .success
+                        )
                     }
                     ForEach(info.pending) { m in
                         VStack(alignment: .leading) {
@@ -521,12 +571,19 @@ struct MigrationsView: View {
                         confirmApply = true
                     }
                         .disabled(info.pending.isEmpty)
-                    if let message { Text(message).font(.caption).foregroundColor(.secondary) }
+                    if let message {
+                        AdminStatusBanner(message: message)
+                    }
                 }
             }
         }
         .navigationTitle("Migrations")
-        .overlay { if isLoading { ProgressView() } }
+        .overlay {
+            if isLoading && info == nil {
+                LookLoadingState(title: "Checking migrations", message: "Reading the server schema status.")
+                    .background(Color(.systemGroupedBackground).opacity(0.92))
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
         .alert("Apply Pending Migrations?", isPresented: $confirmApply) {
@@ -535,7 +592,7 @@ struct MigrationsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This changes the server database schema. Make sure the server is healthy before continuing.")
+            Text("This will change the server database schema. Make sure the server is healthy and backed up before continuing.")
         }
     }
 
@@ -587,11 +644,18 @@ struct TagCleanupView: View {
                 }
                     .disabled(source.trimmingCharacters(in: .whitespaces).isEmpty
                               || target.trimmingCharacters(in: .whitespaces).isEmpty)
-                if let message { Text(message).font(.caption).foregroundColor(.secondary) }
+                if let message {
+                    AdminStatusBanner(message: message)
+                }
             }
             Section("Possible duplicate tags") {
                 if duplicates.isEmpty && !isLoading {
-                    Text("None found").font(.caption).foregroundColor(.secondary)
+                    LookEmptyState(
+                        title: "No duplicate tags found",
+                        systemImage: "tag",
+                        message: "Suggestions will appear here when the server finds tags that differ only by casing or spacing."
+                    )
+                    .frame(minHeight: 220)
                 }
                 ForEach(duplicates) { dup in
                     HStack {
@@ -604,14 +668,19 @@ struct TagCleanupView: View {
             }
         }
         .navigationTitle("Tag Cleanup")
-        .overlay { if isLoading { ProgressView() } }
+        .overlay {
+            if isLoading && duplicates.isEmpty {
+                LookLoadingState(title: "Loading tag suggestions", message: "Checking for duplicate tag names.")
+                    .background(Color(.systemGroupedBackground).opacity(0.92))
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
         .alert(item: $pendingMerge) { request in
             Alert(
                 title: Text("Merge Tags?"),
-                message: Text("Replace \"\(request.source)\" with \"\(request.target)\" on matching photos. This cannot be undone from the app."),
-                primaryButton: .destructive(Text("Merge")) {
+                message: Text("Replace \"\(request.source)\" with \"\(request.target)\" on matching photos. Tag history remains on the server, but this merge cannot be undone from the app."),
+                primaryButton: .destructive(Text("Merge Tags")) {
                     Task { await merge(request) }
                 },
                 secondaryButton: .cancel()
@@ -647,4 +716,93 @@ private struct TagMergeRequest: Identifiable {
     let source: String
     let target: String
     var id: String { "\(source)-\(target)" }
+}
+
+private struct AdminStatusBanner: View {
+    let message: String
+    var title: String?
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        let resolvedTitle = title ?? Self.title(for: message)
+        LookStatusBanner(
+            title: resolvedTitle,
+            message: resolvedTitle == message ? nil : message,
+            tone: Self.tone(for: message),
+            actionTitle: actionTitle,
+            action: action
+        )
+    }
+
+    private static func title(for message: String) -> String {
+        let lowercased = message.lowercased()
+        if lowercased.contains("failed")
+            || lowercased.contains("could not")
+            || lowercased.contains("unable")
+            || lowercased.contains("error") {
+            return "Action failed"
+        }
+        if lowercased.contains("disabled")
+            || lowercased.contains("cancelled")
+            || lowercased.contains("timed out")
+            || lowercased.contains("waiting") {
+            return "Needs attention"
+        }
+        return message
+    }
+
+    private static func tone(for message: String) -> LookStatusBanner.Tone {
+        let lowercased = message.lowercased()
+        if lowercased.contains("failed")
+            || lowercased.contains("could not")
+            || lowercased.contains("unable")
+            || lowercased.contains("error") {
+            return .error
+        }
+        if lowercased.contains("disabled")
+            || lowercased.contains("cancelled")
+            || lowercased.contains("timed out")
+            || lowercased.contains("waiting") {
+            return .warning
+        }
+        if lowercased.contains("updated")
+            || lowercased.contains("merged")
+            || lowercased.contains("removed")
+            || lowercased.contains("watching")
+            || lowercased.contains("paused")
+            || lowercased.contains("applied")
+            || lowercased.contains("up to date")
+            || lowercased.contains("found") {
+            return .success
+        }
+        return .info
+    }
+}
+
+private struct WatchDirectoryRow: View {
+    let directory: WatchDirectory
+    let isBusy: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(directory.path)
+                .font(.caption)
+                .lineLimit(2)
+                .textSelection(.enabled)
+
+            HStack(spacing: LookTheme.Spacing.tight) {
+                if isBusy {
+                    ProgressView()
+                        .scaleEffect(0.72)
+                    Text("Working...")
+                } else if let added = directory.addedAt {
+                    Image(systemName: "calendar")
+                    Text("Added \(added.prefix(10))")
+                }
+            }
+            .font(.caption2)
+            .foregroundColor(.secondary)
+        }
+    }
 }

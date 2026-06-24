@@ -5,45 +5,67 @@ struct AlbumDetail: View {
     @EnvironmentObject var store: PhotoStore
     @State private var photos: [Photo] = []
     @State private var isLoading = true
+    @State private var errorMessage: String?
     @State private var selected: Photo?
 
     private let columns = [
-        GridItem(.adaptive(minimum: 110), spacing: 2)
+        GridItem(.adaptive(minimum: 112), spacing: 4)
     ]
 
     var body: some View {
         Group {
             if isLoading {
-                ProgressView()
-            } else if photos.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "photo.on.rectangle").font(.largeTitle).foregroundColor(.secondary)
-                    Text("No photos in this album").font(.headline)
-                    Text("Add photos from a photo's detail screen.")
-                        .font(.caption).foregroundColor(.secondary)
+                LookLoadingState(title: "Loading album", message: album.name)
+            } else if let errorMessage {
+                VStack(spacing: LookTheme.Spacing.medium) {
+                    LookStatusBanner(
+                        title: "Could not load album",
+                        message: errorMessage,
+                        tone: .error,
+                        actionTitle: "Retry",
+                        action: { Task { await loadPhotos() } }
+                    )
+                    Spacer(minLength: 0)
                 }
+                .padding(LookTheme.Spacing.screen)
+            } else if photos.isEmpty {
+                LookEmptyState(
+                    title: "No photos in this album",
+                    systemImage: "photo.on.rectangle",
+                    message: "Add photos from a photo's detail screen."
+                )
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 2) {
-                        ForEach(photos) { photo in
-                            PhotoCard(photo: photo)
-                                .onTapGesture { selected = photo }
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        Task { await remove(photo) }
-                                    } label: {
-                                        Label("Remove from Album", systemImage: "minus.circle")
+                    VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+                        HStack {
+                            LookChip(title: photos.count == 1 ? "1 photo" : "\(photos.count) photos", systemImage: "photo", tint: LookTheme.ColorToken.graphite)
+                            Spacer()
+                        }
+                        .padding(.horizontal, LookTheme.Spacing.tight)
+
+                        LazyVGrid(columns: columns, spacing: 4) {
+                            ForEach(photos) { photo in
+                                PhotoCard(photo: photo)
+                                    .onTapGesture { selected = photo }
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            Task { await remove(photo) }
+                                        } label: {
+                                            Label("Remove from Album", systemImage: "minus.circle")
+                                        }
                                     }
-                                }
+                            }
                         }
                     }
-                    .padding(2)
+                    .padding(.horizontal, LookTheme.Spacing.small)
+                    .padding(.bottom, LookTheme.Spacing.large)
                 }
+                .refreshable { await loadPhotos() }
             }
         }
+        .lookScreenBackground()
         .navigationTitle(album.name)
         .task { await loadPhotos() }
-        .refreshable { await loadPhotos() }
         .fullScreenCover(item: $selected) { photo in
             NativePhotoViewer(photos: photos, initialPhoto: photo)
         }
@@ -51,9 +73,14 @@ struct AlbumDetail: View {
 
     private func loadPhotos() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
-        if let detail = try? await APIClient.shared.albumDetail(album.id) {
+        do {
+            let detail = try await APIClient.shared.albumDetail(album.id)
             photos = detail.photos ?? []
+        } catch {
+            photos = []
+            errorMessage = error.localizedDescription
         }
     }
 

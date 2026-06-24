@@ -25,20 +25,20 @@ struct PhotoDetail: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
                     imageSection
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
                         titleSection
                         actionRowsSection
                         metadataSection
                         if photo.hasLocation { mapSection }
                         tagsSection
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, LookTheme.Spacing.screen)
                     .padding(.bottom, 28)
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .lookScreenBackground()
             .navigationTitle("Photo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -117,11 +117,20 @@ struct PhotoDetail: View {
     }
 
     private var titleSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+            HStack(alignment: .center, spacing: LookTheme.Spacing.small) {
+                LookTheme.eyebrow(isRawOriginal ? "RAW ORIGINAL" : "ARCHIVE PHOTO")
+                Spacer(minLength: LookTheme.Spacing.small)
+                if let fileKind = PhotoDetailMetadataFormatter.fileKind(filename: photo.filename,
+                                                                        mimeType: photo.mimeType) {
+                    LookChip(title: fileKind, systemImage: "doc", tint: LookTheme.ColorToken.cyan)
+                }
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
                 Text(photo.filename)
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                    .font(.system(.title2, design: .rounded).weight(.semibold))
+                    .foregroundStyle(LookTheme.ColorToken.graphite)
                     .lineLimit(3)
                     .textSelection(.enabled)
                     .accessibilityLabel("Filename, \(photo.filename)")
@@ -134,18 +143,31 @@ struct PhotoDetail: View {
             if let date = PhotoDetailMetadataFormatter.displayDate(from: photo.createdAt) {
                 Label(date, systemImage: "calendar")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .accessibilityLabel("Created \(date)")
+            }
+
+            FlowLayout(spacing: LookTheme.Spacing.tight) {
+                if let w = photo.width, let h = photo.height {
+                    LookChip(title: PhotoDetailMetadataFormatter.dimensions(width: w, height: h),
+                             systemImage: "viewfinder")
+                }
+                if let camera = PhotoDetailMetadataFormatter.camera(make: photo.exif?.make, model: photo.exif?.model) {
+                    LookChip(title: camera, systemImage: "camera")
+                }
+                if photo.hasLocation {
+                    LookChip(title: "Location", systemImage: "location", tint: LookTheme.ColorToken.amber)
+                }
             }
         }
     }
 
     private var actionRowsSection: some View {
-        PhotoDetailPanel {
+        PhotoDetailPanel(header: "Actions") {
             VStack(spacing: 0) {
                 PhotoDetailActionRow(systemImage: "rectangle.stack.badge.plus",
                                      title: "Add to Album",
-                                     detail: "Organize this photo") {
+                                     detail: "Place this frame into an album") {
                     showAddToAlbum = true
                 }
 
@@ -153,7 +175,7 @@ struct PhotoDetail: View {
 
                 PhotoDetailActionRow(systemImage: "square.and.arrow.down",
                                      title: "Save JPEG",
-                                     detail: "Download to Photos",
+                                     detail: "Export a camera-roll copy",
                                      isWorking: isDownloading) {
                     Task { await saveJPEG() }
                 }
@@ -163,7 +185,7 @@ struct PhotoDetail: View {
                     PhotoDetailSeparator()
                     PhotoDetailActionRow(systemImage: "doc.badge.arrow.up",
                                          title: "Export RAW Original",
-                                         detail: photo.fileExtension.uppercased(),
+                                         detail: "Share the \(photo.fileExtension.uppercased()) source file",
                                          isWorking: isDownloading) {
                         Task { await shareRAW() }
                     }
@@ -174,7 +196,7 @@ struct PhotoDetail: View {
 
                 PhotoDetailActionRow(systemImage: "clock.arrow.circlepath",
                                      title: "Tag History",
-                                     detail: "Review tag changes") {
+                                     detail: "Review archive edits") {
                     showTagHistory = true
                 }
             }
@@ -182,7 +204,7 @@ struct PhotoDetail: View {
     }
 
     private var metadataSection: some View {
-        PhotoDetailPanel(header: "Metadata") {
+        PhotoDetailPanel(header: "Archive Record") {
             VStack(spacing: 0) {
                 if let w = photo.width, let h = photo.height {
                     PhotoDetailInfoRow(systemImage: "viewfinder",
@@ -217,14 +239,18 @@ struct PhotoDetail: View {
     private var mapSection: some View {
         PhotoDetailPanel(header: "Location") {
             if let lat = photo.latitude, let lon = photo.longitude {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
                     Map(initialPosition: .region(MKCoordinateRegion(
                         center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
                         span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)))) {
                         Marker(photo.filename, coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon))
                     }
                     .frame(height: 190)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
+                            .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
+                    }
                     .allowsHitTesting(false)
                     .accessibilityLabel("Map showing photo location")
 
@@ -238,15 +264,15 @@ struct PhotoDetail: View {
 
     private var tagsSection: some View {
         PhotoDetailPanel(header: "Tags") {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+                VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
                     ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
                             newTagField
                             addTagButton
                         }
 
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
                             newTagField
                             addTagButton
                         }
@@ -272,20 +298,18 @@ struct PhotoDetail: View {
                     .accessibilityLabel("Auto-tag from EXIF")
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Applied")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                VStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
+                    PhotoDetailSectionLabel(title: "Applied", count: photoTags.count)
 
                     if photoTags.isEmpty {
                         PhotoDetailEmptyState(systemImage: "tag",
                                               text: "No tags applied")
                     } else {
-                        FlowLayout(spacing: 8) {
+                        FlowLayout(spacing: LookTheme.Spacing.tight) {
                             ForEach(photoTags, id: \.self) { tag in
                                 HStack(spacing: 6) {
                                     Text(tag)
-                                        .font(.callout)
+                                        .font(.callout.weight(.medium))
                                         .lineLimit(1)
                                     Button {
                                         Task {
@@ -298,9 +322,14 @@ struct PhotoDetail: View {
                                     .disabled(tagAction != nil)
                                     .accessibilityLabel("Remove \(tag)")
                                 }
-                                .padding(.horizontal, 12)
+                                .foregroundStyle(LookTheme.ColorToken.graphite)
+                                .padding(.horizontal, 11)
                                 .padding(.vertical, 7)
-                                .background(Color.accentColor.opacity(0.12), in: Capsule())
+                                .background(LookTheme.ColorToken.cyan.opacity(0.11), in: Capsule())
+                                .overlay {
+                                    Capsule()
+                                        .stroke(LookTheme.ColorToken.cyan.opacity(0.22), lineWidth: 1)
+                                }
                                 .accessibilityElement(children: .combine)
                             }
                         }
@@ -308,12 +337,10 @@ struct PhotoDetail: View {
                 }
 
                 if !pendingSuggestions.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Suggestions")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
+                    VStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
+                        PhotoDetailSectionLabel(title: "Suggestions", count: pendingSuggestions.count)
 
-                        FlowLayout(spacing: 8) {
+                        FlowLayout(spacing: LookTheme.Spacing.tight) {
                             ForEach(pendingSuggestions, id: \.self) { tag in
                                 Button {
                                     Task {
@@ -321,10 +348,15 @@ struct PhotoDetail: View {
                                     }
                                 } label: {
                                     Label(tag, systemImage: "plus.circle")
-                                        .font(.callout)
-                                        .padding(.horizontal, 12)
+                                        .font(.callout.weight(.medium))
+                                        .foregroundStyle(LookTheme.ColorToken.graphite)
+                                        .padding(.horizontal, 11)
                                         .padding(.vertical, 7)
-                                        .background(Color.green.opacity(0.12), in: Capsule())
+                                        .background(LookTheme.ColorToken.amber.opacity(0.12), in: Capsule())
+                                        .overlay {
+                                            Capsule()
+                                                .stroke(LookTheme.ColorToken.amber.opacity(0.24), lineWidth: 1)
+                                        }
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(tagAction != nil)
@@ -341,7 +373,7 @@ struct PhotoDetail: View {
                         ProgressView()
                     }
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .accessibilityLabel(isLoadingTags ? "Loading tags" : "Loading suggestions")
                 }
             }
@@ -516,38 +548,66 @@ private struct PhotoDetailImage: View {
     @ScaledMetric(relativeTo: .body) private var imageHeight: CGFloat = 320
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 0)
-                .fill(Color.black)
+        VStack(spacing: 0) {
+            PhotoDetailSprocketRail()
 
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
+            ZStack {
+                Rectangle()
+                    .fill(LookTheme.ColorToken.darkroom)
+
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.horizontal, LookTheme.Spacing.small)
+                            .padding(.vertical, LookTheme.Spacing.tight)
+                    case .failure:
+                        VStack(spacing: LookTheme.Spacing.small) {
+                            Image(systemName: "photo.badge.exclamationmark")
+                                .font(.title2)
+                            Text("Unable to load preview")
+                                .font(.callout)
+                        }
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .failure:
-                    VStack(spacing: 10) {
-                        Image(systemName: "photo.badge.exclamationmark")
-                            .font(.title2)
-                        Text("Unable to load preview")
-                            .font(.callout)
+                    case .empty:
+                        ProgressView()
+                            .tint(.white)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    @unknown default:
+                        EmptyView()
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .empty:
-                    ProgressView()
-                        .tint(.white)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                @unknown default:
-                    EmptyView()
                 }
             }
+            .frame(height: min(max(imageHeight, 260), 440))
+
+            PhotoDetailSprocketRail()
         }
         .frame(maxWidth: .infinity)
-        .frame(height: min(max(imageHeight, 260), 440))
+        .background(LookTheme.ColorToken.darkroom)
+        .lookFilmRail(color: LookTheme.ColorToken.darkroom, isActive: true)
         .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct PhotoDetailSprocketRail: View {
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 14)
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 0) {
+            ForEach(0..<14, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(LookTheme.ColorToken.paper.opacity(0.22))
+                    .frame(height: 5)
+            }
+        }
+        .padding(.horizontal, LookTheme.Spacing.medium)
+        .padding(.vertical, LookTheme.Spacing.tight)
+        .background(LookTheme.ColorToken.darkroom)
+        .accessibilityHidden(true)
     }
 }
 
@@ -561,20 +621,17 @@ private struct PhotoDetailPanel<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
             if let header {
-                Text(header)
-                    .font(.headline)
+                LookTheme.eyebrow(header)
                     .accessibilityAddTraits(.isHeader)
             }
 
             VStack(alignment: .leading, spacing: 0) {
                 content
             }
-            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .lookPanel(inset: LookTheme.Spacing.medium)
         }
     }
 }
@@ -588,35 +645,40 @@ private struct PhotoDetailActionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .frame(width: 28)
-                    .foregroundColor(.accentColor)
-                    .accessibilityHidden(true)
+            HStack(spacing: LookTheme.Spacing.small) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
+                        .fill(LookTheme.ColorToken.cyan.opacity(0.12))
 
-                VStack(alignment: .leading, spacing: 2) {
+                    Image(systemName: systemImage)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(LookTheme.ColorToken.cyan)
+                        .accessibilityHidden(true)
+                }
+                .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.body)
-                        .foregroundColor(.primary)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(LookTheme.ColorToken.graphite)
                     Text(detail)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
 
-                Spacer(minLength: 12)
+                Spacer(minLength: LookTheme.Spacing.small)
 
                 if isWorking {
                     ProgressView()
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.tertiary)
                         .accessibilityHidden(true)
                 }
             }
-            .padding(.vertical, 11)
+            .padding(.vertical, LookTheme.Spacing.small)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -646,22 +708,22 @@ private struct PhotoDetailInfoRow: View {
                 }
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, LookTheme.Spacing.small)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(value)")
     }
 
     private var titleLabel: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LookTheme.Spacing.small) {
             Image(systemName: systemImage)
                 .font(.body)
                 .frame(width: 24)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
             Text(title)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
                 .frame(width: 92, alignment: .leading)
         }
     }
@@ -669,7 +731,7 @@ private struct PhotoDetailInfoRow: View {
     private var valueLabel: some View {
         Text(value)
             .font(.body)
-            .foregroundColor(.primary)
+            .foregroundStyle(LookTheme.ColorToken.graphite)
             .multilineTextAlignment(.leading)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -680,6 +742,7 @@ private struct PhotoDetailSeparator: View {
     var body: some View {
         Divider()
             .padding(.leading, 40)
+            .overlay(LookTheme.ColorToken.mist)
     }
 }
 
@@ -690,9 +753,34 @@ private struct PhotoDetailEmptyState: View {
     var body: some View {
         Label(text, systemImage: systemImage)
             .font(.callout)
-            .foregroundColor(.secondary)
-            .padding(.vertical, 6)
+            .foregroundStyle(.secondary)
+            .padding(LookTheme.Spacing.small)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(LookTheme.ColorToken.mist.opacity(0.45),
+                        in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
             .accessibilityLabel(text)
+    }
+}
+
+private struct PhotoDetailSectionLabel: View {
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: LookTheme.Spacing.tight) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(LookTheme.ColorToken.graphite)
+
+            Text(count.formatted())
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(LookTheme.ColorToken.mist, in: Capsule())
+                .accessibilityLabel("\(count) \(title.lowercased())")
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -823,6 +911,12 @@ private enum PhotoDetailMetadataFormatter {
             details.append(byteFormatter.string(fromByteCount: Int64(fileSize)))
         }
         return details.isEmpty ? nil : details.joined(separator: " · ")
+    }
+
+    static func fileKind(filename: String, mimeType: String?) -> String? {
+        let ext = URL(fileURLWithPath: filename).pathExtension.uppercased()
+        if !ext.isEmpty { return ext }
+        return normalized(mimeType)
     }
 
     private static func normalized(_ value: String?) -> String? {

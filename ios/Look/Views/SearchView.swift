@@ -13,7 +13,7 @@ struct SearchView: View {
     @AppStorage("recent_searches") private var recentSearchesStorage = ""
 
     private let columns = [
-        GridItem(.adaptive(minimum: 110), spacing: 2)
+        GridItem(.adaptive(minimum: 112), spacing: 4)
     ]
 
     private var trimmedQuery: String {
@@ -29,11 +29,12 @@ struct SearchView: View {
 
     var body: some View {
         NavigationStack {
-            VStack {
+            VStack(spacing: 0) {
                 searchField
 
                 content
             }
+            .lookScreenBackground()
             .navigationTitle("Search")
             .onChange(of: query) { _, newValue in
                 if ignoreNextQueryChange {
@@ -54,41 +55,62 @@ struct SearchView: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 8) {
-            TextField("Search photos...", text: $query)
-                .textFieldStyle(.roundedBorder)
-                .submitLabel(.search)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .accessibilityLabel("Search photos")
-                .onSubmit {
-                    submitSearch(query, updateField: true)
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+            HStack(spacing: LookTheme.Spacing.small) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+
+                TextField("Filename, tag, camera, or path", text: $query)
+                    .submitLabel(.search)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .accessibilityLabel("Search photos")
+                    .onSubmit {
+                        submitSearch(query, updateField: true)
+                    }
+
+                if !query.isEmpty {
+                    Button {
+                        clearSearch()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .imageScale(.medium)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
                 }
 
-            if !query.isEmpty {
                 Button {
-                    clearSearch()
+                    submitSearch(query, updateField: true)
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .imageScale(.large)
-                        .foregroundColor(.secondary)
+                    Image(systemName: "arrow.forward.circle.fill")
+                        .font(.title3)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
+                .disabled(trimmedQuery.isEmpty)
+                .foregroundStyle(trimmedQuery.isEmpty ? .secondary : LookTheme.ColorToken.cyan)
+                .accessibilityLabel("Submit search")
+            }
+            .padding(.horizontal, LookTheme.Spacing.medium)
+            .padding(.vertical, 12)
+            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
+                    .stroke(isLoading ? LookTheme.ColorToken.cyan.opacity(0.55) : LookTheme.ColorToken.mist, lineWidth: 1)
             }
 
-            Button {
-                submitSearch(query, updateField: true)
-            } label: {
-                Image(systemName: "magnifyingglass")
-                    .imageScale(.large)
+            HStack(spacing: LookTheme.Spacing.tight) {
+                LookChip(title: "Filenames", systemImage: "doc.text.magnifyingglass", tint: LookTheme.ColorToken.graphite)
+                LookChip(title: "Tags", systemImage: "tag", tint: LookTheme.ColorToken.cyan)
+                LookChip(title: "Paths", systemImage: "folder", tint: LookTheme.ColorToken.amber)
             }
-            .buttonStyle(.bordered)
-            .disabled(trimmedQuery.isEmpty)
-            .accessibilityLabel("Submit search")
+            .accessibilityHidden(true)
         }
-        .padding(.horizontal)
-        .padding(.top, 8)
+        .padding(.horizontal, LookTheme.Spacing.screen)
+        .padding(.top, LookTheme.Spacing.small)
+        .padding(.bottom, LookTheme.Spacing.medium)
     }
 
     @ViewBuilder
@@ -123,19 +145,19 @@ struct SearchView: View {
 
     private var emptySearchView: some View {
         ScrollView {
-            VStack(spacing: 22) {
-                stateHeader(
-                    systemImage: "magnifyingglass",
+            VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
+                LookEmptyState(
                     title: "Search your photo library",
-                    message: "Search by filename, tags, or filepath",
-                    showProgress: false
+                    systemImage: "photo.stack",
+                    message: "Find photos by filename, tag, camera text, or folder path."
                 )
+                .lookPanel(inset: 0)
+                .frame(minHeight: 260)
 
                 if !recentSearches.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
                         HStack {
-                            Text("Recent")
-                                .font(.headline)
+                            LookTheme.eyebrow("Recent Searches")
                             Spacer()
                             Button("Clear") {
                                 recentSearchesStorage = ""
@@ -144,35 +166,52 @@ struct SearchView: View {
                             .accessibilityLabel("Clear recent searches")
                         }
 
-                        ForEach(recentSearches, id: \.self) { recentQuery in
-                            Button {
-                                submitSearch(recentQuery, updateField: true)
-                            } label: {
-                                Label(recentQuery, systemImage: "clock.arrow.circlepath")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: LookTheme.Spacing.tight) {
+                                ForEach(recentSearches, id: \.self) { recentQuery in
+                                    Button {
+                                        submitSearch(recentQuery, updateField: true)
+                                    } label: {
+                                        LookChip(title: recentQuery, systemImage: "clock.arrow.circlepath", tint: LookTheme.ColorToken.graphite)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Search for \(recentQuery)")
+                                }
                             }
-                            .buttonStyle(.bordered)
-                            .accessibilityLabel("Search for \(recentQuery)")
                         }
                     }
-                    .padding(.horizontal)
+                    .lookPanel()
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 80)
+            .padding(LookTheme.Spacing.screen)
         }
     }
 
     private var resultsGrid: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 2) {
-                ForEach(results) { photo in
-                    PhotoCard(photo: photo)
-                        .onTapGesture { selectedPhoto = photo }
-                        .accessibilityLabel("Open \(photo.filename)")
+            VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        LookTheme.eyebrow("Results")
+                        Text("\(results.count) photos for \"\(submittedQuery)\"")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(LookTheme.ColorToken.graphite)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, LookTheme.Spacing.tight)
+
+                LazyVGrid(columns: columns, spacing: 4) {
+                    ForEach(results) { photo in
+                        PhotoCard(photo: photo)
+                            .onTapGesture { selectedPhoto = photo }
+                            .accessibilityLabel("Open \(photo.filename)")
+                    }
                 }
             }
-            .padding(2)
+            .padding(.horizontal, LookTheme.Spacing.small)
+            .padding(.bottom, LookTheme.Spacing.large)
         }
         .accessibilityLabel("Search results for \(submittedQuery)")
     }
@@ -185,17 +224,24 @@ struct SearchView: View {
         actionTitle: String? = nil,
         action: (() -> Void)? = nil
     ) -> some View {
-        VStack {
-            Spacer()
-            stateHeader(systemImage: systemImage, title: title, message: message, showProgress: showProgress)
-
-            if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .buttonStyle(.borderedProminent)
-                    .padding(.top, 4)
-                    .accessibilityLabel(actionTitle)
+        VStack(spacing: LookTheme.Spacing.medium) {
+            if showProgress {
+                LookLoadingState(title: title, message: message)
+            } else if actionTitle != nil {
+                VStack(spacing: LookTheme.Spacing.medium) {
+                    LookStatusBanner(
+                        title: title,
+                        message: message,
+                        tone: .error,
+                        actionTitle: actionTitle,
+                        action: action
+                    )
+                    Spacer(minLength: 0)
+                }
+                .padding(LookTheme.Spacing.screen)
+            } else {
+                LookEmptyState(title: title, systemImage: systemImage, message: message)
             }
-            Spacer()
         }
     }
 

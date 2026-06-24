@@ -11,76 +11,108 @@ struct LibraryView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if let message = actionMessage ?? store.errorMessage {
-                    Section {
-                        Label(message, systemImage: "exclamationmark.triangle")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                        Button("Retry") {
-                            Task { await reloadLibrary() }
+            ScrollView {
+                VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
+                    libraryHeader
+
+                    if let message = actionMessage ?? store.errorMessage {
+                        LookStatusBanner(
+                            title: "Library update failed",
+                            message: message,
+                            tone: .error,
+                            actionTitle: "Retry",
+                            action: { Task { await reloadLibrary() } }
+                        )
+                    }
+
+                    LibraryPanelSection(title: "Browse") {
+                        NavigationLink {
+                            MapBrowseView()
+                        } label: {
+                            LibraryCollectionRow(
+                                icon: "map.fill",
+                                title: "Map",
+                                subtitle: "Browse photos with saved locations.",
+                                badge: "Places",
+                                tint: LookTheme.ColorToken.cyan
+                            )
                         }
-                        .font(.caption)
+                        .buttonStyle(.plain)
                     }
-                }
 
-                Section("Browse") {
-                    NavigationLink {
-                        MapBrowseView()
-                    } label: {
-                        Label("Map", systemImage: "map")
-                    }
-                }
-
-                Section("Albums") {
-                    if store.albums.isEmpty {
-                        Text("No albums yet").font(.caption).foregroundColor(.secondary)
-                    }
-                    ForEach(store.albums) { album in
-                        NavigationLink(destination: AlbumDetail(album: album)) {
-                            HStack {
-                                Image(systemName: "rectangle.stack")
-                                    .foregroundColor(.blue)
-                                VStack(alignment: .leading) {
-                                    Text(album.name)
-                                    if let count = album.photoCount {
-                                        Text("\(count) photos")
-                                            .font(.caption2).foregroundColor(.secondary)
+                    LibraryPanelSection(
+                        title: "Albums",
+                        trailing: "\(store.albums.count)"
+                    ) {
+                        if store.albums.isEmpty {
+                            LibraryEmptyPanel(
+                                title: "No albums yet",
+                                message: "Create albums to collect hand-picked sets of photos.",
+                                systemImage: "rectangle.stack"
+                            )
+                        } else {
+                            VStack(spacing: LookTheme.Spacing.small) {
+                                ForEach(store.albums) { album in
+                                    NavigationLink(destination: AlbumDetail(album: album)) {
+                                        LibraryCollectionRow(
+                                            icon: "rectangle.stack.fill",
+                                            title: album.name,
+                                            subtitle: album.description?.nilIfBlank ?? "Manual photo collection.",
+                                            badge: photoCountText(album.photoCount),
+                                            tint: LookTheme.ColorToken.graphite
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            pendingDeletion = .albums([album])
+                                        } label: {
+                                            Label("Delete Album", systemImage: "trash")
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                    .onDelete { indexSet in
-                        let albums = indexSet.map { store.albums[$0] }
-                        pendingDeletion = .albums(albums)
-                    }
-                }
 
-                Section("Smart Albums") {
-                    if store.smartCollections.isEmpty {
-                        Text("No smart albums yet").font(.caption).foregroundColor(.secondary)
-                    }
-                    ForEach(store.smartCollections) { collection in
-                        NavigationLink(destination: SmartAlbumDetail(collection: collection)) {
-                            HStack {
-                                Image(systemName: "sparkles.rectangle.stack")
-                                    .foregroundColor(.purple)
-                                VStack(alignment: .leading) {
-                                    Text(collection.name)
-                                    if let desc = collection.description, !desc.isEmpty {
-                                        Text(desc).font(.caption2).foregroundColor(.secondary)
+                    LibraryPanelSection(
+                        title: "Smart Albums",
+                        trailing: "\(store.smartCollections.count)"
+                    ) {
+                        if store.smartCollections.isEmpty {
+                            LibraryEmptyPanel(
+                                title: "No smart albums yet",
+                                message: "Build rules that keep matching photos grouped automatically.",
+                                systemImage: "sparkles.rectangle.stack"
+                            )
+                        } else {
+                            VStack(spacing: LookTheme.Spacing.small) {
+                                ForEach(store.smartCollections) { collection in
+                                    NavigationLink(destination: SmartAlbumDetail(collection: collection)) {
+                                        LibraryCollectionRow(
+                                            icon: "sparkles.rectangle.stack.fill",
+                                            title: collection.name,
+                                            subtitle: collection.description?.nilIfBlank ?? "Rule-based collection.",
+                                            badge: "Smart",
+                                            tint: LookTheme.ColorToken.amber
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            pendingDeletion = .smartCollections([collection])
+                                        } label: {
+                                            Label("Delete Smart Album", systemImage: "trash")
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                    .onDelete { indexSet in
-                        let collections = indexSet.map { store.smartCollections[$0] }
-                        pendingDeletion = .smartCollections(collections)
-                    }
                 }
+                .padding(LookTheme.Spacing.screen)
             }
+            .lookScreenBackground()
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -121,6 +153,31 @@ struct LibraryView: View {
         }
     }
 
+    private var libraryHeader: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    LookTheme.eyebrow("Collections")
+                    Text("Organize the library")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(LookTheme.ColorToken.graphite)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: LookTheme.Spacing.small) {
+                LibraryMetric(title: "Albums", value: "\(store.albums.count)", tint: LookTheme.ColorToken.graphite)
+                LibraryMetric(title: "Smart", value: "\(store.smartCollections.count)", tint: LookTheme.ColorToken.amber)
+            }
+        }
+        .lookPanel()
+    }
+
+    private func photoCountText(_ count: Int?) -> String? {
+        guard let count else { return nil }
+        return count == 1 ? "1 photo" : "\(count) photos"
+    }
+
     private func reloadLibrary() async {
         actionMessage = nil
         await store.loadAlbums()
@@ -145,6 +202,152 @@ struct LibraryView: View {
         } catch {
             actionMessage = error.localizedDescription
         }
+    }
+}
+
+private struct LibraryPanelSection<Content: View>: View {
+    let title: String
+    var trailing: String?
+    let content: Content
+
+    init(title: String, trailing: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.trailing = trailing
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+            HStack {
+                LookTheme.eyebrow(title)
+                Spacer()
+                if let trailing {
+                    Text(trailing)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(.secondarySystemBackground), in: Capsule())
+                }
+            }
+            content
+        }
+    }
+}
+
+private struct LibraryCollectionRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    var badge: String?
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: LookTheme.Spacing.medium) {
+            ZStack {
+                RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
+                    .fill(tint.opacity(0.13))
+                Image(systemName: icon)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: 44, height: 44)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: LookTheme.Spacing.tight)
+
+            if let badge {
+                Text(badge)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(tint.opacity(0.11), in: Capsule())
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        .padding(LookTheme.Spacing.medium)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
+                .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
+        }
+        .lookFilmRail(color: tint)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct LibraryMetric: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(LookTheme.Spacing.small)
+        .background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
+    }
+}
+
+private struct LibraryEmptyPanel: View {
+    let title: String
+    let message: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: LookTheme.Spacing.medium) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 34, height: 34)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(LookTheme.Spacing.medium)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
+                .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -191,36 +394,60 @@ struct SmartAlbumDetail: View {
     @State private var errorMessage: String?
     @State private var selected: Photo?
 
-    private let columns = [GridItem(.adaptive(minimum: 110), spacing: 2)]
+    private let columns = [GridItem(.adaptive(minimum: 112), spacing: 4)]
 
     var body: some View {
         Group {
             if isLoading {
-                ProgressView()
+                LookLoadingState(title: "Loading smart album", message: collection.name)
             } else if let errorMessage {
-                ContentUnavailableView {
-                    Label("Could not load smart album", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(errorMessage)
-                } actions: {
-                    Button("Retry") {
-                        Task { await load() }
-                    }
+                VStack(spacing: LookTheme.Spacing.medium) {
+                    LookStatusBanner(
+                        title: "Could not load smart album",
+                        message: errorMessage,
+                        tone: .error,
+                        actionTitle: "Retry",
+                        action: { Task { await load() } }
+                    )
+                    Spacer(minLength: 0)
                 }
+                .padding(LookTheme.Spacing.screen)
             } else if photos.isEmpty {
-                ContentUnavailableView("No matching photos", systemImage: "sparkles",
-                                       description: Text("This smart album's rules matched nothing."))
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 2) {
-                        ForEach(photos) { photo in
-                            PhotoCard(photo: photo).onTapGesture { selected = photo }
+                LookEmptyState(
+                    title: "No matching photos",
+                    systemImage: "sparkles",
+                    message: "This smart album's rules did not match anything yet.",
+                    actionTitle: "Evaluate Again",
+                    action: {
+                        Task {
+                            await evaluate()
+                            await load()
                         }
                     }
-                    .padding(2)
+                )
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+                        HStack {
+                            LookChip(title: photos.count == 1 ? "1 photo" : "\(photos.count) photos", systemImage: "photo", tint: LookTheme.ColorToken.amber)
+                            Spacer()
+                        }
+                        .padding(.horizontal, LookTheme.Spacing.tight)
+
+                        LazyVGrid(columns: columns, spacing: 4) {
+                            ForEach(photos) { photo in
+                                PhotoCard(photo: photo)
+                                    .onTapGesture { selected = photo }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, LookTheme.Spacing.small)
+                    .padding(.bottom, LookTheme.Spacing.large)
                 }
+                .refreshable { await load() }
             }
         }
+        .lookScreenBackground()
         .navigationTitle(collection.name)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

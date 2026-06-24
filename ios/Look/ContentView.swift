@@ -88,15 +88,19 @@ struct ContentView: View {
 
 private struct ConnectionCheckingView: View {
     var body: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-            Text("Checking server connection")
-                .font(.headline)
-            Text("Look needs a reachable server before opening your library.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        VStack(spacing: LookTheme.Spacing.large) {
+            LookLoadingState(
+                title: "Checking Look server",
+                message: "Confirming the saved Tailnet route before opening your library."
+            )
+
+            LookStatusBanner(
+                title: "Private-network first",
+                message: "If this device is away from your Tailnet, Look will ask you to reconnect before showing library tabs.",
+                tone: .info
+            )
+            .padding(.horizontal, LookTheme.Spacing.screen)
         }
-        .padding()
+        .lookScreenBackground()
     }
 }

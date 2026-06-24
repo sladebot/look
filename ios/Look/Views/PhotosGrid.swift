@@ -85,7 +85,7 @@ struct PhotosGrid: View {
     @State private var scrubFraction: CGFloat = 0
     @State private var scrubTitle = ""
 
-    private let spacing: CGFloat = 2
+    private let spacing = LookTheme.Spacing.hairline
 
     private var selectedPhotos: [Photo] {
         store.photos.filter { selectedPhotoIds.contains($0.id) }
@@ -152,6 +152,7 @@ struct PhotosGrid: View {
             }
             .navigationTitle("Photos")
             .toolbar { toolbarContent }
+            .lookScreenBackground()
             .safeAreaInset(edge: .bottom) {
                 if selectionMode {
                     selectionActionBar
@@ -180,21 +181,23 @@ struct PhotosGrid: View {
     private func gallery(_ secs: [PhotoSection]) -> some View {
         GeometryReader { geo in
             let width = geo.size.width
-            let target = max(96, width / (width > 600 ? 4.6 : 3.4))
+            let horizontalInset = LookTheme.Spacing.tight * 2
+            let contentWidth = max(1, width - horizontalInset)
+            let target = max(104, contentWidth / (width > 600 ? 4.8 : 3.35))
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    LazyVStack(alignment: .leading, spacing: LookTheme.Spacing.tight, pinnedViews: [.sectionHeaders]) {
                         statusBanner
 
                         if store.isSyncing {
                             syncStatusStrip
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
+                                .padding(.horizontal, LookTheme.Spacing.screen)
+                                .padding(.top, LookTheme.Spacing.small)
                         }
 
                         ForEach(secs) { section in
                             Section {
-                                ForEach(PhotoLayout.rows(for: section.photos, width: width,
+                                ForEach(PhotoLayout.rows(for: section.photos, width: contentWidth,
                                                          target: target, spacing: spacing,
                                                          aspect: photoAspect)) { row in
                                     HStack(spacing: spacing) {
@@ -202,17 +205,19 @@ struct PhotosGrid: View {
                                             cell(item, rowHeight: row.height)
                                         }
                                     }
-                                    .padding(.bottom, spacing)
                                 }
+                                .padding(.horizontal, LookTheme.Spacing.tight)
                             } header: {
-                                sectionHeader(section.title)
+                                sectionHeader(section)
                             }
                             .id(section.id)
                         }
 
                         galleryFooter
                     }
+                    .padding(.top, LookTheme.Spacing.tight)
                 }
+                .background(LookTheme.ColorToken.darkroom.opacity(0.04))
                 .refreshable { await store.syncNow() }
                 .overlay(alignment: .trailing) { scrubber(secs, proxy: proxy) }
             }
@@ -229,14 +234,16 @@ struct PhotosGrid: View {
                 if scrubbing {
                     Text(scrubTitle)
                         .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(.thinMaterial, in: Capsule())
-                        .shadow(radius: 3)
+                        .foregroundStyle(LookTheme.ColorToken.graphite)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.regularMaterial, in: Capsule())
+                        .shadow(color: .black.opacity(0.16), radius: 8, y: 3)
                         .offset(x: -34, y: thumbY)
                         .transition(.opacity)
                 }
                 Capsule()
-                    .fill(Color.secondary.opacity(scrubbing ? 0.95 : 0.3))
+                    .fill((scrubbing ? LookTheme.ColorToken.cyan : LookTheme.ColorToken.graphite).opacity(scrubbing ? 0.95 : 0.34))
                     .frame(width: 5, height: 40)
                     .padding(.trailing, 3)
                     .offset(y: thumbY)
@@ -269,31 +276,37 @@ struct PhotosGrid: View {
             maxPixel: rowHeight * 3
         )
         .frame(width: item.width, height: rowHeight)
+        .background(LookTheme.ColorToken.darkroom)
         .clipped()
         .overlay(alignment: .bottomLeading) {
             if photo.isFavorite == true && !selectionMode {
                 Image(systemName: "heart.fill")
-                    .font(.caption2)
+                    .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
-                    .shadow(radius: 2)
-                    .padding(5)
+                    .shadow(color: .black.opacity(0.45), radius: 4, y: 1)
+                    .padding(6)
+            }
+        }
+        .overlay {
+            if isSelected {
+                Color.black.opacity(0.18)
             }
         }
         .overlay(alignment: .topTrailing) {
             if selectionMode {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
+                    .font(.title3.weight(.semibold))
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(isSelected ? .white : .white.opacity(0.9),
-                                     isSelected ? .blue : .black.opacity(0.35))
-                    .padding(5)
+                                     isSelected ? LookTheme.ColorToken.cyan : .black.opacity(0.38))
+                    .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                    .padding(6)
             }
         }
-        .overlay {
-            if isSelected {
-                Rectangle().stroke(.blue, lineWidth: 3)
-            }
-        }
+        .lookFilmRail(
+            color: isSelected ? LookTheme.ColorToken.cyan : LookTheme.ColorToken.darkroom,
+            isActive: isSelected
+        )
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(for: photo, selected: isSelected))
@@ -313,108 +326,129 @@ struct PhotosGrid: View {
         }
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        HStack {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
+    private func sectionHeader(_ section: PhotoSection) -> some View {
+        HStack(alignment: .lastTextBaseline, spacing: LookTheme.Spacing.small) {
+            LookTheme.eyebrow(section.title)
+                .foregroundStyle(LookTheme.ColorToken.graphite)
+
+            Text("\(section.photos.count)")
+                .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                .foregroundStyle(.secondary)
+
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, LookTheme.Spacing.screen)
+        .padding(.top, LookTheme.Spacing.medium)
+        .padding(.bottom, LookTheme.Spacing.small)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemBackground))
+        .background(.regularMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(LookTheme.ColorToken.mist)
+                .frame(height: 1)
+        }
     }
 
     // MARK: States
 
     private var loadingState: some View {
-        VStack(spacing: 10) {
-            ProgressView()
-            Text("Loading photos...").font(.caption).foregroundColor(.secondary)
+        VStack(spacing: LookTheme.Spacing.medium) {
+            LookLoadingState(
+                title: "Loading library",
+                message: store.isSyncing ? "Sync is still running." : "Preparing the contact sheet."
+            )
             if store.isSyncing {
                 syncStatusStrip
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, LookTheme.Spacing.screen)
             }
         }
+        .lookScreenBackground()
     }
 
     private var disconnectedState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "wifi.slash").font(.largeTitle).foregroundColor(.secondary)
-            Text("Cannot connect to Look server").font(.headline)
-            Text("Check server URL in Settings").font(.caption).foregroundColor(.secondary)
+        VStack(spacing: LookTheme.Spacing.medium) {
+            LookEmptyState(
+                title: "Server unavailable",
+                systemImage: "wifi.slash",
+                message: "Check Settings or retry the connection.",
+                actionTitle: "Retry",
+                action: { Task { await store.checkConnection() } }
+            )
             if let message = store.errorMessage, !message.isEmpty {
-                Text(message)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-                    .padding(.horizontal, 24)
+                LookStatusBanner(
+                    title: "Connection failed",
+                    message: message,
+                    tone: .error
+                )
+                .padding(.horizontal, LookTheme.Spacing.screen)
+                .padding(.bottom, LookTheme.Spacing.screen)
             }
-            Button("Retry") { Task { await store.checkConnection() } }
-                .buttonStyle(.bordered)
         }
+        .lookScreenBackground()
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "photo.on.rectangle").font(.largeTitle).foregroundColor(.secondary)
-            Text(store.photos.isEmpty ? "No photos found" : "No photos match this filter")
-                .font(.headline)
-            Text(store.photos.isEmpty ? "Import photos on the Look server first" : "Clear filters to see the full library")
-                .font(.caption).foregroundColor(.secondary)
+        VStack(spacing: LookTheme.Spacing.medium) {
+            LookEmptyState(
+                title: store.photos.isEmpty ? "No photos yet" : "No matches",
+                systemImage: store.photos.isEmpty ? "photo.on.rectangle.angled" : "line.3.horizontal.decrease.circle",
+                message: store.photos.isEmpty ? "Import photos on the server to begin." : "Adjust the filter to return to the full library.",
+                actionTitle: store.photos.isEmpty ? "Sync Library" : nil,
+                action: store.photos.isEmpty ? { Task { await store.syncNow() } } : nil
+            )
             if let message = store.errorMessage, !message.isEmpty {
                 errorStatusStrip(message)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 4)
+                    .padding(.horizontal, LookTheme.Spacing.screen)
             } else if let message = store.lastSyncMessage, isSyncWarning(message) {
                 syncWarningStrip(message)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 4)
+                    .padding(.horizontal, LookTheme.Spacing.screen)
             }
             if store.isSyncing {
                 syncStatusStrip
-                    .padding(.top, 4)
+                    .padding(.horizontal, LookTheme.Spacing.screen)
+                    .padding(.bottom, LookTheme.Spacing.screen)
             }
         }
+        .lookScreenBackground()
     }
 
     private var galleryFooter: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: LookTheme.Spacing.small) {
             if store.isLoading {
                 ProgressView()
+                    .controlSize(.small)
             }
 
             Text(footerText)
-                .font(.caption2)
-                .foregroundColor(.secondary)
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.secondary)
 
             if !store.isSyncing, let message = store.lastSyncMessage {
                 Text(message)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             if store.hasMorePhotos && !store.isLoading {
                 Label("More photos load as you scroll", systemImage: "arrow.down.circle")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, LookTheme.Spacing.large)
     }
 
     @ViewBuilder
     private var statusBanner: some View {
         if let message = store.errorMessage, !message.isEmpty {
             errorStatusStrip(message)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.horizontal, LookTheme.Spacing.screen)
+                .padding(.bottom, LookTheme.Spacing.small)
         } else if let message = store.lastSyncMessage, isSyncWarning(message) {
             syncWarningStrip(message)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.horizontal, LookTheme.Spacing.screen)
+                .padding(.bottom, LookTheme.Spacing.small)
         }
     }
 
@@ -426,39 +460,45 @@ struct PhotosGrid: View {
     }
 
     private var syncStatusStrip: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+            HStack(spacing: LookTheme.Spacing.small) {
                 if store.syncProgressFraction == nil {
                     ProgressView()
                         .controlSize(.small)
                 }
                 Text(store.syncProgressMessage ?? "Syncing photos...")
                     .font(.caption.weight(.medium))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(LookTheme.ColorToken.graphite)
                     .lineLimit(2)
                 Spacer(minLength: 0)
             }
 
             if let fraction = store.syncProgressFraction {
                 ProgressView(value: fraction)
+                    .tint(LookTheme.ColorToken.cyan)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, LookTheme.Spacing.medium)
+        .padding(.vertical, LookTheme.Spacing.small)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
+                .stroke(LookTheme.ColorToken.cyan.opacity(0.28), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func errorStatusStrip(_ message: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 8) {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+            HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 3) {
+                    .foregroundStyle(LookTheme.ColorToken.danger)
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Library needs attention")
-                        .font(.caption.weight(.semibold))
+                        .font(.subheadline.weight(.semibold))
                     Text(message)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(3)
                 }
                 Spacer(minLength: 0)
@@ -472,7 +512,7 @@ struct PhotosGrid: View {
                 .accessibilityLabel("Dismiss error")
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: LookTheme.Spacing.small) {
                 Button {
                     Task {
                         await store.checkConnection()
@@ -493,26 +533,25 @@ struct PhotosGrid: View {
             }
             .font(.caption)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .padding(LookTheme.Spacing.medium)
+        .background(LookTheme.ColorToken.danger.opacity(0.10), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
+                .stroke(LookTheme.ColorToken.danger.opacity(0.26), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
     }
 
     private func syncWarningStrip(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 3) {
+                .foregroundStyle(LookTheme.ColorToken.amber)
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Sync completed with issues")
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                 Text(message)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
@@ -527,28 +566,28 @@ struct PhotosGrid: View {
             .disabled(store.isSyncing)
             .accessibilityLabel("Retry sync")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .padding(LookTheme.Spacing.medium)
+        .background(LookTheme.ColorToken.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
+                .stroke(LookTheme.ColorToken.amber.opacity(0.32), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
     }
 
     private var selectionActionBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LookTheme.Spacing.small) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(selectionSummary)
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(LookTheme.ColorToken.graphite)
                 Text("\(visiblePhotos.count) visible")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             .lineLimit(1)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: LookTheme.Spacing.tight)
 
             Button {
                 toggleVisibleSelection()
@@ -558,6 +597,7 @@ struct PhotosGrid: View {
             }
             .buttonStyle(.bordered)
             .disabled(visiblePhotos.isEmpty)
+            .controlSize(.small)
 
             Button {
                 showAddToAlbum = true
@@ -565,14 +605,20 @@ struct PhotosGrid: View {
                 Label("Add", systemImage: "rectangle.stack.badge.plus")
             }
             .buttonStyle(.borderedProminent)
+            .tint(LookTheme.ColorToken.cyan)
             .disabled(selectedPhotoIds.isEmpty)
+            .controlSize(.small)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) {
-            Divider()
+        .padding(.horizontal, LookTheme.Spacing.medium)
+        .padding(.vertical, LookTheme.Spacing.small)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
+                .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
         }
+        .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
+        .padding(.horizontal, LookTheme.Spacing.screen)
+        .padding(.bottom, LookTheme.Spacing.tight)
         .accessibilityElement(children: .contain)
     }
 
@@ -885,7 +931,7 @@ struct NativePhotoViewer: View {
                 .padding(.vertical, 10)
             }
             .background(.black.opacity(0.45))
-            .onChange(of: currentId) { id in
+            .onChange(of: currentId) { _, id in
                 withAnimation { proxy.scrollTo(id, anchor: .center) }
             }
             .onAppear { proxy.scrollTo(currentId, anchor: .center) }

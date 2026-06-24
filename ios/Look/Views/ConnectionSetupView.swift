@@ -17,67 +17,23 @@ struct ConnectionSetupView: View {
     @State private var isTesting = false
     @State private var statusMessage: String?
     @State private var errorMessage: String?
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("http://machine.tailnet.ts.net:5678", text: $serverURL)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .textContentType(.URL)
-
-                    SecureField("API key (optional)", text: $apiKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .textContentType(.password)
-                } header: {
-                    Text("Look Server")
-                } footer: {
-                    Text("Use the server URL you can reach from this device. The API key is only required when the server sets API_KEY.")
+            ScrollView {
+                VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
+                    header
+                    statusBanner
+                    connectionPanel
+                    examplesPanel
+                    helpPanel
                 }
-
-                Section("Tailscale Examples") {
-                    exampleRow("Tailscale IP", value: "http://100.86.254.112:5678")
-                    exampleRow("MagicDNS", value: "http://studio.tailnet-name.ts.net:5678")
-                }
-
-                Section {
-                    Button {
-                        testConnection()
-                    } label: {
-                        HStack {
-                            if isTesting {
-                                ProgressView()
-                                    .scaleEffect(0.75)
-                            }
-                            Text(isTesting ? "Testing..." : "Test Connection")
-                        }
-                    }
-                    .disabled(isTesting || normalizedServerURL.isEmpty)
-
-                    if statusMessage != nil || displayErrorMessage != nil {
-                        Button("Clear Status") {
-                            clearStatus()
-                        }
-                    }
-                } header: {
-                    Text("Connection")
-                } footer: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if let statusMessage {
-                            Label(statusMessage, systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        }
-                        if let displayErrorMessage {
-                            Label(displayErrorMessage, systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.red)
-                        }
-                    }
-                }
+                .padding(LookTheme.Spacing.screen)
             }
+            .lookScreenBackground()
             .navigationTitle("Connect to Look")
+            .navigationBarTitleDisplayMode(.inline)
             .task {
                 APIClient.shared.migrateLegacyAPIKeyIfNeeded()
                 apiKey = APIClient.shared.storedAPIKey
@@ -93,12 +49,207 @@ struct ConnectionSetupView: View {
         errorMessage ?? store.errorMessage
     }
 
-    private func exampleRow(_ label: String, value: String) -> some View {
+    private var header: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            Image(systemName: "point.3.connected.trianglepath.dotted")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(LookTheme.ColorToken.cyan)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
+                LookTheme.eyebrow("Private library")
+                Text("Connect on your Tailnet")
+                    .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Look is built for a server you control. Use the address this iPhone can reach through Tailscale, then test once to unlock the library.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: LookTheme.Spacing.tight) {
+                LookChip(title: "MagicDNS", systemImage: "network", tint: LookTheme.ColorToken.cyan)
+                LookChip(title: "100.x IP", systemImage: "lock.shield", tint: LookTheme.ColorToken.graphite)
+                LookChip(title: "API key optional", systemImage: "key", tint: LookTheme.ColorToken.amber)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, LookTheme.Spacing.small)
+    }
+
+    @ViewBuilder
+    private var statusBanner: some View {
+        if isTesting {
+            LookStatusBanner(
+                title: "Checking the private route",
+                message: "Testing \(normalizedServerURL) from this device.",
+                tone: .info
+            )
+        } else if let statusMessage {
+            LookStatusBanner(
+                title: "Ready to browse",
+                message: statusMessage,
+                tone: .success,
+                actionTitle: "Clear",
+                action: clearStatus
+            )
+        } else if let displayErrorMessage {
+            LookStatusBanner(
+                title: "Could not reach Look",
+                message: displayErrorMessage,
+                tone: .error,
+                actionTitle: "Clear",
+                action: clearStatus
+            )
+        } else {
+            LookStatusBanner(
+                title: "Use a private-network address",
+                message: "Tailscale IPs and MagicDNS names both work. Include http:// or https:// and the server port.",
+                tone: .info
+            )
+        }
+    }
+
+    private var connectionPanel: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            panelHeader(
+                title: "Server",
+                subtitle: "This is usually the Mac, NAS, or mini PC running Look.",
+                systemImage: "server.rack"
+            )
+
+            VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+                fieldLabel("Server URL", detail: "Required")
+                TextField("http://studio.taila3f2b.ts.net:5678", text: $serverURL)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textContentType(.URL)
+                    .focused($focusedField, equals: .serverURL)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .apiKey }
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+                fieldLabel("API key", detail: "Only if API_KEY is set on the server")
+                SecureField("Leave blank for a private Tailnet server without API_KEY", text: $apiKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textContentType(.password)
+                    .focused($focusedField, equals: .apiKey)
+                    .submitLabel(.go)
+                    .onSubmit { testConnection() }
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            Button {
+                testConnection()
+            } label: {
+                HStack {
+                    if isTesting {
+                        ProgressView()
+                            .tint(.white)
+                    }
+                    Text(isTesting ? "Testing Connection" : "Test and Continue")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isTesting || normalizedServerURL.isEmpty)
+            .controlSize(.large)
+            .padding(.top, LookTheme.Spacing.tight)
+        }
+        .lookPanel()
+    }
+
+    private var examplesPanel: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            panelHeader(
+                title: "Common Tailnet Addresses",
+                subtitle: "Tap an example to fill the server URL, then replace it with your machine's address.",
+                systemImage: "network"
+            )
+
+            VStack(spacing: LookTheme.Spacing.small) {
+                exampleRow("Tailscale IP", value: "http://100.86.254.112:5678", note: "Works even if MagicDNS is disabled.")
+                exampleRow("MagicDNS", value: "http://studio.tailnet-name.ts.net:5678", note: "Friendlier when your Tailnet has DNS enabled.")
+            }
+        }
+        .lookPanel()
+    }
+
+    private var helpPanel: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+            Label("Before testing", systemImage: "checklist")
+                .font(.headline)
+            Text("Make sure Tailscale is connected on this iPhone and on the Look server. The server should be running on port 5678 and reachable from the same Tailnet.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .lookPanel()
+    }
+
+    private func panelHeader(title: String, subtitle: String, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
+            Image(systemName: systemImage)
+                .foregroundStyle(LookTheme.ColorToken.cyan)
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func fieldLabel(_ title: String, detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Spacer()
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func exampleRow(_ label: String, value: String, note: String) -> some View {
         Button {
             serverURL = value
             clearStatus()
         } label: {
-            LabeledContent(label, value: value)
+            HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
+                Image(systemName: "arrow.down.doc")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(LookTheme.ColorToken.cyan)
+                    .frame(width: 22)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(label)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(value)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(LookTheme.ColorToken.graphite)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Text(note)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: LookTheme.Spacing.tight)
+            }
+            .padding(LookTheme.Spacing.small)
+            .background(LookTheme.ColorToken.mist.opacity(0.45), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -148,6 +299,11 @@ struct ConnectionSetupView: View {
         statusMessage = nil
         errorMessage = nil
         store.errorMessage = nil
+    }
+
+    private enum Field {
+        case serverURL
+        case apiKey
     }
 }
 
