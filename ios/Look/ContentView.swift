@@ -7,9 +7,9 @@ struct ContentView: View {
     @State private var didLoadApplicationData = false
 
     init() {
-        let paper = UIColor(red: 221 / 255, green: 229 / 255, blue: 234 / 255, alpha: 1)
-        let graphite = UIColor(red: 39 / 255, green: 43 / 255, blue: 47 / 255, alpha: 1)
-        let cyan = UIColor(red: 30 / 255, green: 138 / 255, blue: 255 / 255, alpha: 1)
+        let paper = UIColor(red: 31 / 255, green: 35 / 255, blue: 39 / 255, alpha: 1)
+        let graphite = UIColor(red: 238 / 255, green: 243 / 255, blue: 246 / 255, alpha: 1)
+        let cyan = UIColor(red: 46 / 255, green: 168 / 255, blue: 255 / 255, alpha: 1)
 
         // Keep chrome on the same quiet surface as the gallery. The previous
         // default material turned the top region white and the tab bar glassy
@@ -20,22 +20,22 @@ struct ContentView: View {
         tab.shadowColor = UIColor.black.withAlphaComponent(0.10)
         tab.stackedLayoutAppearance.selected.iconColor = cyan
         tab.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: cyan]
-        tab.stackedLayoutAppearance.normal.iconColor = graphite.withAlphaComponent(0.72)
-        tab.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: graphite.withAlphaComponent(0.72)]
+        tab.stackedLayoutAppearance.normal.iconColor = graphite.withAlphaComponent(0.70)
+        tab.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: graphite.withAlphaComponent(0.70)]
         tab.inlineLayoutAppearance = tab.stackedLayoutAppearance
         tab.compactInlineLayoutAppearance = tab.stackedLayoutAppearance
         UITabBar.appearance().isTranslucent = false
         UITabBar.appearance().backgroundColor = paper
         UITabBar.appearance().tintColor = cyan
-        UITabBar.appearance().unselectedItemTintColor = graphite.withAlphaComponent(0.72)
+        UITabBar.appearance().unselectedItemTintColor = graphite.withAlphaComponent(0.70)
         UITabBar.appearance().standardAppearance = tab
         UITabBar.appearance().scrollEdgeAppearance = tab
 
         let nav = UINavigationBarAppearance()
         nav.configureWithOpaqueBackground()
         nav.backgroundColor = paper
-        nav.shadowColor = UIColor.black.withAlphaComponent(0.08)
-        nav.largeTitleTextAttributes = [.foregroundColor: UIColor.black]
+        nav.shadowColor = UIColor.black.withAlphaComponent(0.35)
+        nav.largeTitleTextAttributes = [.foregroundColor: graphite]
         nav.titleTextAttributes = [.foregroundColor: graphite]
         UINavigationBar.appearance().standardAppearance = nav
         UINavigationBar.appearance().scrollEdgeAppearance = nav
@@ -82,6 +82,8 @@ struct ContentView: View {
         .background(LookTheme.ColorToken.paper)
         .toolbarBackground(LookTheme.ColorToken.paper, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        .toolbarColorScheme(.dark, for: .tabBar)
+        .preferredColorScheme(.dark)
     }
 
     private func performInitialConnectionCheck() async {

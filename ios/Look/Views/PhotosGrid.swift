@@ -80,11 +80,6 @@ struct PhotosGrid: View {
     @State private var filter = PhotoGridFilter.all
     @State private var sort = PhotoGridSort.newest
 
-    // Scrubber
-    @State private var scrubbing = false
-    @State private var scrubFraction: CGFloat = 0
-    @State private var scrubTitle = ""
-
     private let spacing = LookTheme.Spacing.hairline
 
     private var selectedPhotos: [Photo] {
@@ -150,15 +145,16 @@ struct PhotosGrid: View {
                     gallery(secs)
                 }
             }
-            .navigationTitle("Photos")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
             .lookScreenBackground()
             .toolbarBackground(LookTheme.ColorToken.paper, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(LookTheme.ColorToken.paper, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
+            .toolbarColorScheme(.dark, for: .tabBar)
             .safeAreaInset(edge: .bottom) {
                 if selectionMode {
                     selectionActionBar
@@ -190,87 +186,63 @@ struct PhotosGrid: View {
             let horizontalInset = LookTheme.Spacing.tight * 2
             let contentWidth = max(1, width - horizontalInset)
             let target = max(104, contentWidth / (width > 600 ? 4.8 : 3.35))
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: LookTheme.Spacing.tight, pinnedViews: [.sectionHeaders]) {
-                        statusBanner
+            ScrollView(showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: LookTheme.Spacing.tight, pinnedViews: [.sectionHeaders]) {
+                    galleryHeader
+                    statusBanner
 
-                        if store.isSyncing {
-                            syncStatusStrip
-                                .padding(.horizontal, LookTheme.Spacing.screen)
-                                .padding(.top, LookTheme.Spacing.small)
-                        }
+                    if store.isSyncing {
+                        syncStatusStrip
+                            .padding(.horizontal, LookTheme.Spacing.screen)
+                            .padding(.top, LookTheme.Spacing.small)
+                    }
 
-                        ForEach(secs) { section in
-                            Section {
-                                ForEach(PhotoLayout.rows(for: section.photos, width: contentWidth,
-                                                         target: target, spacing: spacing,
-                                                         aspect: photoAspect)) { row in
-                                    HStack(spacing: spacing) {
-                                        ForEach(row.items) { item in
-                                            cell(item, rowHeight: row.height)
-                                        }
+                    ForEach(secs) { section in
+                        Section {
+                            ForEach(PhotoLayout.rows(for: section.photos, width: contentWidth,
+                                                     target: target, spacing: spacing,
+                                                     aspect: photoAspect)) { row in
+                                HStack(spacing: spacing) {
+                                    ForEach(row.items) { item in
+                                        cell(item, rowHeight: row.height)
                                     }
                                 }
-                                .padding(.horizontal, LookTheme.Spacing.tight)
-                            } header: {
-                                sectionHeader(section)
                             }
-                            .id(section.id)
+                            .padding(.horizontal, LookTheme.Spacing.tight)
+                        } header: {
+                            sectionHeader(section)
                         }
-
-                        galleryFooter
+                        .id(section.id)
                     }
-                    .padding(.top, LookTheme.Spacing.tight)
+
+                    galleryFooter
                 }
-                .background(LookTheme.ColorToken.darkroom.opacity(0.04))
-                .refreshable { await store.syncNow() }
-                .overlay(alignment: .trailing) { scrubber(secs, proxy: proxy) }
+                .padding(.top, LookTheme.Spacing.tight)
             }
+            .scrollIndicators(.hidden)
+            .background(LookTheme.ColorToken.paper)
+            .refreshable { await store.syncNow() }
         }
     }
 
-    // MARK: Scrubber
+    private var galleryHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Photos")
+                .font(.system(size: 44, weight: .bold, design: .default))
+                .foregroundStyle(LookTheme.ColorToken.graphite)
+                .lineLimit(1)
 
-    private func scrubber(_ secs: [PhotoSection], proxy: ScrollViewProxy) -> some View {
-        GeometryReader { geo in
-            let h = geo.size.height
-            let thumbY = max(0, min(h - 40, scrubFraction * h - 20))
-            ZStack(alignment: .topTrailing) {
-                if scrubbing {
-                    Text(scrubTitle)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(LookTheme.ColorToken.graphite)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.regularMaterial, in: Capsule())
-                        .shadow(color: .black.opacity(0.16), radius: 8, y: 3)
-                        .offset(x: -34, y: thumbY)
-                        .transition(.opacity)
-                }
-                Capsule()
-                    .fill((scrubbing ? LookTheme.ColorToken.cyan : LookTheme.ColorToken.graphite).opacity(scrubbing ? 0.95 : 0.34))
-                    .frame(width: 5, height: 40)
-                    .padding(.trailing, 3)
-                    .offset(y: thumbY)
-                    .contentShape(Rectangle().inset(by: -16))
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { v in
-                                scrubbing = true
-                                let frac = min(max(v.location.y / h, 0), 1)
-                                scrubFraction = frac
-                                let idx = min(secs.count - 1, max(0, Int(frac * CGFloat(secs.count))))
-                                scrubTitle = secs[idx].title
-                                proxy.scrollTo(secs[idx].id, anchor: .top)
-                            }
-                            .onEnded { _ in
-                                withAnimation(.easeOut(duration: 0.3)) { scrubbing = false }
-                            }
-                    )
-            }
+            Spacer(minLength: LookTheme.Spacing.medium)
+
+            Text("\(store.photos.count)")
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.58))
+                .monospacedDigit()
         }
-        .frame(width: 44)
+        .padding(.horizontal, LookTheme.Spacing.screen)
+        .padding(.top, LookTheme.Spacing.large)
+        .padding(.bottom, LookTheme.Spacing.medium)
+        .background(LookTheme.ColorToken.paper)
     }
 
     private func cell(_ item: JustifiedItem, rowHeight: CGFloat) -> some View {
@@ -331,13 +303,10 @@ struct PhotosGrid: View {
         .onTapGesture {
             if selectionMode { toggleSelection(photo) } else { selectedPhoto = photo }
         }
-        .contextMenu {
-            Button {
-                selectedPhotoIds = [photo.id]
-                showAddToAlbum = true
-            } label: {
-                Label("Add to Album", systemImage: "rectangle.stack.badge.plus")
-            }
+        .onLongPressGesture {
+            guard !selectionMode else { return }
+            selectionMode = true
+            selectedPhotoIds = [photo.id]
         }
     }
 
@@ -345,11 +314,11 @@ struct PhotosGrid: View {
         HStack(alignment: .lastTextBaseline, spacing: LookTheme.Spacing.small) {
             Text(section.title.uppercased())
                 .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.72))
+                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.84))
 
             Text("\(section.photos.count)")
                 .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.55))
+                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.60))
                 .monospacedDigit()
 
             Spacer()
@@ -690,11 +659,6 @@ struct PhotosGrid: View {
             if selectionMode {
                 Button(allVisiblePhotosSelected ? "Clear" : "All") {
                     toggleVisibleSelection()
-                }
-                .disabled(visiblePhotos.isEmpty)
-            } else {
-                Button("Select") {
-                    selectionMode = true
                 }
                 .disabled(visiblePhotos.isEmpty)
             }

@@ -2,11 +2,12 @@ import SwiftUI
 
 enum LookTheme {
     enum ColorToken {
-        static let darkroom = Color(hex: 0x111417)
-        static let paper = Color(hex: 0xDDE5EA)
-        static let graphite = Color(hex: 0x272B2F)
-        static let mist = Color(hex: 0xC4D0D8)
-        static let cyan = Color(hex: 0x1E8AFF)
+        static let darkroom = Color(hex: 0x0E1012)
+        static let paper = Color(hex: 0x1F2327)
+        static let surface = Color(hex: 0x2A3036)
+        static let graphite = Color(hex: 0xEEF3F6)
+        static let mist = Color(hex: 0x3D464E)
+        static let cyan = Color(hex: 0x2EA8FF)
         static let amber = Color(hex: 0xD9A441)
         static let danger = Color(hex: 0xC94545)
     }
@@ -52,7 +53,7 @@ struct LookPanel: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(inset)
-            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+            .background(LookTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
                     .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
