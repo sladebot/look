@@ -80,6 +80,30 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(task.progress?["percent"]?.stringValue, "87.5")
         XCTAssertEqual(task.progress?["stages"]?.arrayValue?.count, 2)
         XCTAssertEqual(task.progress?["active"]?.stringValue, "true")
-        XCTAssertNotNil(task.result)
+        XCTAssertNil(task.result)
+    }
+
+    func testJSONValueDecodesTaskResultObject() throws {
+        let data = """
+        {
+          "task_id": "task-2",
+          "task_type": "import",
+          "status": "completed",
+          "progress": null,
+          "result": {
+            "imported": 12,
+            "errors": 1,
+            "ok": true
+          }
+        }
+        """.data(using: .utf8)!
+
+        let task = try JSONDecoder().decode(TaskInfo.self, from: data)
+
+        XCTAssertEqual(task.id, "task-2")
+        XCTAssertNil(task.progress)
+        XCTAssertEqual(task.result?["imported"]?.intValue, 12)
+        XCTAssertEqual(task.result?["errors"]?.intValue, 1)
+        XCTAssertEqual(task.result?["ok"]?.stringValue, "true")
     }
 }
