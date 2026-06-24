@@ -26,6 +26,8 @@ targets:
           NSAllowsArbitraryLoads: false
           NSAllowsLocalNetworking: true
           NSExceptionDomains:
+            100.86.254.112:
+              NSExceptionAllowsInsecureHTTPLoads: true
             ts.net:
               NSExceptionAllowsInsecureHTTPLoads: true
               NSIncludesSubdomains: true

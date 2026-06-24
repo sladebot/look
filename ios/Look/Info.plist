@@ -26,6 +26,11 @@
 		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
+			<key>100.86.254.112</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
 			<key>ts.net</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
