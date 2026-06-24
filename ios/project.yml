@@ -8,6 +8,7 @@ targets:
       - Look
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.sladebot.look
+      DEVELOPMENT_TEAM: 22BH2R3K7H
       MARKETING_VERSION: "1.0.0"
       CURRENT_PROJECT_VERSION: "1"
       INFOPLIST_KEY_CFBundleDisplayName: "Look"
