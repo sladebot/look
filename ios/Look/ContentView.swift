@@ -1,10 +1,38 @@
 import SwiftUI
 
+private enum LookTab: String, CaseIterable, Identifiable {
+    case photos
+    case library
+    case search
+    case settings
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .photos: return "Photos"
+        case .library: return "Library"
+        case .search: return "Search"
+        case .settings: return "Settings"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .photos: return "photo.on.rectangle.angled"
+        case .library: return "rectangle.stack"
+        case .search: return "magnifyingglass"
+        case .settings: return "gear"
+        }
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject var store: PhotoStore
     @AppStorage(ConnectionSetupStorage.hasSuccessfulConnectionKey) private var hasSuccessfulConnection = false
     @State private var initialConnectionCheckCompleted = false
     @State private var didLoadApplicationData = false
+    @State private var selectedTab: LookTab = .photos
 
     init() {
         let paper = UIColor(red: 31 / 255, green: 35 / 255, blue: 39 / 255, alpha: 1)
@@ -26,6 +54,7 @@ struct ContentView: View {
         tab.compactInlineLayoutAppearance = tab.stackedLayoutAppearance
         UITabBar.appearance().isTranslucent = false
         UITabBar.appearance().backgroundColor = paper
+        UITabBar.appearance().barTintColor = paper
         UITabBar.appearance().tintColor = cyan
         UITabBar.appearance().unselectedItemTintColor = graphite.withAlphaComponent(0.70)
         UITabBar.appearance().standardAppearance = tab
@@ -68,22 +97,72 @@ struct ContentView: View {
     }
 
     private var appTabs: some View {
-        TabView {
-            PhotosGrid()
-                .tabItem { Label("Photos", systemImage: "photo.on.rectangle.angled") }
-            LibraryView()
-                .tabItem { Label("Library", systemImage: "rectangle.stack") }
-            SearchView()
-                .tabItem { Label("Search", systemImage: "magnifyingglass") }
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gear") }
+        ZStack(alignment: .bottom) {
+            activeTabView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(.container, edges: .bottom)
+
+            lookTabBar
         }
         .tint(LookTheme.ColorToken.cyan)
-        .background(LookTheme.ColorToken.paper)
-        .toolbarBackground(LookTheme.ColorToken.paper, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarColorScheme(.dark, for: .tabBar)
+        .background(LookTheme.ColorToken.paper.ignoresSafeArea())
         .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder
+    private var activeTabView: some View {
+        switch selectedTab {
+        case .photos:
+            PhotosGrid()
+        case .library:
+            LibraryView()
+        case .search:
+            SearchView()
+        case .settings:
+            SettingsView()
+        }
+    }
+
+    private var lookTabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(LookTab.allCases) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    VStack(spacing: 5) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 24, weight: .semibold))
+                            .frame(height: 28)
+                        Text(tab.title)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(selectedTab == tab ? LookTheme.ColorToken.graphite : LookTheme.ColorToken.graphite.opacity(0.72))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background {
+                        if selectedTab == tab {
+                            Capsule()
+                                .fill(LookTheme.ColorToken.graphite.opacity(0.13))
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(.ultraThinMaterial)
+        .background(LookTheme.ColorToken.paper.opacity(0.80))
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(LookTheme.ColorToken.mist.opacity(0.45))
+                .frame(height: 1)
+        }
+        .ignoresSafeArea(.container, edges: .bottom)
     }
 
     private func performInitialConnectionCheck() async {

@@ -176,6 +176,7 @@ struct PhotosGrid: View {
                 CreateAlbumSheet()
             }
         }
+        .ignoresSafeArea(.container, edges: .bottom)
     }
 
     // MARK: Gallery
@@ -215,14 +216,17 @@ struct PhotosGrid: View {
                         .id(section.id)
                     }
 
-                    galleryFooter
                 }
                 .padding(.top, LookTheme.Spacing.tight)
+                .background(LookTheme.ColorToken.paper)
             }
             .scrollIndicators(.hidden)
-            .background(LookTheme.ColorToken.paper)
+            .contentMargins(.bottom, 0, for: .scrollContent)
+            .background(LookTheme.ColorToken.paper.ignoresSafeArea())
             .refreshable { await store.syncNow() }
+            .ignoresSafeArea(.container, edges: .bottom)
         }
+        .background(LookTheme.ColorToken.paper.ignoresSafeArea())
     }
 
     private var galleryHeader: some View {
@@ -398,33 +402,6 @@ struct PhotosGrid: View {
         .lookScreenBackground()
     }
 
-    private var galleryFooter: some View {
-        VStack(spacing: LookTheme.Spacing.small) {
-            if store.isLoading {
-                ProgressView()
-                    .controlSize(.small)
-            }
-
-            Text(footerText)
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(.secondary)
-
-            if !store.isSyncing, let message = store.lastSyncMessage {
-                Text(message)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            if store.hasMorePhotos && !store.isLoading {
-                Label("More photos load as you scroll", systemImage: "arrow.down.circle")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, LookTheme.Spacing.large)
-    }
-
     @ViewBuilder
     private var statusBanner: some View {
         if let message = store.errorMessage, !message.isEmpty {
@@ -436,13 +413,6 @@ struct PhotosGrid: View {
                 .padding(.horizontal, LookTheme.Spacing.screen)
                 .padding(.bottom, LookTheme.Spacing.small)
         }
-    }
-
-    private var footerText: String {
-        if filter == .all {
-            return "\(store.photos.count) of \(store.totalPhotos) photos loaded"
-        }
-        return "\(visiblePhotos.count) matching, \(store.photos.count) of \(store.totalPhotos) photos loaded"
     }
 
     private var syncStatusStrip: some View {
