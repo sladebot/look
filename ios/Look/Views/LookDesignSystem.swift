@@ -3,9 +3,9 @@ import SwiftUI
 enum LookTheme {
     enum ColorToken {
         static let darkroom = Color(hex: 0x111417)
-        static let paper = Color(hex: 0xF6F7F7)
+        static let paper = Color(hex: 0xDDE5EA)
         static let graphite = Color(hex: 0x272B2F)
-        static let mist = Color(hex: 0xE7ECEF)
+        static let mist = Color(hex: 0xC4D0D8)
         static let cyan = Color(hex: 0x1E8AFF)
         static let amber = Color(hex: 0xD9A441)
         static let danger = Color(hex: 0xC94545)

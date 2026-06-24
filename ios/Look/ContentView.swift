@@ -7,7 +7,7 @@ struct ContentView: View {
     @State private var didLoadApplicationData = false
 
     init() {
-        let paper = UIColor(red: 246 / 255, green: 247 / 255, blue: 247 / 255, alpha: 1)
+        let paper = UIColor(red: 221 / 255, green: 229 / 255, blue: 234 / 255, alpha: 1)
         let graphite = UIColor(red: 39 / 255, green: 43 / 255, blue: 47 / 255, alpha: 1)
         let cyan = UIColor(red: 30 / 255, green: 138 / 255, blue: 255 / 255, alpha: 1)
 
