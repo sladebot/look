@@ -37,10 +37,19 @@ struct PhotoCard: View {
                         .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                 }
             }
-            .lookFilmRail(
-                color: isSelected ? LookTheme.ColorToken.cyan : LookTheme.ColorToken.darkroom,
-                isActive: isSelected
-            )
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Rectangle()
+                        .fill(LookTheme.ColorToken.cyan)
+                        .frame(width: 5)
+                }
+            }
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: LookTheme.Radius.thumbnail, style: .continuous)
+                        .stroke(LookTheme.ColorToken.cyan, lineWidth: 2)
+                }
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
             .accessibilityHint(selectionMode ? "Double tap to \(isSelected ? "remove from" : "add to") selection" : "Double tap to open photo")

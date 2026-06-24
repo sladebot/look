@@ -7,15 +7,36 @@ struct ContentView: View {
     @State private var didLoadApplicationData = false
 
     init() {
-        // Clean, opaque chrome so pinned date headers and the tab bar read
-        // crisply over edge-to-edge photos (Google Photos style).
+        let paper = UIColor(red: 246 / 255, green: 247 / 255, blue: 247 / 255, alpha: 1)
+        let graphite = UIColor(red: 39 / 255, green: 43 / 255, blue: 47 / 255, alpha: 1)
+        let cyan = UIColor(red: 30 / 255, green: 138 / 255, blue: 255 / 255, alpha: 1)
+
+        // Keep chrome on the same quiet surface as the gallery. The previous
+        // default material turned the top region white and the tab bar glassy
+        // over thumbnails, which made the contact-sheet surface feel split.
         let tab = UITabBarAppearance()
-        tab.configureWithDefaultBackground()
+        tab.configureWithOpaqueBackground()
+        tab.backgroundColor = paper
+        tab.shadowColor = UIColor.black.withAlphaComponent(0.10)
+        tab.stackedLayoutAppearance.selected.iconColor = cyan
+        tab.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: cyan]
+        tab.stackedLayoutAppearance.normal.iconColor = graphite.withAlphaComponent(0.72)
+        tab.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: graphite.withAlphaComponent(0.72)]
+        tab.inlineLayoutAppearance = tab.stackedLayoutAppearance
+        tab.compactInlineLayoutAppearance = tab.stackedLayoutAppearance
+        UITabBar.appearance().isTranslucent = false
+        UITabBar.appearance().backgroundColor = paper
+        UITabBar.appearance().tintColor = cyan
+        UITabBar.appearance().unselectedItemTintColor = graphite.withAlphaComponent(0.72)
         UITabBar.appearance().standardAppearance = tab
         UITabBar.appearance().scrollEdgeAppearance = tab
 
         let nav = UINavigationBarAppearance()
-        nav.configureWithDefaultBackground()
+        nav.configureWithOpaqueBackground()
+        nav.backgroundColor = paper
+        nav.shadowColor = UIColor.black.withAlphaComponent(0.08)
+        nav.largeTitleTextAttributes = [.foregroundColor: UIColor.black]
+        nav.titleTextAttributes = [.foregroundColor: graphite]
         UINavigationBar.appearance().standardAppearance = nav
         UINavigationBar.appearance().scrollEdgeAppearance = nav
     }
@@ -57,7 +78,10 @@ struct ContentView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gear") }
         }
-        .tint(.blue)
+        .tint(LookTheme.ColorToken.cyan)
+        .background(LookTheme.ColorToken.paper)
+        .toolbarBackground(LookTheme.ColorToken.paper, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
     }
 
     private func performInitialConnectionCheck() async {

@@ -151,8 +151,14 @@ struct PhotosGrid: View {
                 }
             }
             .navigationTitle("Photos")
+            .navigationBarTitleDisplayMode(.large)
             .toolbar { toolbarContent }
             .lookScreenBackground()
+            .toolbarBackground(LookTheme.ColorToken.paper, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbarBackground(LookTheme.ColorToken.paper, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
             .safeAreaInset(edge: .bottom) {
                 if selectionMode {
                     selectionActionBar
@@ -303,10 +309,19 @@ struct PhotosGrid: View {
                     .padding(6)
             }
         }
-        .lookFilmRail(
-            color: isSelected ? LookTheme.ColorToken.cyan : LookTheme.ColorToken.darkroom,
-            isActive: isSelected
-        )
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Rectangle()
+                    .fill(LookTheme.ColorToken.cyan)
+                    .frame(width: 5)
+            }
+        }
+        .overlay {
+            if isSelected {
+                Rectangle()
+                    .stroke(LookTheme.ColorToken.cyan, lineWidth: 2)
+            }
+        }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(for: photo, selected: isSelected))
@@ -328,12 +343,14 @@ struct PhotosGrid: View {
 
     private func sectionHeader(_ section: PhotoSection) -> some View {
         HStack(alignment: .lastTextBaseline, spacing: LookTheme.Spacing.small) {
-            LookTheme.eyebrow(section.title)
-                .foregroundStyle(LookTheme.ColorToken.graphite)
+            Text(section.title.uppercased())
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.72))
 
             Text("\(section.photos.count)")
                 .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.55))
+                .monospacedDigit()
 
             Spacer()
         }
@@ -341,7 +358,7 @@ struct PhotosGrid: View {
         .padding(.top, LookTheme.Spacing.medium)
         .padding(.bottom, LookTheme.Spacing.small)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial)
+        .background(LookTheme.ColorToken.paper)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(LookTheme.ColorToken.mist)
@@ -462,24 +479,48 @@ struct PhotosGrid: View {
     private var syncStatusStrip: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             HStack(spacing: LookTheme.Spacing.small) {
-                if store.syncProgressFraction == nil {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                Text(store.syncProgressMessage ?? "Syncing photos...")
-                    .font(.caption.weight(.medium))
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(LookTheme.ColorToken.cyan)
+                    .frame(width: 16)
+
+                Text("Syncing library")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(LookTheme.ColorToken.graphite)
-                    .lineLimit(2)
+                    .lineLimit(1)
+
                 Spacer(minLength: 0)
+
+                if let fraction = store.syncProgressFraction {
+                    Text(fraction, format: .percent.precision(.fractionLength(0)))
+                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 44, alignment: .trailing)
+                } else {
+                    Text("Working")
+                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 54, alignment: .trailing)
+                }
             }
 
+            Text(store.syncProgressMessage ?? "Importing and updating thumbnails")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             if let fraction = store.syncProgressFraction {
-                ProgressView(value: fraction)
-                    .tint(LookTheme.ColorToken.cyan)
+                StableSyncProgressBar(value: fraction)
+            } else {
+                StableSyncProgressBar(value: nil)
             }
         }
         .padding(.horizontal, LookTheme.Spacing.medium)
         .padding(.vertical, LookTheme.Spacing.small)
+        .frame(minHeight: 72, alignment: .center)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
@@ -677,16 +718,21 @@ struct PhotosGrid: View {
                     }
                     Button {
                         Task { await store.syncNow() }
-                    } label: {
-                        if store.isSyncing {
-                            Label("Syncing", systemImage: "arrow.triangle.2.circlepath")
-                        } else {
-                            Label("Sync & Import", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                    }
-                    .disabled(store.isSyncing)
                 } label: {
-                    if store.isSyncing { ProgressView() } else { Image(systemName: "ellipsis.circle") }
+                    Label(store.isSyncing ? "Syncing" : "Sync and Import",
+                          systemImage: "arrow.triangle.2.circlepath")
+                }
+                .disabled(store.isSyncing)
+            } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .overlay(alignment: .topTrailing) {
+                            if store.isSyncing {
+                                Circle()
+                                    .fill(LookTheme.ColorToken.cyan)
+                                    .frame(width: 7, height: 7)
+                                    .offset(x: 3, y: -3)
+                            }
+                        }
                 }
             }
         }
@@ -718,6 +764,37 @@ struct PhotosGrid: View {
         if photo.isFavorite == true { parts.append("favorite") }
         if selected { parts.append("selected") }
         return parts.joined(separator: ", ")
+    }
+}
+
+private struct StableSyncProgressBar: View {
+    let value: Double?
+
+    private var clampedValue: Double {
+        min(max(value ?? 0, 0), 1)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(LookTheme.ColorToken.mist)
+
+                if let value {
+                    Capsule()
+                        .fill(LookTheme.ColorToken.cyan)
+                        .frame(width: max(6, proxy.size.width * clampedValue))
+                        .animation(nil, value: value)
+                } else {
+                    Capsule()
+                        .fill(LookTheme.ColorToken.cyan.opacity(0.75))
+                        .frame(width: max(36, proxy.size.width * 0.28))
+                        .offset(x: proxy.size.width * 0.16)
+                }
+            }
+        }
+        .frame(height: 5)
+        .accessibilityHidden(true)
     }
 }
 
