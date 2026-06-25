@@ -107,11 +107,7 @@ private struct TagHistoryRow: View {
             }
         }
         .padding(LookTheme.Spacing.medium)
-        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
-        }
+        .lookInsetSurface()
         .accessibilityElement(children: .combine)
     }
 }

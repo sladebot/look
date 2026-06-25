@@ -105,7 +105,7 @@ struct ConnectionSetupView: View {
         } else {
             LookStatusBanner(
                 title: "Use a private-network address",
-                message: "Tailscale IPs and MagicDNS names both work. Include http:// or https:// and the server port.",
+                message: "Use the Tailnet-only HTTP or HTTPS address for your Look server, including the port.",
                 tone: .info
             )
         }
@@ -129,7 +129,7 @@ struct ConnectionSetupView: View {
                     .focused($focusedField, equals: .serverURL)
                     .submitLabel(.next)
                     .onSubmit { focusedField = .apiKey }
-                    .textFieldStyle(.roundedBorder)
+                    .lookTextInputSurface()
             }
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
@@ -141,7 +141,7 @@ struct ConnectionSetupView: View {
                     .focused($focusedField, equals: .apiKey)
                     .submitLabel(.go)
                     .onSubmit { testConnection() }
-                    .textFieldStyle(.roundedBorder)
+                    .lookTextInputSurface()
             }
 
             Button {
@@ -152,7 +152,7 @@ struct ConnectionSetupView: View {
                         ProgressView()
                             .tint(.white)
                     }
-                    Text(isTesting ? "Testing Connection" : "Test and Continue")
+                    Text(isTesting ? "Testing connection" : "Test and continue")
                         .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)

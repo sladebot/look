@@ -227,7 +227,7 @@ private struct LibraryPanelSection<Content: View>: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color(.secondarySystemBackground), in: Capsule())
+                        .background(LookTheme.ColorToken.surface, in: Capsule())
                 }
             }
             content
@@ -282,11 +282,7 @@ private struct LibraryCollectionRow: View {
                 .accessibilityHidden(true)
         }
         .padding(LookTheme.Spacing.medium)
-        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
-        }
+        .lookInsetSurface()
         .lookFilmRail(color: tint)
         .accessibilityElement(children: .combine)
     }
@@ -335,11 +331,7 @@ private struct LibraryEmptyPanel: View {
             Spacer()
         }
         .padding(LookTheme.Spacing.medium)
-        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
-        }
+        .lookInsetSurface()
         .accessibilityElement(children: .combine)
     }
 }

@@ -107,3 +107,61 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(task.result?["ok"]?.stringValue, "true")
     }
 }
+
+final class APIClientURLTests: XCTestCase {
+    func testBaseURLNormalizationAddsHTTPSchemeAndTrimsWhitespaceAndSlash() throws {
+        let normalized = try APIClient.normalizedBaseURLString(from: "  studio.taila3f2b.ts.net:5678/  ")
+
+        XCTAssertEqual(normalized, "http://studio.taila3f2b.ts.net:5678")
+    }
+
+    func testThumbnailURLBuilderEncodesPhotoIDWithoutForceUnwraps() throws {
+        let url = try APIClient.thumbnailURL(
+            baseURL: "http://studio.taila3f2b.ts.net:5678",
+            photoId: "folder/photo 1",
+            size: 512
+        )
+
+        XCTAssertEqual(
+            url.absoluteString,
+            "http://studio.taila3f2b.ts.net:5678/api/thumbnails/folder%2Fphoto%201?size=512"
+        )
+    }
+
+    func testFullImageURLBuilderPreservesBasePath() throws {
+        let url = try APIClient.fullImageURL(
+            baseURL: "https://example.com/look/",
+            photoId: "abc123"
+        )
+
+        XCTAssertEqual(url.absoluteString, "https://example.com/look/api/full/abc123")
+    }
+
+    func testInvalidBaseURLThrowsTypedError() {
+        XCTAssertThrowsError(try APIClient.normalizedBaseURLString(from: "ftp://example.com")) { error in
+            guard case APIError.invalidBaseURL = error else {
+                return XCTFail("Expected invalidBaseURL, got \(error)")
+            }
+        }
+
+        XCTAssertThrowsError(try APIClient.endpointURL(baseURL: "http://example.com?debug=1", path: "/api/health")) { error in
+            guard case APIError.invalidBaseURL = error else {
+                return XCTFail("Expected invalidBaseURL, got \(error)")
+            }
+        }
+    }
+
+    func testTransportErrorsMapToTypedNetworkErrors() {
+        guard case .offline = APIError.transportError(URLError(.notConnectedToInternet)) else {
+            return XCTFail("Expected offline error")
+        }
+
+        guard case .timedOut = APIError.transportError(URLError(.timedOut)) else {
+            return XCTFail("Expected timeout error")
+        }
+
+        guard case .networkUnavailable = APIError.transportError(URLError(.cannotFindHost)) else {
+            return XCTFail("Expected networkUnavailable error")
+        }
+    }
+}

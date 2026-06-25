@@ -20,6 +20,7 @@ targets:
           UIColorName: ""
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIApplicationSupportsIndirectInputEvents: true

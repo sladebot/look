@@ -386,7 +386,7 @@ struct PhotoDetail: View {
 
     private var newTagField: some View {
         TextField("Add tag", text: $newTag)
-            .textFieldStyle(.roundedBorder)
+            .lookTextInputSurface()
             .submitLabel(.done)
             .onSubmit { submitNewTag() }
             .accessibilityLabel("New tag")

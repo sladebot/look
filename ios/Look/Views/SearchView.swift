@@ -93,20 +93,16 @@ struct SearchView: View {
                 .foregroundStyle(trimmedQuery.isEmpty ? .secondary : LookTheme.ColorToken.cyan)
                 .accessibilityLabel("Submit search")
             }
-            .padding(.horizontal, LookTheme.Spacing.medium)
-            .padding(.vertical, 12)
-            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+            .lookTextInputSurface()
             .overlay {
                 RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                    .stroke(isLoading ? LookTheme.ColorToken.cyan.opacity(0.55) : LookTheme.ColorToken.mist, lineWidth: 1)
+                    .stroke(isLoading ? LookTheme.ColorToken.cyan.opacity(0.55) : Color.clear, lineWidth: 1)
             }
 
-            HStack(spacing: LookTheme.Spacing.tight) {
-                LookChip(title: "Filenames", systemImage: "doc.text.magnifyingglass", tint: LookTheme.ColorToken.graphite)
-                LookChip(title: "Tags", systemImage: "tag", tint: LookTheme.ColorToken.cyan)
-                LookChip(title: "Paths", systemImage: "folder", tint: LookTheme.ColorToken.amber)
-            }
-            .accessibilityHidden(true)
+            Text("Search filenames, tags, camera text, and folder paths.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, LookTheme.Spacing.screen)
         .padding(.top, LookTheme.Spacing.small)

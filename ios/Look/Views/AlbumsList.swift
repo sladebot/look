@@ -99,11 +99,7 @@ private struct AlbumListRow: View {
                 .accessibilityHidden(true)
         }
         .padding(LookTheme.Spacing.medium)
-        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
-        }
+        .lookInsetSurface()
         .lookFilmRail(color: LookTheme.ColorToken.graphite)
         .accessibilityElement(children: .combine)
     }

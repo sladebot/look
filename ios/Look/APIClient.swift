@@ -17,6 +17,7 @@ class APIClient {
     private let defaultBaseURL = "http://studio.taila3f2b.ts.net:5678"
     private static let apiKeyStorageKey = "api_key"
     private static let legacyAPIKeyDefaultsKey = "api_key"
+    private static let invalidDisplayURL = URL(fileURLWithPath: "/dev/null")
 
     /// Cached base URL that last produced a successful response.
     private var activeBaseURL: String?
@@ -28,7 +29,8 @@ class APIClient {
     var configuredBaseURL: String {
         let saved = UserDefaults.standard.string(forKey: "server_url")?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (saved?.isEmpty == false) ? saved! : defaultBaseURL
+        guard let saved, !saved.isEmpty else { return defaultBaseURL }
+        return (try? Self.normalizedBaseURLString(from: saved)) ?? saved
     }
 
     init() {
@@ -109,19 +111,19 @@ class APIClient {
     func photoDetail(_ id: String) async throws -> Photo { try await get("/api/photos/\(id)") }
 
     func thumbnailURL(for photoId: String, size: Int = 256) -> URL {
-        URL(string: "\(baseURL)/api/thumbnails/\(photoId)?size=\(size)")!
+        (try? Self.thumbnailURL(baseURL: baseURL, photoId: photoId, size: size)) ?? Self.invalidDisplayURL
     }
 
     func fullImageURL(for photoId: String) -> URL {
-        URL(string: "\(baseURL)/api/full/\(photoId)")!
+        (try? Self.fullImageURL(baseURL: baseURL, photoId: photoId)) ?? Self.invalidDisplayURL
     }
 
     func downloadJPEGData(_ photoId: String) async throws -> Data {
-        try await fetchData("/api/download/jpeg/\(photoId)")
+        try await fetchData("/api/download/jpeg/\(Self.encodePathComponent(photoId))")
     }
 
     func downloadRawData(_ photoId: String) async throws -> Data {
-        try await fetchData("/api/download/raw/\(photoId)")
+        try await fetchData("/api/download/raw/\(Self.encodePathComponent(photoId))")
     }
 
     // MARK: - Albums
@@ -334,9 +336,83 @@ class APIClient {
     }
 
     private func encodePathComponent(_ s: String) -> String {
+        Self.encodePathComponent(s)
+    }
+
+    private static func encodePathComponent(_ s: String) -> String {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/")
         return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
+    }
+
+    static func normalizedBaseURLString(from rawValue: String) throws -> String {
+        let url = try normalizedBaseURL(from: rawValue)
+        return url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    static func endpointURL(baseURL rawBaseURL: String, path rawPath: String) throws -> URL {
+        let base = try normalizedBaseURL(from: rawBaseURL)
+        guard rawPath.hasPrefix("/") else {
+            throw APIError.invalidEndpointURL(baseURL: rawBaseURL, path: rawPath)
+        }
+
+        let pieces = rawPath.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let rawEndpointPath = pieces.first, !rawEndpointPath.isEmpty else {
+            throw APIError.invalidEndpointURL(baseURL: rawBaseURL, path: rawPath)
+        }
+
+        var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
+        let basePath = components?.percentEncodedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
+        let endpointPath = String(rawEndpointPath).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components?.percentEncodedPath = "/" + [basePath, endpointPath]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+        components?.percentEncodedQuery = pieces.count > 1 ? String(pieces[1]) : nil
+
+        guard let url = components?.url else {
+            throw APIError.invalidEndpointURL(baseURL: rawBaseURL, path: rawPath)
+        }
+        return url
+    }
+
+    static func thumbnailURL(baseURL: String, photoId: String, size: Int = 256) throws -> URL {
+        try endpointURL(
+            baseURL: baseURL,
+            path: "/api/thumbnails/\(encodePathComponent(photoId))?size=\(size)"
+        )
+    }
+
+    static func fullImageURL(baseURL: String, photoId: String) throws -> URL {
+        try endpointURL(baseURL: baseURL, path: "/api/full/\(encodePathComponent(photoId))")
+    }
+
+    private static func normalizedBaseURL(from rawValue: String) throws -> URL {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw APIError.invalidBaseURL(rawValue)
+        }
+
+        let valueWithScheme = trimmed.contains("://") ? trimmed : "http://\(trimmed)"
+        guard var components = URLComponents(string: valueWithScheme),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              components.host?.isEmpty == false,
+              components.user == nil,
+              components.password == nil,
+              components.query == nil,
+              components.fragment == nil else {
+            throw APIError.invalidBaseURL(rawValue)
+        }
+
+        components.scheme = scheme
+        while components.percentEncodedPath.hasSuffix("/") {
+            components.percentEncodedPath.removeLast()
+        }
+
+        guard let url = components.url else {
+            throw APIError.invalidBaseURL(rawValue)
+        }
+        return url
     }
 
     private func get<T: Decodable>(_ path: String) async throws -> T {
@@ -360,11 +436,23 @@ class APIClient {
     /// Core request: tries each candidate base URL until one succeeds, caches it,
     /// and attaches the API key header when configured.
     private func rawRequest(_ path: String, method: String, timeout: TimeInterval) async throws -> Data {
-        var lastError: Error?
+        var lastError: APIError?
         let candidates = activeBaseURL.map { [$0] + baseURLCandidates.filter { c in c != activeBaseURL } } ?? baseURLCandidates
 
         for candidate in candidates {
-            guard let url = URL(string: "\(candidate)\(path)") else { continue }
+            let url: URL
+            do {
+                url = try Self.endpointURL(baseURL: candidate, path: path)
+            } catch let apiErr as APIError {
+                lastError = apiErr
+                if hasExplicitServerURL { throw apiErr }
+                continue
+            } catch {
+                let apiErr = APIError.transportError(error)
+                lastError = apiErr
+                continue
+            }
+
             var req = URLRequest(url: url)
             req.httpMethod = method
             req.timeoutInterval = timeout
@@ -374,24 +462,55 @@ class APIClient {
                 let (data, response) = try await URLSession.shared.data(for: req)
                 if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
                     // A 4xx/5xx is a real server answer — don't keep probing other hosts.
-                    activeBaseURL = candidate
+                    activeBaseURL = (try? Self.normalizedBaseURLString(from: candidate)) ?? candidate
                     throw APIError.httpError(http.statusCode)
                 }
-                activeBaseURL = candidate
+                activeBaseURL = (try? Self.normalizedBaseURLString(from: candidate)) ?? candidate
                 return data
             } catch let apiErr as APIError {
                 throw apiErr
             } catch {
-                lastError = error
+                lastError = APIError.transportError(error)
             }
         }
-        throw lastError ?? APIError.httpError(0)
+        throw lastError ?? APIError.networkUnavailable("Unable to reach the Look server")
     }
 }
 
 enum APIError: LocalizedError {
     case httpError(Int)
     case decodingError(String)
+    case invalidBaseURL(String)
+    case invalidEndpointURL(baseURL: String, path: String)
+    case offline
+    case networkUnavailable(String)
+    case timedOut
+    case cancelled
+    case transport(String)
+
+    static func transportError(_ error: Error) -> APIError {
+        if let apiError = error as? APIError {
+            return apiError
+        }
+
+        guard let urlError = error as? URLError else {
+            return .transport(error.localizedDescription)
+        }
+
+        switch urlError.code {
+        case .notConnectedToInternet:
+            return .offline
+        case .timedOut:
+            return .timedOut
+        case .cancelled:
+            return .cancelled
+        case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .networkConnectionLost,
+             .internationalRoamingOff, .callIsActive, .dataNotAllowed:
+            return .networkUnavailable(urlError.localizedDescription)
+        default:
+            return .transport(urlError.localizedDescription)
+        }
+    }
 
     var errorDescription: String? {
         switch self {
@@ -399,6 +518,20 @@ enum APIError: LocalizedError {
             if code == 401 { return "Unauthorized — check the API key in Settings" }
             return "Server error (\(code))"
         case .decodingError(let msg): return "Data error: \(msg)"
+        case .invalidBaseURL:
+            return "Invalid server URL. Enter an http:// or https:// server address."
+        case .invalidEndpointURL:
+            return "Invalid request URL"
+        case .offline:
+            return "No internet connection"
+        case .networkUnavailable(let msg):
+            return msg.isEmpty ? "Unable to reach the Look server" : msg
+        case .timedOut:
+            return "The request timed out"
+        case .cancelled:
+            return "The request was cancelled"
+        case .transport(let msg):
+            return msg.isEmpty ? "Network error" : msg
         }
     }
 }

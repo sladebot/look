@@ -112,6 +112,12 @@ actor ThumbnailLoader {
         return result
     }
 
+    func clear() {
+        cache.removeAllObjects()
+        session.configuration.urlCache?.removeAllCachedResponses()
+        inflight.removeAll()
+    }
+
     /// Decode + downsample in one pass without materializing the full-size bitmap.
     private static func downsample(_ data: Data, maxPixel: CGFloat) -> UIImage? {
         let srcOptions = [kCGImageSourceShouldCache: false] as CFDictionary

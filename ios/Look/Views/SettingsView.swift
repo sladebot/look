@@ -25,7 +25,7 @@ struct SettingsView: View {
             }
             .lookScreenBackground()
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .onChange(of: apiKey) { _, newValue in
                 keychainMessage = APIClient.shared.saveAPIKey(newValue) ? nil : "Could not save the API key to Keychain."
             }
@@ -63,7 +63,7 @@ struct SettingsView: View {
                     .focused($focusedField, equals: .serverURL)
                     .submitLabel(.next)
                     .onSubmit { focusedField = .apiKey }
-                    .textFieldStyle(.roundedBorder)
+                    .lookTextInputSurface()
             }
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
@@ -75,7 +75,7 @@ struct SettingsView: View {
                     .focused($focusedField, equals: .apiKey)
                     .submitLabel(.go)
                     .onSubmit { testConnection() }
-                    .textFieldStyle(.roundedBorder)
+                    .lookTextInputSurface()
             }
 
             Text("Examples: http://100.86.254.112:5678 or http://studio.tailnet-name.ts.net:5678")
@@ -91,7 +91,7 @@ struct SettingsView: View {
                         ProgressView()
                             .tint(.white)
                     }
-                    Text(isTesting ? "Testing Connection" : "Test Connection")
+                    Text(isTesting ? "Testing connection" : "Test connection")
                         .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
@@ -140,7 +140,7 @@ struct SettingsView: View {
                 systemImage: "arrow.triangle.2.circlepath"
             )
 
-            Toggle("Auto Sync", isOn: Binding(
+                Toggle("Auto sync", isOn: Binding(
                 get: { store.autoSyncEnabled },
                 set: { on in if on { store.startAutoSync() } else { store.stopAutoSync() } }
             ))
@@ -150,7 +150,7 @@ struct SettingsView: View {
             } label: {
                 HStack {
                     if store.isSyncing { ProgressView().scaleEffect(0.8) }
-                    Text(store.isSyncing ? "Syncing" : "Sync and Import Now")
+                    Text(store.isSyncing ? "Syncing" : "Sync and import now")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -158,7 +158,7 @@ struct SettingsView: View {
             .disabled(store.isSyncing)
 
             if let message = store.lastSyncMessage {
-                settingsRow("Last Sync", value: message, systemImage: "clock")
+                settingsRow("Last sync", value: message, systemImage: "clock")
             }
         }
         .lookPanel()
@@ -175,15 +175,20 @@ struct SettingsView: View {
             VStack(spacing: LookTheme.Spacing.small) {
                 settingsRow("Photos", value: "\(store.totalPhotos)", systemImage: "photo")
                 settingsRow("Albums", value: "\(store.albums.count)", systemImage: "rectangle.stack")
-                settingsRow("Smart Albums", value: "\(store.smartCollections.count)", systemImage: "sparkles.rectangle.stack")
-                settingsRow("Thumbnail Cache", value: "256 MB disk, 64 MB memory", systemImage: "externaldrive")
+                settingsRow("Smart albums", value: "\(store.smartCollections.count)", systemImage: "sparkles.rectangle.stack")
+                settingsRow("Thumbnail cache", value: "512 MB disk, 96 MB memory", systemImage: "externaldrive")
             }
 
             Button(role: .destructive) {
-                URLCache.shared.removeAllCachedResponses()
-                cacheMessage = "Thumbnail cache cleared"
+                Task {
+                    await ThumbnailLoader.shared.clear()
+                    URLCache.shared.removeAllCachedResponses()
+                    await MainActor.run {
+                        cacheMessage = "Thumbnail cache cleared"
+                    }
+                }
             } label: {
-                Label("Clear Thumbnail Cache", systemImage: "trash")
+                Label("Clear thumbnail cache", systemImage: "trash")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
@@ -200,17 +205,17 @@ struct SettingsView: View {
     private var featuresPanel: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
             panelHeader(
-                title: "Server Features",
+                title: "Server features",
                 subtitle: "These settings are stored on the Look server.",
                 systemImage: "slider.horizontal.3"
             )
 
             VStack(spacing: LookTheme.Spacing.small) {
-                serverToggle("Smart Albums", key: "smart_albums_enabled")
+                serverToggle("Smart albums", key: "smart_albums_enabled")
                 serverToggle("Deduplication", key: "dedup_enabled")
-                serverToggle("Tag History", key: "tag_history_enabled")
+                serverToggle("Tag history", key: "tag_history_enabled")
                 serverToggle("Auto-tag GPS", key: "auto_tag_gps")
-                serverToggle("Auto-tag Camera", key: "auto_tag_camera")
+                serverToggle("Auto-tag camera", key: "auto_tag_camera")
             }
         }
         .lookPanel()

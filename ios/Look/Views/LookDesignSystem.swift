@@ -61,6 +61,30 @@ struct LookPanel: ViewModifier {
     }
 }
 
+struct LookInsetSurface: ViewModifier {
+    var radius: CGFloat = LookTheme.Radius.panel
+
+    func body(content: Content) -> some View {
+        content
+            .background(LookTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
+            }
+    }
+}
+
+struct LookTextInputSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, LookTheme.Spacing.medium)
+            .padding(.vertical, 12)
+            .foregroundStyle(LookTheme.ColorToken.graphite)
+            .tint(LookTheme.ColorToken.cyan)
+            .modifier(LookInsetSurface())
+    }
+}
+
 struct LookFilmRail: ViewModifier {
     var color: Color = LookTheme.ColorToken.darkroom
     var isActive = false
@@ -235,6 +259,14 @@ extension View {
 
     func lookPanel(inset: CGFloat = LookTheme.Spacing.medium) -> some View {
         modifier(LookPanel(inset: inset))
+    }
+
+    func lookInsetSurface(radius: CGFloat = LookTheme.Radius.panel) -> some View {
+        modifier(LookInsetSurface(radius: radius))
+    }
+
+    func lookTextInputSurface() -> some View {
+        modifier(LookTextInputSurface())
     }
 
     func lookFilmRail(color: Color = LookTheme.ColorToken.darkroom, isActive: Bool = false) -> some View {
