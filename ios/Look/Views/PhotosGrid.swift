@@ -85,6 +85,11 @@ struct PhotosGrid: View {
         store.photos.filter { selectedPhotoIds.contains($0.id) }
     }
 
+    init(initialSelectedPhotoIds: Set<String> = []) {
+        _selectionMode = State(initialValue: !initialSelectedPhotoIds.isEmpty)
+        _selectedPhotoIds = State(initialValue: initialSelectedPhotoIds)
+    }
+
     private var selectedVisibleCount: Int {
         visiblePhotos.reduce(0) { count, photo in
             count + (selectedPhotoIds.contains(photo.id) ? 1 : 0)

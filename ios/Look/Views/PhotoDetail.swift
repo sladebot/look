@@ -407,6 +407,12 @@ struct PhotoDetail: View {
     // MARK: - Data
 
     private func loadTags() async {
+        #if DEBUG
+        if LookDemoScreenshots.isActive {
+            photoTags = DemoData.detailTags
+            return
+        }
+        #endif
         isLoadingTags = true
         defer { isLoadingTags = false }
         do {
@@ -417,6 +423,12 @@ struct PhotoDetail: View {
     }
 
     private func loadSuggestions() async {
+        #if DEBUG
+        if LookDemoScreenshots.isActive {
+            suggestions = DemoData.suggestedTags
+            return
+        }
+        #endif
         isLoadingSuggestions = true
         defer { isLoadingSuggestions = false }
         do {
@@ -555,6 +567,32 @@ private struct PhotoDetailImage: View {
                 Rectangle()
                     .fill(LookTheme.ColorToken.darkroom)
 
+                #if DEBUG
+                if LookDemoScreenshots.isActive {
+                    Image(uiImage: LookDemoMockImage.image(identifier: url.absoluteString, size: CGSize(width: 1000, height: 720)))
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, LookTheme.Spacing.small)
+                        .padding(.vertical, LookTheme.Spacing.tight)
+                } else {
+                    remoteImage
+                }
+                #else
+                remoteImage
+                #endif
+            }
+            .frame(height: min(max(imageHeight, 260), 440))
+
+            PhotoDetailSprocketRail()
+        }
+        .frame(maxWidth: .infinity)
+        .background(LookTheme.ColorToken.darkroom)
+        .lookFilmRail(color: LookTheme.ColorToken.darkroom, isActive: true)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var remoteImage: some View {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -581,15 +619,6 @@ private struct PhotoDetailImage: View {
                         EmptyView()
                     }
                 }
-            }
-            .frame(height: min(max(imageHeight, 260), 440))
-
-            PhotoDetailSprocketRail()
-        }
-        .frame(maxWidth: .infinity)
-        .background(LookTheme.ColorToken.darkroom)
-        .lookFilmRail(color: LookTheme.ColorToken.darkroom, isActive: true)
-        .accessibilityLabel(accessibilityLabel)
     }
 }
 

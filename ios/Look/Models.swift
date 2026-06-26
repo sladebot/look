@@ -32,6 +32,36 @@ struct Photo: Codable, Identifiable, Equatable {
         case gpsLon = "gps_lon"
     }
 
+    init(
+        id: String,
+        filename: String,
+        filepath: String,
+        fileSize: Int? = nil,
+        width: Int? = nil,
+        height: Int? = nil,
+        mimeType: String? = nil,
+        createdAt: String? = nil,
+        hasThumbnail: Bool? = nil,
+        isFavorite: Bool? = nil,
+        exif: EXIFData? = nil,
+        gpsLat: Double? = nil,
+        gpsLon: Double? = nil
+    ) {
+        self.id = id
+        self.filename = filename
+        self.filepath = filepath
+        self.fileSize = fileSize
+        self.width = width
+        self.height = height
+        self.mimeType = mimeType
+        self.createdAt = createdAt
+        self.hasThumbnail = hasThumbnail
+        self.isFavorite = isFavorite
+        self.exif = exif
+        self.gpsLat = gpsLat
+        self.gpsLon = gpsLon
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)

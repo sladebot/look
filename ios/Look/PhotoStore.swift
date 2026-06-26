@@ -29,6 +29,13 @@ class PhotoStore: ObservableObject {
     private let pageSize = 200
 
     func checkConnection() async {
+        #if DEBUG
+        if LookDemoScreenshots.isActive {
+            serverConnected = true
+            totalPhotos = max(totalPhotos, photos.count)
+            return
+        }
+        #endif
         do {
             let health = try await client.health()
             serverConnected = health.status == "ok"
@@ -42,6 +49,14 @@ class PhotoStore: ObservableObject {
     }
 
     func loadPhotos(reset: Bool = false) async {
+        #if DEBUG
+        if LookDemoScreenshots.isActive {
+            serverConnected = true
+            totalPhotos = max(totalPhotos, photos.count)
+            hasMorePhotos = false
+            return
+        }
+        #endif
         let query = searchQuery.isEmpty ? nil : searchQuery
         let offset = reset ? 0 : currentOffset
         let pageKey = "\(query ?? ""):\(offset)"
@@ -176,6 +191,9 @@ class PhotoStore: ObservableObject {
     }
 
     func loadAlbums() async {
+        #if DEBUG
+        if LookDemoScreenshots.isActive { return }
+        #endif
         do {
             albums = try await client.albums()
         } catch {
@@ -184,6 +202,9 @@ class PhotoStore: ObservableObject {
     }
 
     func loadSmartCollections() async {
+        #if DEBUG
+        if LookDemoScreenshots.isActive { return }
+        #endif
         do {
             let response = try await client.smartCollections()
             smartCollections = response.collections
@@ -193,6 +214,9 @@ class PhotoStore: ObservableObject {
     }
 
     func loadAllTags() async {
+        #if DEBUG
+        if LookDemoScreenshots.isActive { return }
+        #endif
         do {
             let response = try await client.allTags()
             allTags = response.tags
@@ -243,6 +267,9 @@ class PhotoStore: ObservableObject {
     @Published var serverSettings: [String: String] = [:]
 
     func loadServerSettings() async {
+        #if DEBUG
+        if LookDemoScreenshots.isActive { return }
+        #endif
         do {
             serverSettings = try await client.settings().settings
         } catch { errorMessage = error.localizedDescription }

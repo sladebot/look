@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2C02D5A19EF645D7A5103B69 /* DemoScreenshotHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ED050BB06424872B9645564 /* DemoScreenshotHost.swift */; };
 		1A93994BCB6A421BB2DEFB69 /* LookDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2425216D4BD3434E85095AE7 /* LookDesignSystem.swift */; };
 		A49FFEDF69274E2AB82B7900 /* ConnectionSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6339814E64954BE6845B5492 /* ConnectionSetupView.swift */; };
 		097D84F65F1F6BC7A603805B /* PhotosGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 406A30CD26384FB80F95C418 /* PhotosGrid.swift */; };
@@ -49,6 +50,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1ED050BB06424872B9645564 /* DemoScreenshotHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoScreenshotHost.swift; sourceTree = "<group>"; };
 		2425216D4BD3434E85095AE7 /* LookDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookDesignSystem.swift; sourceTree = "<group>"; };
 		6339814E64954BE6845B5492 /* ConnectionSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSetupView.swift; sourceTree = "<group>"; };
 		056DEE9FB68A41B40C546B5A /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
@@ -87,6 +89,7 @@
 		3274BE188A6463D26B39F29C /* Look */ = {
 			isa = PBXGroup;
 			children = (
+				1ED050BB06424872B9645564 /* DemoScreenshotHost.swift */,
 				AC3907B5F94AB008E013852A /* APIClient.swift */,
 				52D109695EEE22F9A327B404 /* Assets.xcassets */,
 				939167C0790FBD02BEA90F8A /* ContentView.swift */,
@@ -252,6 +255,7 @@
 				599F0B83C521F06556081FB7 /* AlbumsList.swift in Sources */,
 				A49FFEDF69274E2AB82B7900 /* ConnectionSetupView.swift in Sources */,
 				70674C05A1789F4B5D5637B8 /* ContentView.swift in Sources */,
+				2C02D5A19EF645D7A5103B69 /* DemoScreenshotHost.swift in Sources */,
 				3C756A7E668F40525E5D15DF /* FullScreenImage.swift in Sources */,
 				75D3A0D3591DFF8BE3D5153A /* ImageSaver.swift in Sources */,
 				BA05724923607D4D662DAC38 /* LibraryView.swift in Sources */,

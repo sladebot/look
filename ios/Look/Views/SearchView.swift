@@ -16,6 +16,12 @@ struct SearchView: View {
         GridItem(.adaptive(minimum: 112), spacing: 4)
     ]
 
+    init(initialQuery: String = "", initialResults: [Photo] = []) {
+        _query = State(initialValue: initialQuery)
+        _submittedQuery = State(initialValue: initialQuery)
+        _results = State(initialValue: initialResults)
+    }
+
     private var trimmedQuery: String {
         query.trimmingCharacters(in: .whitespacesAndNewlines)
     }

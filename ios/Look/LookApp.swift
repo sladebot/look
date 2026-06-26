@@ -14,8 +14,17 @@ struct LookApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if LookDemoScreenshots.isActive {
+                DemoScreenshotHost()
+            } else {
+                ContentView()
+                    .environmentObject(store)
+            }
+            #else
             ContentView()
                 .environmentObject(store)
+            #endif
         }
     }
 }

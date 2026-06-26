@@ -152,6 +152,24 @@ struct CachedThumbnail: View {
 
     var body: some View {
         Group {
+            #if DEBUG
+            if LookDemoScreenshots.isActive {
+                Image(uiImage: LookDemoMockImage.image(identifier: url.absoluteString, size: CGSize(width: maxPixel, height: maxPixel)))
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                    .clipped()
+            } else {
+                remoteThumbnailBody
+            }
+            #else
+            remoteThumbnailBody
+            #endif
+        }
+    }
+
+    private var remoteThumbnailBody: some View {
+        Group {
             if let image {
                 Image(uiImage: image)
                     .resizable()
@@ -171,6 +189,9 @@ struct CachedThumbnail: View {
     }
 
     private func load() async {
+        #if DEBUG
+        if LookDemoScreenshots.isActive { return }
+        #endif
         let loaded = await ThumbnailLoader.shared.image(for: url, maxPixel: maxPixel)
         await MainActor.run {
             if let loaded {
