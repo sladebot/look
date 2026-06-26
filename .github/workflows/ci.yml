@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Scan for committed secrets
+        run: python scripts/scan_secrets.py
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

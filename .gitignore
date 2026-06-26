@@ -9,9 +9,23 @@ __pycache__/
 # Thumbnails and converted images (generated, not source)
 *.thumbnails/
 .converted/
+thumbnails/
+converted/
+.trash/
 
 # Environment
 .env
+.env.*
+!.env.example
+
+# Secrets and signing material
+*.key
+*.pem
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+*.certSigningRequest
 
 # macOS / editor local state
 .DS_Store

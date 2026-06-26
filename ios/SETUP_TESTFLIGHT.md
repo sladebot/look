@@ -82,7 +82,7 @@ Go to your repo → **Settings → Secrets and variables → Actions → New rep
 | `BUILD_CERTIFICATE_BASE64` | Contents of `distribution.p12.b64` | Step 2 |
 | `P12_PASSWORD` | Password you set when exporting .p12 | Step 2 |
 | `BUILD_PROVISION_PROFILE_BASE64` | Contents of `profile.b64` | Step 3 |
-| `KEYCHAIN_PASSWORD` | Any temporary password (e.g. `temp-password-123`) | Create new |
+| `KEYCHAIN_PASSWORD` | Any temporary password value you create locally | Create new |
 | `APP_STORE_CONNECT_API_KEY_ID` | Key ID from App Store Connect | Step 1 |
 | `APP_STORE_CONNECT_API_ISSUER_ID` | Issuer ID from App Store Connect | Step 1 |
 | `APP_STORE_CONNECT_API_KEY` | Raw contents of the `.p8` file | Step 1 |
