@@ -42,6 +42,15 @@ struct SearchView: View {
             }
             .lookScreenBackground()
             .navigationTitle("Search")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    LookNavTitle(
+                        title: "Search",
+                        subtitle: submittedQuery.isEmpty ? "Filename, tag, camera, or path" : "\(results.count) results"
+                    )
+                }
+            }
             .onChange(of: query) { _, newValue in
                 if ignoreNextQueryChange {
                     ignoreNextQueryChange = false

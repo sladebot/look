@@ -556,10 +556,28 @@ struct PhotosGrid: View {
         return count == 1 ? "1 photo selected" : "\(count) photos selected"
     }
 
+    private var navigationSubtitle: String {
+        if selectionMode {
+            return "\(selectedVisibleCount) of \(visiblePhotos.count) visible"
+        }
+        if store.isSyncing {
+            return "Syncing \(store.totalPhotos.formatted()) photos"
+        }
+        let count = store.totalPhotos > 0 ? store.totalPhotos : visiblePhotos.count
+        let filterContext = filter == .all ? "Private library" : filter.title
+        return "\(count.formatted()) photos • \(filterContext)"
+    }
+
     // MARK: Toolbar
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            LookNavTitle(
+                title: selectionMode ? selectionSummary : "Photos",
+                subtitle: navigationSubtitle
+            )
+        }
         ToolbarItem(placement: .topBarLeading) {
             if selectionMode {
                 Button("Cancel") {
@@ -602,6 +620,7 @@ struct PhotosGrid: View {
                 .disabled(store.isSyncing)
             } label: {
                     Image(systemName: "ellipsis.circle")
+                        .font(.title3.weight(.semibold))
                         .overlay(alignment: .topTrailing) {
                             if store.isSyncing {
                                 Circle()

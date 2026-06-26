@@ -123,12 +123,12 @@ private struct ConnectionCheckingView: View {
         VStack(spacing: LookTheme.Spacing.large) {
             LookLoadingState(
                 title: "Checking Look server",
-                message: "Confirming the saved Tailnet route before opening your library."
+                message: "Confirming the saved Tailscale route before opening your library."
             )
 
             LookStatusBanner(
                 title: "Private-network first",
-                message: "If this device is away from your Tailnet, Look will ask you to reconnect before showing library tabs.",
+                message: "If this device is away from your Tailscale network, Look will ask you to reconnect before showing library tabs.",
                 tone: .info
             )
             .padding(.horizontal, LookTheme.Spacing.screen)

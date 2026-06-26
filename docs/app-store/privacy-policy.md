@@ -2,7 +2,7 @@
 
 Effective date: 2026-06-26
 
-Look is a self-hosted photo library client for iPhone and iPad. It is designed to connect to a Look server that you control on a private network, such as a Tailscale Tailnet.
+Look is a self-hosted photo library client for iPhone and iPad. It is designed to connect to a Look server that you control on a private network, such as Tailscale.
 
 ## Summary
 
@@ -23,7 +23,7 @@ This information is used only to connect to and browse your configured Look serv
 
 ## Photos and Photo Metadata
 
-Look displays photos and metadata served by your self-hosted Look server. This can include filenames, dimensions, file types, EXIF metadata, tags, albums, and location metadata if your server provides it.
+Look displays photos and metadata served by your self-hosted Look server. This can include filenames, dimensions, file types, EXIF metadata, tags, albums, and location metadata if your server provides it. Look does not scan your iPhone photo library.
 
 Look does not upload your photos or metadata to a developer-operated service.
 
@@ -33,7 +33,7 @@ If you choose to save a photo from Look to your device, iOS may ask for permissi
 
 ## Network Connections
 
-Look connects to the server URL you configure. The app is intended for private networks such as Tailscale. If you use a Tailscale MagicDNS name or private Tailnet IP address, traffic is routed through your private Tailnet according to your Tailscale configuration.
+Look connects to the server URL you configure. The app is intended for private networks such as Tailscale. If you use a Tailscale MagicDNS name or private Tailscale IP address, traffic is routed according to your Tailscale configuration.
 
 ## Analytics and Tracking
 
@@ -45,7 +45,7 @@ Look does not sell personal data and does not share your photos or library metad
 
 ## Security
 
-The optional server API key is stored locally in the iOS Keychain. You are responsible for securing your self-hosted Look server, Tailnet membership, Tailscale ACLs, and any server-side API key configuration.
+The optional server API key is stored locally in the iOS Keychain. You are responsible for securing your self-hosted Look server, Tailscale membership, Tailscale ACLs, and any server-side API key configuration.
 
 ## Changes
 

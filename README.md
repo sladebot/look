@@ -13,6 +13,11 @@ The project has two parts:
 Look is designed for private libraries you control. It is not a hosted cloud
 photo product.
 
+> **Requires a self-hosted Look server.** The iOS app is a client for browsing
+> your own Look server over Tailscale or another trusted private network. It
+> does not scan your iPhone photo library and does not provide cloud photo
+> hosting.
+
 ## Screenshots
 
 These screenshots use generated mock photos and metadata. They do not contain a

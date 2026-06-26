@@ -69,7 +69,7 @@ struct DemoScreenshotHost: View {
                     DemoGalleryWorkflow(syncing: true, selectedPhotoIds: [])
                 }
             case .gallery:
-                DemoWorkflowFrame(selected: .photos, title: "Photos", subtitle: "Private library on Tailnet") {
+                DemoWorkflowFrame(selected: .photos, title: "Photos", subtitle: "Private library over Tailscale") {
                     DemoGalleryWorkflow(syncing: false, selectedPhotoIds: [])
                 }
             case .multiselect:
@@ -162,6 +162,13 @@ private struct DemoWorkflowFrame<Content: View>: View {
             }
 
             Spacer()
+
+            Label("Tailscale", systemImage: "checkmark.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.green)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(.green.opacity(0.12), in: Capsule())
 
             Button {} label: {
                 Image(systemName: "ellipsis.circle")

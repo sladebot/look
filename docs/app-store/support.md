@@ -1,11 +1,17 @@
 # Look Support
 
-Look is a self-hosted photo library app for iPhone and iPad. It connects to a Look server that you run on a private network, usually through Tailscale.
+Look is a self-hosted photo library app for iPhone and iPad. It requires a Look server that you run on a private network, usually through Tailscale. Look does not provide cloud photo hosting and does not scan your iPhone photo library.
+
+## Quick Connection Check
+
+If Look cannot connect, first open your Look server URL in Safari on the same iPhone or iPad.
+
+If Safari cannot open the URL, fix Tailscale, the server process, the host firewall, or the server address before retrying in Look. If Safari can open the URL but Look cannot connect, check the API key and app settings.
 
 ## Requirements
 
 - A running Look server
-- Your iPhone or iPad connected to the same Tailnet or trusted private network
+- Your iPhone or iPad connected to the same Tailscale network or trusted private network
 - A reachable server URL, such as:
   - `http://machine.tailnet-name.ts.net:5678`
   - `http://100.x.y.z:5678`
@@ -14,7 +20,7 @@ Look is a self-hosted photo library app for iPhone and iPad. It connects to a Lo
 ## Common Setup Steps
 
 1. Start the Look server on your host machine.
-2. Confirm the server is reachable from another device on your Tailnet.
+2. Confirm the server is reachable from another device on your Tailscale network.
 3. Open Look on iPhone or iPad.
 4. Enter the server URL.
 5. Enter the API key only if your server requires one.
@@ -25,7 +31,7 @@ Look is a self-hosted photo library app for iPhone and iPad. It connects to a Lo
 If Look cannot connect:
 
 - Confirm Tailscale is running on both devices.
-- Confirm both devices are signed into the correct Tailnet.
+- Confirm both devices are signed into the correct Tailscale network.
 - Open the server URL in Safari on the same iPhone or iPad.
 - Confirm the Look server is bound to a reachable private interface.
 - Confirm port `5678` is allowed by the host firewall.

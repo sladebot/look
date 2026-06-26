@@ -26,6 +26,14 @@ struct SettingsView: View {
             .lookScreenBackground()
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    LookNavTitle(
+                        title: "Settings",
+                        subtitle: store.serverConnected ? "Connected over Tailscale" : "Server connection"
+                    )
+                }
+            }
             .onChange(of: apiKey) { _, newValue in
                 keychainMessage = APIClient.shared.saveAPIKey(newValue) ? nil : "Could not save the API key to Keychain."
             }
@@ -47,7 +55,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
             panelHeader(
                 title: "Server Connection",
-                subtitle: "Use the Tailnet address this iPhone can reach.",
+                subtitle: "Use the Tailscale address this iPhone can reach.",
                 systemImage: "point.3.connected.trianglepath.dotted"
             )
 
@@ -126,7 +134,7 @@ struct SettingsView: View {
         } else {
             LookStatusBanner(
                 title: "Disconnected",
-                message: store.errorMessage ?? "Reconnect to the Tailnet or test a different server URL.",
+                message: store.errorMessage ?? "Reconnect to Tailscale or test a different server URL.",
                 tone: .warning
             )
         }

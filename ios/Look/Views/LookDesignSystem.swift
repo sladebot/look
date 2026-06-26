@@ -190,6 +190,31 @@ struct LookChip: View {
     }
 }
 
+struct LookNavTitle: View {
+    let title: String
+    var subtitle: String?
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(title)
+                .font(.system(.headline, design: .rounded).weight(.semibold))
+                .foregroundStyle(LookTheme.ColorToken.graphite)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct LookEmptyState: View {
     let title: String
     let systemImage: String

@@ -58,11 +58,11 @@ struct ConnectionSetupView: View {
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
                 LookTheme.eyebrow("Private library")
-                Text("Connect on your Tailnet")
+                Text("Connect with Tailscale")
                     .font(.system(.largeTitle, design: .rounded).weight(.bold))
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Look is built for a server you control. Use the address this iPhone can reach through Tailscale, then test once to unlock the library.")
+                Text("Look requires a self-hosted Look server. Use the address this iPhone can reach through Tailscale, then test once to unlock the library.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -105,7 +105,7 @@ struct ConnectionSetupView: View {
         } else {
             LookStatusBanner(
                 title: "Use a private-network address",
-                message: "Use the Tailnet-only HTTP or HTTPS address for your Look server, including the port.",
+                message: "Use the private Tailscale HTTP or HTTPS address for your self-hosted Look server, including the port.",
                 tone: .info
             )
         }
@@ -134,7 +134,7 @@ struct ConnectionSetupView: View {
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
                 fieldLabel("API key", detail: "Only if API_KEY is set on the server")
-                SecureField("Leave blank for a private Tailnet server without API_KEY", text: $apiKey)
+                SecureField("Leave blank for a private Tailscale server without API_KEY", text: $apiKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textContentType(.password)
@@ -168,14 +168,14 @@ struct ConnectionSetupView: View {
     private var examplesPanel: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
             panelHeader(
-                title: "Common Tailnet Addresses",
+                title: "Common Tailscale Addresses",
                 subtitle: "Tap an example to fill the server URL, then replace it with your machine's address.",
                 systemImage: "network"
             )
 
             VStack(spacing: LookTheme.Spacing.small) {
                 exampleRow("Tailscale IP", value: "http://100.86.254.112:5678", note: "Works even if MagicDNS is disabled.")
-                exampleRow("MagicDNS", value: "http://studio.tailnet-name.ts.net:5678", note: "Friendlier when your Tailnet has DNS enabled.")
+                exampleRow("MagicDNS", value: "http://studio.tailnet-name.ts.net:5678", note: "Friendlier when Tailscale DNS is enabled.")
             }
         }
         .lookPanel()
@@ -185,7 +185,7 @@ struct ConnectionSetupView: View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             Label("Before testing", systemImage: "checklist")
                 .font(.headline)
-            Text("Make sure Tailscale is connected on this iPhone and on the Look server. The server should be running on port 5678 and reachable from the same Tailnet.")
+            Text("Make sure Tailscale is connected on this iPhone and on the Look server. The server should be running on port 5678 and reachable from the same Tailscale network. Look does not scan this iPhone's photo library.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

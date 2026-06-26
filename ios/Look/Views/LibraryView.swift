@@ -114,7 +114,14 @@ struct LibraryView: View {
             }
             .lookScreenBackground()
             .navigationTitle("Library")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    LookNavTitle(
+                        title: "Library",
+                        subtitle: "\(store.albums.count) albums • \(store.smartCollections.count) smart"
+                    )
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { showCreateAlbum = true } label: {
@@ -125,6 +132,7 @@ struct LibraryView: View {
                         }
                     } label: {
                         Image(systemName: "plus")
+                            .font(.title3.weight(.semibold))
                     }
                 }
             }
