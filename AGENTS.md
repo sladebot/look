@@ -1,4 +1,4 @@
-# Look — CLAUDE.md
+# Look — AGENTS.md
 
 ## Project Overview
 
@@ -13,7 +13,7 @@ The project has two parts:
 **Run:** `./.conda/bin/python -m uvicorn api.server:app --host 0.0.0.0 --port 5678`  
 **UI:** `http://studio.taila3f2b.ts.net:5678`
 
-> **Note:** `AGENTS.md` is a sibling copy of this file for non-Claude tooling. If you change one, update the other to keep them in sync.
+> **Note:** `CLAUDE.md` is the sibling copy of this file (identical content) for Claude tooling. If you change one, update the other to keep them in sync.
 
 ---
 
