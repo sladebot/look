@@ -40,6 +40,11 @@ class Config:
     # Fast grid thumbnails are generated before larger preview work.
     grid_thumbnail_width: int = int(os.environ.get("GRID_THUMBNAIL_WIDTH", "512"))
 
+    # Display preview size for full-screen viewers. This is intentionally below
+    # original RAW/sidecar dimensions so mobile swipe navigation avoids decoding
+    # 50-70 MP images unless the user explicitly downloads the source.
+    display_preview_width: int = int(os.environ.get("DISPLAY_PREVIEW_WIDTH", "1600"))
+
     # Bounded preview worker pool; keep this modest for external disks.
     preview_workers: int = int(os.environ.get("PREVIEW_WORKERS", "4"))
 

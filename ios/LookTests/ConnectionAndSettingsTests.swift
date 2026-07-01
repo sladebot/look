@@ -31,6 +31,17 @@ final class ConnectionAndSettingsTests: XCTestCase {
 
         XCTAssertEqual(client.configuredBaseURL, "http://100.86.254.112:5678")
         XCTAssertEqual(client.fullImageURL(for: "photo-id").absoluteString, "http://100.86.254.112:5678/api/full/photo-id")
+        XCTAssertEqual(client.previewImageURL(for: "photo-id").absoluteString, "http://100.86.254.112:5678/api/preview/photo-id?size=1600")
+    }
+
+    func testPreviewImageURLPercentEncodesPhotoIds() throws {
+        let url = try APIClient.previewImageURL(
+            baseURL: "http://studio.taila3f2b.ts.net:5678",
+            photoId: "raw photo/1",
+            size: 1600
+        )
+
+        XCTAssertEqual(url.absoluteString, "http://studio.taila3f2b.ts.net:5678/api/preview/raw%20photo%2F1?size=1600")
     }
 
     func testPhotoStoreBooleanSettingsSupportServerRepresentations() {

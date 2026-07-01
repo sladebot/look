@@ -116,6 +116,75 @@ def test_nearby_no_gps_returns_empty():
         api.server.db = old_db
 
 
+# ── Display preview endpoint ──────────────────────────────────────────────────
+
+def test_display_preview_endpoint_queues_missing_preview(tmp_path):
+    """GET /api/preview/{id} should queue display preview generation."""
+    import api.server
+    from api.server import PhotoDatabase as PD, Config
+
+    photo_path = tmp_path / "large.jpg"
+    photo_path.write_bytes(b"jpeg placeholder")
+    db_path = str(tmp_path / "preview.db")
+    db = PD(db_path)
+    db.store_photo({
+        'id': 'photo-preview',
+        'filename': 'large.jpg',
+        'filepath': str(photo_path),
+        'file_size': photo_path.stat().st_size,
+        'width': 9504,
+        'height': 6336,
+        'mime_type': 'image/jpeg',
+        'indexed_at': '2026-07-01T00:00:00',
+        'has_thumbnail': False,
+    })
+
+    class FakeProcessor:
+        def __init__(self, config):
+            self.config = config
+
+        def find_existing_thumbnail(self, path, size):
+            return None
+
+    class FakePreviewQueue:
+        def __init__(self, db):
+            self.db = db
+            self.calls = []
+
+        def enqueue_thumbnail(self, photo_id, filepath, size, priority=50):
+            self.calls.append((photo_id, filepath, size, priority))
+
+    config = Config(photo_dir=str(tmp_path), db_path=db_path)
+    fake_queue = FakePreviewQueue(db)
+    old_db = api.server.db
+    old_config = api.server.config
+    old_processor = api.server.processor
+    old_queue = api.server.preview_queue
+
+    api.server.db = db
+    api.server.config = config
+    api.server.processor = FakeProcessor(config)
+    api.server.preview_queue = fake_queue
+
+    try:
+        transport = ASGITransport(app=app)
+        client = httpx.Client(transport=transport, base_url="http://test")
+        try:
+            resp = client.get("/api/preview/photo-preview", params={'size': 1600})
+        finally:
+            client.close()
+
+        assert resp.status_code == 200
+        assert resp.headers["x-look-preview"] == "queued"
+        assert resp.headers["content-type"] == "image/jpeg"
+        assert fake_queue.calls == [("photo-preview", str(photo_path), 1600, 0)]
+    finally:
+        api.server.db = old_db
+        api.server.config = old_config
+        api.server.processor = old_processor
+        api.server.preview_queue = old_queue
+
+
 # ── Task Queue endpoints ──────────────────────────────────────────────────────
 
 def test_submit_dedup_scan_returns_task_id():

@@ -5,6 +5,7 @@ __pycache__/
 
 # Database (local only, not tracked)
 *.db
+.local/
 
 # Thumbnails and converted images (generated, not source)
 *.thumbnails/

@@ -1,6 +1,7 @@
 """Local Photo Library Server — Main FastAPI application with web frontend."""
 import os
 import hashlib
+import shutil
 import time
 import threading
 from pathlib import Path
@@ -110,6 +111,7 @@ def _migration_specs():
 def _make_rate_limiter() -> RateLimiter:
     limiter = RateLimiter(default_rate=120, default_burst=240)
     limiter.set_limit("/api/thumbnails/*", rate=30, burst=60)
+    limiter.set_limit("/api/preview/*", rate=20, burst=40)
     limiter.set_limit("/api/full/*", rate=10, burst=20)
     limiter.set_limit("/api/dedup/scan", rate=5, burst=5)
     return limiter
@@ -581,6 +583,16 @@ def _existing_preview_path(filepath: str) -> str:
 
 @app.get("/api/thumbnails/{photo_id}")
 async def get_thumbnail(photo_id: str, size: int = Query(256, ge=128, le=1024)):
+    return _thumbnail_or_queue_response(photo_id, size=size)
+
+
+@app.get("/api/preview/{photo_id}")
+async def get_display_preview(photo_id: str, size: int | None = Query(None, ge=512, le=2048)):
+    display_size = size or getattr(config, "display_preview_width", 1600)
+    return _thumbnail_or_queue_response(photo_id, size=display_size)
+
+
+def _thumbnail_or_queue_response(photo_id: str, size: int):
     photo = db.get_photo(photo_id)
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")

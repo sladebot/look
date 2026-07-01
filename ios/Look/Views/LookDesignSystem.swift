@@ -2,13 +2,16 @@ import SwiftUI
 
 enum LookTheme {
     enum ColorToken {
-        static let darkroom = Color(hex: 0x0E1012)
-        static let paper = Color(hex: 0x1F2327)
-        static let surface = Color(hex: 0x2A3036)
+        static let darkroom = Color(hex: 0x090B0E)
+        static let paper = Color(hex: 0x15191D)
+        static let surface = Color(hex: 0x22282E)
+        static let elevated = Color(hex: 0x2A3138)
         static let graphite = Color(hex: 0xEEF3F6)
-        static let mist = Color(hex: 0x3D464E)
-        static let cyan = Color(hex: 0x2EA8FF)
-        static let amber = Color(hex: 0xD9A441)
+        static let mist = Color(hex: 0x39434C)
+        static let line = Color(hex: 0x46515A)
+        static let cyan = Color(hex: 0x20A7FF)
+        static let amber = Color(hex: 0xCFA44A)
+        static let success = Color(hex: 0x4CC27E)
         static let danger = Color(hex: 0xC94545)
     }
 
@@ -43,7 +46,14 @@ enum LookTheme {
 struct LookScreenBackground: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background(LookTheme.ColorToken.paper.ignoresSafeArea())
+            .background {
+                LinearGradient(
+                    colors: [LookTheme.ColorToken.paper, LookTheme.ColorToken.darkroom],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+            }
     }
 }
 
@@ -53,11 +63,21 @@ struct LookPanel: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(inset)
-            .background(LookTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [LookTheme.ColorToken.elevated, LookTheme.ColorToken.surface],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                    .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
+                    .stroke(LookTheme.ColorToken.line.opacity(0.72), lineWidth: 1)
             }
+            .shadow(color: .black.opacity(0.16), radius: 14, y: 8)
     }
 }
 
@@ -69,7 +89,7 @@ struct LookInsetSurface: ViewModifier {
             .background(LookTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
+                    .stroke(LookTheme.ColorToken.line.opacity(0.68), lineWidth: 1)
             }
     }
 }
@@ -81,7 +101,7 @@ struct LookTextInputSurface: ViewModifier {
             .padding(.vertical, 12)
             .foregroundStyle(LookTheme.ColorToken.graphite)
             .tint(LookTheme.ColorToken.cyan)
-            .modifier(LookInsetSurface())
+            .modifier(LookInsetSurface(radius: LookTheme.Radius.control))
     }
 }
 
@@ -110,7 +130,7 @@ struct LookStatusBanner: View {
         var color: Color {
             switch self {
             case .info: return LookTheme.ColorToken.cyan
-            case .success: return .green
+            case .success: return LookTheme.ColorToken.success
             case .warning: return LookTheme.ColorToken.amber
             case .error: return LookTheme.ColorToken.danger
             }
@@ -159,10 +179,16 @@ struct LookStatusBanner: View {
             }
         }
         .padding(LookTheme.Spacing.medium)
-        .background(tone.color.opacity(0.10), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+        .background(LookTheme.ColorToken.elevated, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(tone.color.opacity(0.26), lineWidth: 1)
+                .stroke(tone.color.opacity(0.30), lineWidth: 1)
+        }
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tone.color)
+                .frame(width: 3)
+                .padding(.vertical, 10)
         }
         .accessibilityElement(children: .combine)
     }
@@ -185,8 +211,30 @@ struct LookChip: View {
         .foregroundStyle(tint)
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
-        .background(tint.opacity(0.11), in: Capsule())
+        .background(tint.opacity(0.09), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(tint.opacity(0.20), lineWidth: 1)
+        }
         .accessibilityElement(children: .combine)
+    }
+}
+
+struct LookConnectionPill: View {
+    var title = "Tailscale"
+
+    var body: some View {
+        Label(title, systemImage: "checkmark.circle.fill")
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(LookTheme.ColorToken.success)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(LookTheme.ColorToken.success.opacity(0.11), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(LookTheme.ColorToken.success.opacity(0.22), lineWidth: 1)
+            }
+            .accessibilityElement(children: .combine)
     }
 }
 

@@ -197,6 +197,13 @@ struct PhotosGrid: View {
                     }
 
                     ForEach(secs) { section in
+                        PhotoDateStrip(
+                            title: displayDayTitle(for: section.id),
+                            count: section.photos.count
+                        )
+                        .padding(.horizontal, LookTheme.Spacing.screen)
+                        .padding(.top, LookTheme.Spacing.small)
+
                         ForEach(PhotoLayout.rows(for: section.photos, width: contentWidth,
                                                  target: target, spacing: spacing,
                                                  aspect: photoAspect)) { row in
@@ -663,6 +670,30 @@ struct PhotosGrid: View {
     }
 }
 
+private struct PhotoDateStrip: View {
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: LookTheme.Spacing.small) {
+            Text(title)
+                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.82))
+            Text(count.formatted())
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .font(.system(.caption, design: .monospaced).weight(.semibold))
+        .padding(.vertical, LookTheme.Spacing.small)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(LookTheme.ColorToken.line.opacity(0.36))
+                .frame(height: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(count) photos")
+    }
+}
+
 private struct StableSyncProgressBar: View {
     let value: Double?
 
@@ -758,10 +789,24 @@ private let dayKeyFormatter: DateFormatter = {
     return f
 }()
 
+private let displayDayFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = "EEEE, MMM d"
+    return f
+}()
+
 private func dayKey(_ photo: Photo) -> String {
     let date = photoDate(photo)
     if date == .distantPast { return "unknown" }
     return dayKeyFormatter.string(from: date)
+}
+
+private func displayDayTitle(for key: String) -> String {
+    guard key != "unknown", let date = dayKeyFormatter.date(from: key) else {
+        return "UNKNOWN DATE"
+    }
+    return displayDayFormatter.string(from: date).uppercased()
 }
 
 // MARK: - Immersive viewer
@@ -802,18 +847,21 @@ struct NativePhotoViewer: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            TabView(selection: $currentId) {
-                ForEach(photos) { photo in
-                    FullScreenImage(
-                        photo: photo,
-                        onTap: { withAnimation(.easeInOut(duration: 0.2)) { chromeHidden.toggle() } },
-                        onDismiss: { dismiss() },
-                        onInfo: { showInfo = true }
-                    )
-                    .tag(photo.id)
-                }
+            FullScreenImage(
+                photo: currentPhoto,
+                isActive: true,
+                canGoPrevious: currentIndex > 0,
+                canGoNext: currentIndex < photos.count - 1,
+                onTap: { withAnimation(.easeInOut(duration: 0.2)) { chromeHidden.toggle() } },
+                onDismiss: { dismiss() },
+                onInfo: { showInfo = true },
+                onPrevious: showPrevious,
+                onNext: showNext
+            )
+            .id(currentPhoto.id)
+            .accessibilityAction(.magicTap) {
+                withAnimation(.easeInOut(duration: 0.18)) { showNext() }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea()
 
             VStack {
@@ -825,6 +873,19 @@ struct NativePhotoViewer: View {
         .statusBarHidden(chromeHidden)
         .sheet(isPresented: $showInfo) { PhotoDetail(photo: currentPhoto) }
         .sheet(isPresented: $showAddToAlbum) { AddToAlbumSheet(photo: currentPhoto) }
+        .task(id: currentId) {
+            await prefetchAdjacentPreviews()
+        }
+    }
+
+    private func showPrevious() {
+        guard currentIndex > 0 else { return }
+        currentId = photos[currentIndex - 1].id
+    }
+
+    private func showNext() {
+        guard currentIndex < photos.count - 1 else { return }
+        currentId = photos[currentIndex + 1].id
     }
 
     private var topBar: some View {
@@ -903,6 +964,27 @@ struct NativePhotoViewer: View {
         }
         let state = photo.id == currentId ? ", selected" : ""
         return "\(photo.filename), \(index + 1) of \(photos.count)\(state)"
+    }
+
+    private func prefetchAdjacentPreviews() async {
+        guard !photos.isEmpty else { return }
+        let lowerBound = max(0, currentIndex - 2)
+        let upperBound = min(photos.count, currentIndex + 3)
+        let candidates = photos[lowerBound..<upperBound].filter { $0.id != currentId }
+
+        await withTaskGroup(of: Void.self) { group in
+            for photo in candidates {
+                let url = APIClient.shared.previewImageURL(for: photo.id, size: 1600)
+                group.addTask {
+                    _ = await PreviewImageLoader.shared.image(
+                        for: url,
+                        maxPixel: 2_400,
+                        retryQueued: true,
+                        attempts: 2
+                    )
+                }
+            }
+        }
     }
 }
 

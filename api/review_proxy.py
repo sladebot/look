@@ -2,22 +2,23 @@
 
 Purpose
 -------
-Devices inside the Tailscale tailnet reach the backend directly on port 5678
-with no API key. External reviewers (e.g. Apple App Store Review) reach it
-through a public HTTPS Tailscale Funnel that points at *this* proxy — never at
-the raw backend. The proxy enforces a bearer token and forwards authorized
-traffic to the local backend.
+Clients reach port 5678, which is owned by this auth proxy. The raw backend runs
+on loopback-only port 5680 and is never exposed directly. External reviewers
+(e.g. Apple App Store Review) reach this proxy through a public HTTPS Tailscale
+Funnel. The proxy enforces a bearer token and forwards authorized traffic to the
+local backend.
 
-    Tailnet (internal):   http://<mac-studio>.<tailnet>.ts.net:5678   (no key)
+    Tailnet/review app:   http://<mac-studio>.<tailnet>.ts.net:5678   (X-API-Key)
     External (review):    https://<mac-studio>.<tailnet>.ts.net       (Bearer key)
                               → Tailscale Funnel :443
-                              → this proxy 127.0.0.1:5679
-                              → backend 127.0.0.1:5678
+                              → this proxy 0.0.0.0:5678
+                              → backend 127.0.0.1:5680
 
 Run
 ---
     export REVIEW_API_KEY="$(openssl rand -hex 32)"
-    ./.conda/bin/python -m uvicorn api.review_proxy:app --host 127.0.0.1 --port 5679
+    ./.conda/bin/python -m uvicorn api.server:app --host 127.0.0.1 --port 5680
+    ./.conda/bin/python -m uvicorn api.review_proxy:app --host 0.0.0.0 --port 5678
 
 See docs/release/review-funnel-access.md for full setup, testing, and the
 Tailscale Funnel commands.
@@ -35,7 +36,7 @@ from starlette.background import BackgroundTask
 # ─── configuration ───────────────────────────────────────────────────────────
 # Where the real backend listens. Loopback only — the raw backend is never the
 # Funnel target.
-BACKEND_URL = os.environ.get("REVIEW_BACKEND_URL", "http://127.0.0.1:5678")
+BACKEND_URL = os.environ.get("REVIEW_BACKEND_URL", "http://127.0.0.1:5680")
 
 # Fail fast: without a key the proxy would either reject everything or (worse)
 # forward everything, so refuse to start.

@@ -118,6 +118,21 @@ class APIClient {
         (try? Self.fullImageURL(baseURL: baseURL, photoId: photoId)) ?? Self.invalidDisplayURL
     }
 
+    func previewImageURL(for photoId: String, size: Int = 1600) -> URL {
+        (try? Self.previewImageURL(baseURL: baseURL, photoId: photoId, size: size)) ?? Self.invalidDisplayURL
+    }
+
+    /// Builds a request for an image endpoint (thumbnail/full) carrying the API
+    /// key as `X-API-Key`, so images authenticate through an auth proxy exactly
+    /// like JSON calls do. Without this, image loads reach a keyed proxy with no
+    /// credential and 401 (the tailnet backend is keyless, so it only shows up on
+    /// the proxy/review path).
+    func imageRequest(for url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        if let apiKey { request.setValue(apiKey, forHTTPHeaderField: "X-API-Key") }
+        return request
+    }
+
     func downloadJPEGData(_ photoId: String) async throws -> Data {
         try await fetchData("/api/download/jpeg/\(Self.encodePathComponent(photoId))")
     }
@@ -379,6 +394,13 @@ class APIClient {
         try endpointURL(
             baseURL: baseURL,
             path: "/api/thumbnails/\(encodePathComponent(photoId))?size=\(size)"
+        )
+    }
+
+    static func previewImageURL(baseURL: String, photoId: String, size: Int = 1600) throws -> URL {
+        try endpointURL(
+            baseURL: baseURL,
+            path: "/api/preview/\(encodePathComponent(photoId))?size=\(size)"
         )
     }
 

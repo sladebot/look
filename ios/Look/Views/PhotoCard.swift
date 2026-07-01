@@ -96,7 +96,7 @@ actor ThumbnailLoader {
         if let task = inflight[key] { return await task.value }
 
         let task = Task<UIImage?, Never> { [session] in
-            var request = URLRequest(url: url)
+            var request = APIClient.shared.imageRequest(for: url)
             request.timeoutInterval = 30
             guard let (data, _) = try? await session.data(for: request),
                   let image = Self.downsample(data, maxPixel: maxPixel) else { return nil }

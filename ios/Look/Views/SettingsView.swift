@@ -148,7 +148,7 @@ struct SettingsView: View {
                 systemImage: "arrow.triangle.2.circlepath"
             )
 
-                Toggle("Auto sync", isOn: Binding(
+            Toggle("Auto sync", isOn: Binding(
                 get: { store.autoSyncEnabled },
                 set: { on in if on { store.startAutoSync() } else { store.stopAutoSync() } }
             ))

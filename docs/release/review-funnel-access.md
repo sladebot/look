@@ -3,21 +3,20 @@
 This sets up a **public HTTPS entry point for App Store Review** while keeping
 the raw backend private to your Tailscale tailnet.
 
-- **Tailnet devices** keep talking to the backend directly on `:5678`, **no API
-  key** required.
-- **External reviewers** reach the backend through a **public HTTPS Funnel URL**
-  that terminates at a small **auth proxy** (`api/review_proxy.py`) requiring an
-  `Authorization: Bearer` token.
-- The raw backend on `:5678` is **never** exposed to the public internet.
+- **All app-facing traffic** uses `:5678`.
+- `:5678` is the review auth proxy (`api/review_proxy.py`) and requires a
+  review key via `X-API-Key` or `Authorization: Bearer`.
+- The raw backend is moved to loopback-only `127.0.0.1:5680` and is never
+  exposed directly.
 
 ```
-Tailnet (internal):   http://<mac-studio>.<tailnet>.ts.net:5678      (no key)
-                      http://100.x.x.x:5678
+Tailnet/review app:   http://<mac-studio>.<tailnet>.ts.net:5678      (X-API-Key)
+                      http://100.x.x.x:5678                         (X-API-Key)
 
 External (review):    https://<mac-studio>.<tailnet>.ts.net          (Bearer key)
                           → Tailscale Funnel  :443
-                          → auth proxy        127.0.0.1:5679
-                          → backend           127.0.0.1:5678
+                          → auth proxy        0.0.0.0:5678
+                          → backend           127.0.0.1:5680
 ```
 
 The proxy accepts the review key as **either** `Authorization: Bearer <key>`
@@ -25,6 +24,36 @@ The proxy accepts the review key as **either** `Authorization: Bearer <key>`
 HTTP method, path, query string, request/response bodies, status codes, and
 headers — dropping only hop-by-hop headers and the inbound credential headers, so
 the review key never reaches backend logs.
+
+## Scripted startup
+
+For normal App Store Review setup, use the helper script instead of manually
+starting each process:
+
+```bash
+# Recommended: point this at a generated/mock review library, not real photos.
+export PHOTO_DIR="/path/to/generated-review-photos"
+export DB_PATH="$PWD/.local/review-library.db"
+
+# Use an existing key...
+export REVIEW_API_KEY="paste-the-hex-string-here"
+./scripts/start_review_funnel.sh restart
+
+# ...or generate a local ignored key file.
+LOOK_GENERATE_REVIEW_KEY=1 ./scripts/start_review_funnel.sh restart
+```
+
+The script:
+
+- starts the backend in a detached `tmux` session named `look-server` on
+  `127.0.0.1:5680`;
+- starts the review auth proxy in `look-review-proxy` on `0.0.0.0:5678`;
+- verifies both local health endpoints;
+- runs `tailscale funnel --bg 5678`;
+- supports `start`, `restart`, `status`, and `stop`.
+
+The generated key file lives at `.local/review-funnel.env`, which is ignored by
+git. Keep the review build's API-key value in sync with `REVIEW_API_KEY`.
 
 ---
 
@@ -53,23 +82,26 @@ FATAL: REVIEW_API_KEY is not set.
 
 ## 3. Start the auth proxy
 
-Keep the backend running as usual on `:5678`, then start the proxy on `:5679`:
+Start the backend on loopback-only `:5680`, then start the proxy on app-facing
+`:5678`:
 
 ```bash
-./.conda/bin/python -m uvicorn api.review_proxy:app --host 127.0.0.1 --port 5679
+./.conda/bin/python -m uvicorn api.server:app --host 127.0.0.1 --port 5680
+REVIEW_BACKEND_URL=http://127.0.0.1:5680 \
+  ./.conda/bin/python -m uvicorn api.review_proxy:app --host 0.0.0.0 --port 5678
 ```
 
-Bind to `127.0.0.1` only — the proxy should be reachable via the Funnel, not
-directly from the network.
+Do not bind the raw backend to `0.0.0.0` in review mode. Only the proxy should
+own `:5678`.
 
 ## 4. Test unauthorized access (expect 401)
 
 ```bash
 # No token:
-curl -i http://127.0.0.1:5679/api/health
+curl -i http://127.0.0.1:5678/api/health
 
 # Wrong token:
-curl -i -H "Authorization: Bearer wrong" http://127.0.0.1:5679/api/health
+curl -i -H "Authorization: Bearer wrong" http://127.0.0.1:5678/api/health
 ```
 
 Both return:
@@ -83,18 +115,18 @@ HTTP/1.1 401 Unauthorized
 
 ```bash
 curl -i -H "Authorization: Bearer $REVIEW_API_KEY" \
-  http://127.0.0.1:5679/api/health
+  http://127.0.0.1:5678/api/health
 
 # X-API-Key is accepted too (this is what the iOS client sends):
-curl -i -H "X-API-Key: $REVIEW_API_KEY" http://127.0.0.1:5679/api/health
+curl -i -H "X-API-Key: $REVIEW_API_KEY" http://127.0.0.1:5678/api/health
 
 # Query string is preserved:
 curl -s -H "Authorization: Bearer $REVIEW_API_KEY" \
-  "http://127.0.0.1:5679/api/photos?limit=5"
+  "http://127.0.0.1:5678/api/photos?limit=5"
 
 # Binary/streamed responses pass through unchanged:
 curl -s -o /tmp/thumb.jpg -H "Authorization: Bearer $REVIEW_API_KEY" \
-  "http://127.0.0.1:5679/api/thumbnails/<photo_id>?size=256" && file /tmp/thumb.jpg
+  "http://127.0.0.1:5678/api/thumbnails/<photo_id>?size=256" && file /tmp/thumb.jpg
 ```
 
 ---
@@ -121,14 +153,17 @@ Funnel will refuse to start unless the tailnet is configured for it:
 
 ### Start the Funnel
 
-Point the public HTTPS Funnel at the **proxy** (`5679`), never the backend
-(`5678`):
+Point the public HTTPS Funnel at the **proxy** (`5678`), never the internal
+backend (`5680`):
 
 ```bash
-tailscale funnel --https=443 localhost:5679 --bg
+tailscale funnel --bg 5678
 ```
 
-`--bg` runs it in the background so it survives your shell session.
+`--bg` runs it in the background so it survives your shell session. Note: flags
+must come **before** the port; the port defaults to public HTTPS on 443. (Older
+Tailscale builds used `tailscale funnel --https=443 localhost:5678 --bg`, which
+newer CLIs reject with `invalid argument format`.)
 
 ### Check status
 
@@ -137,7 +172,7 @@ tailscale funnel status
 ```
 
 You should see `https://<mac-studio>.<tailnet>.ts.net` proxying to
-`localhost:5679`. Then verify end-to-end from *outside* the tailnet
+`localhost:5678`. Then verify end-to-end from *outside* the tailnet
 (e.g. phone on cellular):
 
 ```bash
@@ -151,7 +186,7 @@ curl -i -H "Authorization: Bearer $REVIEW_API_KEY" \
 When review is finished, take the public endpoint down:
 
 ```bash
-tailscale funnel --https=443 off
+tailscale funnel reset      # removes the public Funnel config
 ```
 
 Then stop the proxy (Ctrl-C, or kill its uvicorn process). The backend on
@@ -164,7 +199,7 @@ Then stop the proxy (Ctrl-C, or kill its uvicorn process). The backend on
 > **⚠️ Prerequisite 1 — serve a mock library, not your real photos.** The proxy
 > forwards **all HTTP methods** to a **keyless** backend, so while the Funnel is
 > up it is a public, Bearer-gated, *write-capable* path to whatever
-> `127.0.0.1:5678` is serving. Before enabling the Funnel, point the backend at a
+> `127.0.0.1:5680` is serving. Before enabling the Funnel, point the backend at a
 > **throwaway/mock library** (set `PHOTO_DIR` / the watch list to a folder of
 > generated demo photos, and use a separate `DB_PATH`). Do **not** expose your
 > real archive. The template below tells Apple the data is mock — make that true.

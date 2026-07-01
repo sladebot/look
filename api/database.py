@@ -1,5 +1,6 @@
 """Local Photo Library Server — Database"""
 import json
+import os
 import sqlite3
 from pathlib import Path
 from datetime import datetime
@@ -493,6 +494,88 @@ class PhotoDatabase:
                 "DELETE FROM watch_list WHERE path = ?", (normalized,)
             ).rowcount
         return result > 0
+
+    # ── photo pruning / directory sync ────────────────────────────────────────
+    # Photos have child rows in album_photos / tags / tag_history /
+    # content_hashes / duplicates. Those FKs have no ON DELETE CASCADE and
+    # foreign_keys=ON, so children must be deleted before the photo row.
+    _CHILD_TABLES = ("album_photos", "tags", "tag_history", "content_hashes")
+
+    @staticmethod
+    def _norm(path: str) -> str:
+        """Absolute, symlink-resolved path — the one normalization used by all
+        directory-boundary logic so it is defined once, not duplicated."""
+        return str(Path(path).resolve())
+
+    @staticmethod
+    def _is_under(filepath: str, directory: str) -> bool:
+        """True if filepath is `directory` itself or lives beneath it, using an
+        os.sep boundary so '/a/App Store' does not match '/a/App Store Connect'."""
+        return filepath == directory or filepath.startswith(directory + os.sep)
+
+    def _delete_photo_ids(self, conn, ids: list) -> int:
+        """Delete photo rows and their children within an existing connection."""
+        if not ids:
+            return 0
+        marks = ",".join("?" * len(ids))
+        for table in self._CHILD_TABLES:
+            conn.execute(f"DELETE FROM {table} WHERE photo_id IN ({marks})", ids)
+        # duplicates references photos twice (the archived row and its keeper).
+        conn.execute(
+            f"DELETE FROM duplicates WHERE photo_id IN ({marks}) "
+            f"OR duplicate_of IN ({marks})", ids + ids,
+        )
+        return conn.execute(
+            f"DELETE FROM photos WHERE id IN ({marks})", ids
+        ).rowcount
+
+    def delete_photos_under(self, prefix: str) -> int:
+        """Delete every photo whose filepath is `prefix` or lives beneath it,
+        along with its child rows. Returns the number of photos removed."""
+        directory = self._norm(prefix)
+        with self._connect() as conn:
+            ids = [
+                row[0] for row in conn.execute("SELECT id, filepath FROM photos")
+                if self._is_under(row[1], directory)
+            ]
+            return self._delete_photo_ids(conn, ids)
+
+    def prune_orphans(self, active_dirs: list) -> dict:
+        """Reconcile the library against the active watch dirs. Removes photos
+        that are (a) no longer under any active watch dir, or (b) whose source
+        file is gone — BUT only prunes 'missing' files under watch roots that are
+        currently accessible, so an unmounted drive can't wipe the library.
+
+        Returns {removed_untracked, removed_missing, skipped_roots}.
+        """
+        active = [self._norm(d) for d in active_dirs]
+        # A root counts as accessible only if it exists AND has at least one
+        # entry — an unmounted /Volumes/X is either absent or an empty stub.
+        accessible = {}
+        for d in active:
+            try:
+                accessible[d] = os.path.isdir(d) and any(os.scandir(d))
+            except OSError:
+                accessible[d] = False
+
+        untracked, missing, skipped = [], [], set()
+        with self._connect() as conn:
+            for pid, fp in conn.execute("SELECT id, filepath FROM photos"):
+                root = next((d for d in active if self._is_under(fp, d)), None)
+                if root is None:
+                    untracked.append(pid)
+                elif not os.path.exists(fp):
+                    if accessible.get(root):
+                        missing.append(pid)
+                    else:
+                        skipped.add(root)
+            removed_untracked = self._delete_photo_ids(conn, untracked)
+            removed_missing = self._delete_photo_ids(conn, missing)
+        return {
+            "removed_untracked": removed_untracked,
+            "removed_missing": removed_missing,
+            "skipped_roots": sorted(skipped),
+        }
 
     def set_watch_active(self, path: str, active: bool) -> bool:
         """Enable/disable a watch directory."""

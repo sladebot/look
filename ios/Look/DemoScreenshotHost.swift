@@ -163,12 +163,7 @@ private struct DemoWorkflowFrame<Content: View>: View {
 
             Spacer()
 
-            Label("Tailscale", systemImage: "checkmark.circle.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.green)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
-                .background(.green.opacity(0.12), in: Capsule())
+            LookConnectionPill()
 
             Button {} label: {
                 Image(systemName: "ellipsis.circle")
@@ -574,6 +569,11 @@ enum LookDemoMockImage {
             return cached
         }
 
+        if let bundled = bundledDemoPhoto(identifier: identifier, width: width, height: height) {
+            imageCache.setObject(bundled, forKey: cacheKey)
+            return bundled
+        }
+
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
         let seed = abs(identifier.hashValue)
 
@@ -594,6 +594,40 @@ enum LookDemoMockImage {
         let finished = photographicFinish(raw, seed: seed)
         imageCache.setObject(finished, forKey: cacheKey)
         return finished
+    }
+
+    private static func bundledDemoPhoto(identifier: String, width: Int, height: Int) -> UIImage? {
+        let assetIndex = photoIndex(from: identifier)
+        let assetName = String(format: "DemoPhoto%02d", assetIndex)
+        guard let source = UIImage(named: assetName) else { return nil }
+
+        let targetSize = CGSize(width: width, height: height)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+
+        return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
+            UIColor.black.setFill()
+            UIRectFill(CGRect(origin: .zero, size: targetSize))
+
+            let sourceSize = source.size
+            let scale = max(targetSize.width / max(1, sourceSize.width),
+                            targetSize.height / max(1, sourceSize.height))
+            let drawSize = CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+            let drawOrigin = CGPoint(
+                x: (targetSize.width - drawSize.width) / 2,
+                y: (targetSize.height - drawSize.height) / 2
+            )
+            source.draw(in: CGRect(origin: drawOrigin, size: drawSize))
+        }
+    }
+
+    private static func photoIndex(from identifier: String) -> Int {
+        let number = identifier
+            .split(separator: "-")
+            .last
+            .flatMap { Int($0) } ?? 0
+        return (number % 16) + 1
     }
 
     private static func gradient(_ cg: CGContext, _ colors: [UIColor], width: Int, height: Int, vertical: Bool = true) {
