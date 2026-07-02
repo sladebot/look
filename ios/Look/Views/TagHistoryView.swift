@@ -102,8 +102,8 @@ private struct TagHistoryRow: View {
                         Label(user, systemImage: "person.crop.circle")
                     }
                 }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.caption)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
         }
         .padding(LookTheme.Spacing.medium)

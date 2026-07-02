@@ -388,21 +388,21 @@ struct PhotosGrid: View {
 
                 if let fraction = store.syncProgressFraction {
                     Text(fraction, format: .percent.precision(.fractionLength(0)))
-                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .monospacedDigit()
                         .frame(width: 44, alignment: .trailing)
                 } else {
                     Text("Working")
-                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .frame(width: 54, alignment: .trailing)
                 }
             }
 
             Text(store.syncProgressMessage ?? "Importing and updating thumbnails")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.caption)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -433,8 +433,8 @@ struct PhotosGrid: View {
                     Text("Library needs attention")
                         .font(.subheadline.weight(.semibold))
                     Text(message)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .lineLimit(3)
                 }
                 Spacer(minLength: 0)
@@ -442,7 +442,7 @@ struct PhotosGrid: View {
                     store.errorMessage = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Dismiss error")
@@ -486,8 +486,8 @@ struct PhotosGrid: View {
                 Text("Sync completed with issues")
                     .font(.subheadline.weight(.semibold))
                 Text(message)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
@@ -518,8 +518,8 @@ struct PhotosGrid: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                 Text("\(visiblePhotos.count) visible")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
             .lineLimit(1)
 
@@ -679,10 +679,10 @@ private struct PhotoDateStrip: View {
             Text(title)
                 .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.82))
             Text(count.formatted())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             Spacer()
         }
-        .font(.system(.caption, design: .monospaced).weight(.semibold))
+        .font(.caption.weight(.semibold))
         .padding(.vertical, LookTheme.Spacing.small)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -903,8 +903,8 @@ struct NativePhotoViewer: View {
                     .foregroundColor(.white)
                     .lineLimit(1)
                 Text("\(currentIndex + 1) of \(photos.count)")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.86))
             }
 
             Spacer()

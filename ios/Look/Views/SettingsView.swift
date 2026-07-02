@@ -87,8 +87,8 @@ struct SettingsView: View {
             }
 
             Text("Examples: http://100.86.254.112:5678 or http://studio.tailnet-name.ts.net:5678")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.subheadline)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
@@ -203,8 +203,8 @@ struct SettingsView: View {
 
             if let cacheMessage {
                 Text(cacheMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
         }
         .lookPanel()
@@ -257,7 +257,7 @@ struct SettingsView: View {
             )
 
             settingsRow("App", value: "Look", systemImage: "camera.aperture")
-            settingsRow("Version", value: "1.1.0", systemImage: "number")
+            settingsRow("Version", value: "1.1", systemImage: "number")
         }
         .lookPanel()
     }
@@ -306,8 +306,8 @@ struct SettingsView: View {
                 Text(title)
                     .font(.headline)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -320,20 +320,20 @@ struct SettingsView: View {
             Spacer()
             Text(detail)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
     }
 
     private func settingsRow(_ title: String, value: String, systemImage: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
             Image(systemName: systemImage)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .frame(width: 22)
                 .accessibilityHidden(true)
             Text(title)
             Spacer(minLength: LookTheme.Spacing.small)
             Text(value)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .multilineTextAlignment(.trailing)
         }
         .font(.subheadline)
@@ -357,7 +357,7 @@ struct SettingsView: View {
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                     .accessibilityHidden(true)
             }
             .padding(.vertical, 6)

@@ -179,7 +179,7 @@ struct CachedThumbnail: View {
                     .transition(.opacity)
             } else if failed {
                 Color(.systemGray5)
-                    .overlay(Image(systemName: "photo.badge.exclamationmark").foregroundColor(.secondary))
+                    .overlay(Image(systemName: "photo.badge.exclamationmark").foregroundStyle(LookTheme.ColorToken.readableSecondary))
             } else {
                 Color(.systemGray6)
                     .overlay(ProgressView().tint(.secondary))

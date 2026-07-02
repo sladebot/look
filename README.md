@@ -191,8 +191,8 @@ Release security notes:
 App Store support docs:
 
 - [App Store metadata](docs/app-store/app-store-metadata.md)
-- [Privacy policy draft](docs/app-store/privacy-policy.md)
-- [Support page draft](docs/app-store/support.md)
+- [Privacy policy](docs/app-store/privacy-policy.md)
+- [Support page](docs/app-store/support.md)
 
 ## Development
 

@@ -143,7 +143,7 @@ struct PhotoDetail: View {
             if let date = PhotoDetailMetadataFormatter.displayDate(from: photo.createdAt) {
                 Label(date, systemImage: "calendar")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .accessibilityLabel("Created \(date)")
             }
 
@@ -373,7 +373,7 @@ struct PhotoDetail: View {
                         ProgressView()
                     }
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .accessibilityLabel(isLoadingTags ? "Loading tags" : "Loading suggestions")
                 }
             }
@@ -692,7 +692,7 @@ private struct PhotoDetailActionRow: View {
                         .foregroundStyle(LookTheme.ColorToken.graphite)
                     Text(detail)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .lineLimit(2)
                 }
 
@@ -703,7 +703,7 @@ private struct PhotoDetailActionRow: View {
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                         .accessibilityHidden(true)
                 }
             }
@@ -747,12 +747,12 @@ private struct PhotoDetailInfoRow: View {
             Image(systemName: systemImage)
                 .font(.body)
                 .frame(width: 24)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .accessibilityHidden(true)
 
             Text(title)
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .frame(width: 92, alignment: .leading)
         }
     }
@@ -782,7 +782,7 @@ private struct PhotoDetailEmptyState: View {
     var body: some View {
         Label(text, systemImage: systemImage)
             .font(.callout)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             .padding(LookTheme.Spacing.small)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(LookTheme.ColorToken.mist.opacity(0.45),
@@ -802,8 +802,8 @@ private struct PhotoDetailSectionLabel: View {
                 .foregroundStyle(LookTheme.ColorToken.graphite)
 
             Text(count.formatted())
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .background(LookTheme.ColorToken.mist, in: Capsule())

@@ -45,7 +45,7 @@ Use the hosted support page URL.
 
 Recommended URL after hosting:
 
-https://YOUR_DOMAIN/look/support
+https://github.com/sladebot/look/blob/main/docs/app-store/support.md
 
 ### Marketing URL
 
@@ -53,7 +53,7 @@ Optional.
 
 Recommended URL after hosting:
 
-https://YOUR_DOMAIN/look
+https://github.com/sladebot/look
 
 ### Privacy Policy URL
 
@@ -61,11 +61,11 @@ Use the hosted privacy policy URL.
 
 Recommended URL after hosting:
 
-https://YOUR_DOMAIN/look/privacy
+https://github.com/sladebot/look/blob/main/docs/app-store/privacy-policy.md
 
 ### Version
 
-1.0
+1.1
 
 ### Copyright
 
@@ -87,8 +87,8 @@ Required fields in App Store Connect:
 
 - First name: Souranil
 - Last name: Sen
-- Phone: YOUR_PHONE_NUMBER
-- Email: YOUR_REVIEW_CONTACT_EMAIL
+- Phone: [PASTE_REVIEW_PHONE_NUMBER_HERE]
+- Email: [PASTE_REVIEW_CONTACT_EMAIL_HERE]
 
 ### Notes
 
@@ -97,6 +97,8 @@ Look is designed for self-hosted photo libraries on a private Tailscale network.
 For review, please use the included demo/test server details if provided with the build. The app accepts either a Tailscale MagicDNS URL, such as `http://machine.tailnet.ts.net:5678`, or a private Tailscale `100.x.y.z` address.
 
 The app does not create a public account, does not include cloud-hosted photo storage, and does not scan the review device's local photo library. If an API key is required by the configured test server, enter the API key in the Settings screen after entering the server URL.
+
+Support URL readiness note: host `docs/app-store/support.md` as a public GitHub Pages, Notion, GitHub-rendered Markdown, or equivalent web page before submission, then paste that public URL into App Store Connect. The support page must include a functional support channel, such as the GitHub Issues URL or a real support email address, and should link to the hosted privacy policy.
 
 ## App Privacy
 

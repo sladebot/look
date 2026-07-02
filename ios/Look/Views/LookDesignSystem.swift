@@ -7,6 +7,8 @@ enum LookTheme {
         static let surface = Color(hex: 0x22282E)
         static let elevated = Color(hex: 0x2A3138)
         static let graphite = Color(hex: 0xEEF3F6)
+        static let readableSecondary = Color(hex: 0xC6D0D7)
+        static let readableTertiary = Color(hex: 0xAAB6BF)
         static let mist = Color(hex: 0x39434C)
         static let line = Color(hex: 0x46515A)
         static let cyan = Color(hex: 0x20A7FF)
@@ -38,8 +40,8 @@ enum LookTheme {
 
     static func eyebrow(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(.system(.caption2, design: .monospaced).weight(.semibold))
-            .foregroundStyle(.secondary)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(ColorToken.readableSecondary)
     }
 }
 
@@ -163,8 +165,8 @@ struct LookStatusBanner: View {
                     .font(.subheadline.weight(.semibold))
                 if let message, !message.isEmpty {
                     Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -252,8 +254,8 @@ struct LookNavTitle: View {
 
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.system(.caption2, design: .rounded).weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
             }
@@ -274,7 +276,7 @@ struct LookEmptyState: View {
         VStack(spacing: LookTheme.Spacing.medium) {
             Image(systemName: systemImage)
                 .font(.system(size: 40, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                 .accessibilityHidden(true)
 
             VStack(spacing: 5) {
@@ -284,7 +286,7 @@ struct LookEmptyState: View {
                 if let message {
                     Text(message)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .multilineTextAlignment(.center)
                 }
             }
@@ -314,7 +316,7 @@ struct LookLoadingState: View {
                 if let message {
                     Text(message)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .multilineTextAlignment(.center)
                 }
             }

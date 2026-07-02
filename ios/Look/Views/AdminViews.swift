@@ -24,7 +24,8 @@ struct DedupView: View {
                         Task { await updateSettings(tolerance: newValue) }
                     }
                 Text("Lower tolerance = stricter matching (Hamming distance on perceptual hash).")
-                    .font(.caption2).foregroundColor(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
 
             if loadedSettings && !enabled {
@@ -237,14 +238,18 @@ struct TasksView: View {
                         LookChip(title: task.status, systemImage: statusIcon(task.status), tint: statusColor(task.status))
                     }
                     if let phase = task.progress?["phase"]?.stringValue {
-                        Text("Phase: \(phase)").font(.caption).foregroundColor(.secondary)
+                        Text("Phase: \(phase)")
+                            .font(.caption)
+                            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     }
                     if let cur = task.progress?["current"]?.intValue,
                        let total = task.progress?["total_scanned"]?.intValue, total > 0 {
                         ProgressView(value: Double(cur), total: Double(total))
                     }
                     if let created = task.createdAt {
-                        Text(created).font(.caption2).foregroundColor(.secondary)
+                        Text(created)
+                            .font(.caption)
+                            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     }
                     if ["pending", "running"].contains(task.status) {
                         Button("Cancel", role: .destructive) {
@@ -549,7 +554,8 @@ struct MigrationsView: View {
             if let info {
                 Section("Schema") {
                     HStack { Text("Current version"); Spacer()
-                        Text("\(info.currentVersion)").foregroundColor(.secondary) }
+                        Text("\(info.currentVersion)")
+                            .foregroundStyle(LookTheme.ColorToken.readableSecondary) }
                 }
                 Section("Pending (\(info.pending.count))") {
                     if info.pending.isEmpty {
@@ -562,7 +568,9 @@ struct MigrationsView: View {
                     ForEach(info.pending) { m in
                         VStack(alignment: .leading) {
                             Text("v\(m.version)").font(.caption.bold())
-                            Text(m.description).font(.caption2).foregroundColor(.secondary)
+                            Text(m.description)
+                                .font(.caption)
+                                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         }
                     }
                 }
@@ -661,7 +669,10 @@ struct TagCleanupView: View {
                     HStack {
                         Text(dup.normal)
                         Spacer()
-                        if let c = dup.c { Text("\(c)").foregroundColor(.secondary) }
+                        if let c = dup.c {
+                            Text("\(c)")
+                                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        }
                     }
                     .font(.caption)
                 }
@@ -801,8 +812,8 @@ private struct WatchDirectoryRow: View {
                     Text("Added \(added.prefix(10))")
                 }
             }
-            .font(.caption2)
-            .foregroundColor(.secondary)
+            .font(.caption)
+            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
     }
 }

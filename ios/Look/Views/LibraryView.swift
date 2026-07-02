@@ -232,7 +232,7 @@ private struct LibraryPanelSection<Content: View>: View {
                 if let trailing {
                     Text(trailing)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(LookTheme.ColorToken.surface, in: Capsule())
@@ -268,8 +268,8 @@ private struct LibraryCollectionRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(2)
             }
 
@@ -277,7 +277,7 @@ private struct LibraryCollectionRow: View {
 
             if let badge {
                 Text(badge)
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(tint)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -286,7 +286,7 @@ private struct LibraryCollectionRow: View {
 
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                 .accessibilityHidden(true)
         }
         .padding(LookTheme.Spacing.medium)
@@ -308,7 +308,7 @@ private struct LibraryMetric: View {
                 .foregroundStyle(tint)
             Text(title)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(LookTheme.Spacing.small)
@@ -325,7 +325,7 @@ private struct LibraryEmptyPanel: View {
         HStack(spacing: LookTheme.Spacing.medium) {
             Image(systemName: systemImage)
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .frame(width: 34, height: 34)
                 .accessibilityHidden(true)
 
@@ -333,8 +333,8 @@ private struct LibraryEmptyPanel: View {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                 Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
             Spacer()
         }
@@ -603,7 +603,8 @@ struct CreateSmartAlbumSheet: View {
                 }
                 Section {
                     Text("Photos matching this rule are added automatically.")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 }
                 if let errorMessage {
                     Section {

@@ -64,7 +64,7 @@ struct ConnectionSetupView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Look requires a self-hosted Look server. Use the address this iPhone can reach through Tailscale, then test once to unlock the library.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -186,8 +186,8 @@ struct ConnectionSetupView: View {
             Label("Before testing", systemImage: "checklist")
                 .font(.headline)
             Text("Make sure Tailscale is connected on this iPhone and on the Look server. The server should be running on port 5678 and reachable from the same Tailscale network. Look does not scan this iPhone's photo library.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .font(.subheadline)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .lookPanel()
@@ -203,8 +203,8 @@ struct ConnectionSetupView: View {
                 Text(title)
                     .font(.headline)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -217,7 +217,7 @@ struct ConnectionSetupView: View {
             Spacer()
             Text(detail)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
     }
 
@@ -242,8 +242,8 @@ struct ConnectionSetupView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                     Text(note)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: LookTheme.Spacing.tight)

@@ -73,7 +73,7 @@ struct SearchView: View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             HStack(spacing: LookTheme.Spacing.small) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .accessibilityHidden(true)
 
                 TextField("Filename, tag, camera, or path", text: $query)
@@ -91,7 +91,7 @@ struct SearchView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .imageScale(.medium)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Clear search")
@@ -115,8 +115,8 @@ struct SearchView: View {
             }
 
             Text("Search filenames, tags, camera text, and folder paths.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.subheadline)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, LookTheme.Spacing.screen)
@@ -269,7 +269,7 @@ struct SearchView: View {
             } else {
                 Image(systemName: systemImage)
                     .font(.largeTitle)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                     .accessibilityHidden(true)
             }
 
@@ -279,8 +279,8 @@ struct SearchView: View {
 
             if let message {
                 Text(message)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }

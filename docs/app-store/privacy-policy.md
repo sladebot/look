@@ -55,4 +55,4 @@ This policy may be updated when Look's features change. The updated policy will 
 
 For privacy questions, contact:
 
-YOUR_PRIVACY_CONTACT_EMAIL
+**[PASTE_PRIVACY_CONTACT_EMAIL_HERE]**

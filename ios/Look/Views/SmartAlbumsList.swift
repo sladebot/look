@@ -129,8 +129,8 @@ private struct SmartAlbumListRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(2)
             }
 
@@ -141,7 +141,7 @@ private struct SmartAlbumListRow: View {
                     .controlSize(.small)
             } else {
                 Text("Smart")
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(LookTheme.ColorToken.amber)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -149,7 +149,7 @@ private struct SmartAlbumListRow: View {
 
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                     .accessibilityHidden(true)
             }
         }

@@ -77,8 +77,8 @@ private struct AlbumListRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(2)
             }
 
@@ -86,7 +86,7 @@ private struct AlbumListRow: View {
 
             if let countText {
                 Text(countText)
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -95,7 +95,7 @@ private struct AlbumListRow: View {
 
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                 .accessibilityHidden(true)
         }
         .padding(LookTheme.Spacing.medium)
