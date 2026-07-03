@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+# Capture App Store screenshots from the REAL Look app (no demo mocks).
+#
+# The app is driven to each screen with DEBUG-only launch environment variables
+# (see LookUIScreenshotRoute in ContentView.swift), pointed at a live Look
+# server seeded with generated landscape photography
+# (demo/generate_screenshot_library.py).
+#
+# Prerequisites: a running seeded server, e.g.
+#   OUT=/tmp/look-screenshot-library
+#   PORT=8765 PHOTO_DIR=$OUT DB_PATH=/tmp/look-screens.db \
+#     ./.conda/bin/python -m uvicorn api.server:app --host 127.0.0.1 --port 8765 &
+#   ./.conda/bin/python demo/generate_screenshot_library.py $OUT \
+#     --seed http://127.0.0.1:8765 /tmp/look-screens.db
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,17 +22,19 @@ APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Look.app"
 BUNDLE_ID="com.sladebot.look"
 IPHONE_DEVICE_NAME="${LOOK_SCREENSHOT_IPHONE_DEVICE:-iPhone 13 Pro Max}"
 IPAD_DEVICE_NAME="${LOOK_SCREENSHOT_IPAD_DEVICE:-iPad Pro 13-inch (M5)}"
-SETTLE_SECONDS="${LOOK_SCREENSHOT_SETTLE_SECONDS:-3}"
+SETTLE_SECONDS="${LOOK_SCREENSHOT_SETTLE_SECONDS:-8}"
+SERVER_URL="${LOOK_SCREENSHOT_SERVER_URL:-http://127.0.0.1:8765}"
 
+# scenario_name:filename:space-separated LOOK_UI_* env assignments (or "-")
 SCENARIOS=(
-  "connection:01_tailnet_connection.png"
-  "sync:02_sync_progress.png"
-  "gallery:03_main_gallery.png"
-  "multiselect:04_long_press_multiselect.png"
-  "detail:05_photo_detail_tags.png"
-  "library:06_library_albums.png"
-  "search:07_search_mock_library.png"
-  "settings:08_settings_tailnet.png"
+  "connection:01_tailnet_connection.png:-"
+  "gallery:02_main_gallery.png:-"
+  "viewer:03_photo_viewer.png:LOOK_UI_ROUTE=viewer"
+  "multiselect:04_long_press_multiselect.png:LOOK_UI_SELECT_COUNT=4"
+  "detail:05_photo_detail_tags.png:LOOK_UI_ROUTE=detail"
+  "library:06_library_albums.png:LOOK_UI_TAB=library"
+  "search:07_search_library.png:LOOK_UI_TAB=search LOOK_UI_SEARCH_QUERY=night"
+  "settings:08_settings_tailnet.png:LOOK_UI_TAB=settings"
 )
 
 device_id_for_name() {
@@ -39,7 +54,13 @@ raise SystemExit(f"No available simulator named {name!r}")
 PY
 }
 
-echo "[look-demo] Building Look for iOS Simulator"
+echo "[look-shots] Checking server at $SERVER_URL"
+curl -sf "$SERVER_URL/api/health" >/dev/null || {
+  echo "[look-shots] No Look server at $SERVER_URL — see header comment for setup" >&2
+  exit 1
+}
+
+echo "[look-shots] Building Look for iOS Simulator"
 xcodebuild build \
   -project "$IOS_DIR/Look.xcodeproj" \
   -scheme Look \
@@ -47,10 +68,10 @@ xcodebuild build \
   -sdk iphonesimulator \
   -destination "platform=iOS Simulator,name=$IPHONE_DEVICE_NAME" \
   -derivedDataPath "$DERIVED_DATA" \
-  CODE_SIGNING_ALLOWED=NO >/tmp/look-demo-xcodebuild.log
+  CODE_SIGNING_ALLOWED=NO >/tmp/look-shots-xcodebuild.log
 
 if [[ ! -d "$APP_PATH" ]]; then
-  echo "[look-demo] App bundle not found: $APP_PATH" >&2
+  echo "[look-shots] App bundle not found: $APP_PATH" >&2
   exit 1
 fi
 
@@ -66,7 +87,7 @@ capture_device() {
 
   device_id="$(device_id_for_name "$device_name")"
 
-  echo "[look-demo] Booting $device_name ($device_id)"
+  echo "[look-shots] Booting $device_name ($device_id)"
   xcrun simctl boot "$device_id" >/dev/null 2>&1 || true
   xcrun simctl bootstatus "$device_id" -b >/dev/null
   xcrun simctl install "$device_id" "$APP_PATH"
@@ -77,23 +98,35 @@ capture_device() {
     --wifiBars 3 \
     --cellularBars 4 \
     --batteryState charged \
-    --batteryLevel 58 >/dev/null 2>&1 || true
+    --batteryLevel 100 >/dev/null 2>&1 || true
 
   for entry in "${SCENARIOS[@]}"; do
-    scenario="${entry%%:*}"
-    filename="${entry#*:}"
-    echo "[look-demo] Capturing $output_slug/$filename"
+    local scenario="${entry%%:*}"
+    local rest="${entry#*:}"
+    local filename="${rest%%:*}"
+    local env_spec="${rest#*:}"
+
+    echo "[look-shots] Capturing $output_slug/$filename"
     xcrun simctl terminate "$device_id" "$BUNDLE_ID" >/dev/null 2>&1 || true
-    SIMCTL_CHILD_LOOK_DEMO_SCREEN="$scenario" xcrun simctl launch \
-      --terminate-running-process \
-      "$device_id" \
-      "$BUNDLE_ID" \
-      --look-demo-screenshots >/dev/null
+
+    local launch_env=("SIMCTL_CHILD_LOOK_UI_SERVER_URL=$SERVER_URL")
+    if [[ "$scenario" == "connection" ]]; then
+      launch_env+=("SIMCTL_CHILD_LOOK_UI_CONNECTED=0")
+    else
+      launch_env+=("SIMCTL_CHILD_LOOK_UI_CONNECTED=1")
+    fi
+    if [[ "$env_spec" != "-" ]]; then
+      for pair in $env_spec; do
+        launch_env+=("SIMCTL_CHILD_$pair")
+      done
+    fi
+
+    env "${launch_env[@]}" xcrun simctl launch "$device_id" "$BUNDLE_ID" >/dev/null
     sleep "$SETTLE_SECONDS"
     xcrun simctl io "$device_id" screenshot "$out_dir/$filename" >/dev/null
   done
 
-  python3 - "$out_dir" "$contact_sheet" "$output_slug" <<'PY'
+  "$ROOT/.conda/bin/python" - "$out_dir" "$contact_sheet" "$output_slug" <<'PY'
 from pathlib import Path
 import sys
 from PIL import Image, ImageDraw
@@ -128,7 +161,7 @@ sheet.save(sheet_path)
 print(f"{label} contact sheet: {sheet_path}")
 PY
 
-  echo "[look-demo] Screenshots written to $out_dir"
+  echo "[look-shots] Screenshots written to $out_dir"
 }
 
 capture_device "$IPHONE_DEVICE_NAME" "iphone_6_7" "$ROOT/demo/contact_sheet_iphone_6_7.png"
