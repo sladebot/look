@@ -59,11 +59,11 @@ struct ConnectionSetupView: View {
             VStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
                 LookTheme.eyebrow("Private library")
                 Text("Connect with Tailscale")
-                    .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                    .font(LookTheme.Typography.display)
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Look requires a self-hosted Look server. Use the address this iPhone can reach through Tailscale, then test once to unlock the library.")
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -184,9 +184,9 @@ struct ConnectionSetupView: View {
     private var helpPanel: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             Label("Before testing", systemImage: "checklist")
-                .font(.headline)
+                .font(LookTheme.Typography.headline)
             Text("Make sure Tailscale is connected on this iPhone and on the Look server. The server should be running on port 5678 and reachable from the same Tailscale network. Look does not scan this iPhone's photo library.")
-                .font(.subheadline)
+                .font(LookTheme.Typography.secondary)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -201,9 +201,9 @@ struct ConnectionSetupView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.headline)
+                    .font(LookTheme.Typography.headline)
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -213,10 +213,10 @@ struct ConnectionSetupView: View {
     private func fieldLabel(_ title: String, detail: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(LookTheme.Typography.secondaryEmphasis)
             Spacer()
             Text(detail)
-                .font(.caption)
+                .font(LookTheme.Typography.caption)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
     }
@@ -234,15 +234,15 @@ struct ConnectionSetupView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(label)
-                        .font(.subheadline.weight(.semibold))
+                        .font(LookTheme.Typography.secondaryEmphasis)
                         .foregroundStyle(.primary)
                     Text(value)
-                        .font(.caption.monospaced())
+                        .font(LookTheme.Typography.mono)
                         .foregroundStyle(LookTheme.ColorToken.graphite)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .truncationMode(.middle)
                     Text(note)
-                        .font(.caption)
+                        .font(LookTheme.Typography.caption)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

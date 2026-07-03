@@ -167,7 +167,7 @@ struct LibraryView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     LookTheme.eyebrow("Collections")
                     Text("Organize the library")
-                        .font(.title3.weight(.semibold))
+                        .font(LookTheme.Typography.sectionTitle)
                         .foregroundStyle(LookTheme.ColorToken.graphite)
                 }
                 Spacer()
@@ -231,7 +231,7 @@ private struct LibraryPanelSection<Content: View>: View {
                 Spacer()
                 if let trailing {
                     Text(trailing)
-                        .font(.caption.weight(.semibold))
+                        .font(LookTheme.Typography.captionEmphasis)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -256,7 +256,7 @@ private struct LibraryCollectionRow: View {
                 RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
                     .fill(tint.opacity(0.13))
                 Image(systemName: icon)
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(tint)
             }
             .frame(width: 44, height: 44)
@@ -264,11 +264,11 @@ private struct LibraryCollectionRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.body.weight(.semibold))
+                    .font(LookTheme.Typography.bodyEmphasis)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(2)
             }
@@ -277,7 +277,7 @@ private struct LibraryCollectionRow: View {
 
             if let badge {
                 Text(badge)
-                    .font(.caption.weight(.semibold))
+                    .font(LookTheme.Typography.captionEmphasis)
                     .foregroundStyle(tint)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -285,7 +285,7 @@ private struct LibraryCollectionRow: View {
             }
 
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                 .accessibilityHidden(true)
         }
@@ -304,10 +304,10 @@ private struct LibraryMetric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
-                .font(.title3.weight(.semibold))
+                .font(LookTheme.Typography.sectionTitle)
                 .foregroundStyle(tint)
             Text(title)
-                .font(.caption)
+                .font(LookTheme.Typography.caption)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -331,9 +331,9 @@ private struct LibraryEmptyPanel: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(LookTheme.Typography.secondaryEmphasis)
                 Text(message)
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
             Spacer()
@@ -603,7 +603,7 @@ struct CreateSmartAlbumSheet: View {
                 }
                 Section {
                     Text("Photos matching this rule are added automatically.")
-                        .font(.caption)
+                        .font(LookTheme.Typography.caption)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 }
                 if let errorMessage {

@@ -117,7 +117,7 @@ private struct SmartAlbumListRow: View {
     var body: some View {
         HStack(spacing: LookTheme.Spacing.medium) {
             Image(systemName: "sparkles.rectangle.stack.fill")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(LookTheme.ColorToken.amber)
                 .frame(width: 42, height: 42)
                 .background(LookTheme.ColorToken.amber.opacity(0.14), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
@@ -125,11 +125,11 @@ private struct SmartAlbumListRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(collection.name)
-                    .font(.body.weight(.semibold))
+                    .font(LookTheme.Typography.bodyEmphasis)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(2)
             }
@@ -141,14 +141,14 @@ private struct SmartAlbumListRow: View {
                     .controlSize(.small)
             } else {
                 Text("Smart")
-                    .font(.caption.weight(.semibold))
+                    .font(LookTheme.Typography.captionEmphasis)
                     .foregroundStyle(LookTheme.ColorToken.amber)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(LookTheme.ColorToken.amber.opacity(0.12), in: Capsule())
 
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                     .accessibilityHidden(true)
             }

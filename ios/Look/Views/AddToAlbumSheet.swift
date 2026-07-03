@@ -28,17 +28,26 @@ struct AddToAlbumSheet: View {
                     Button {
                         Task { await add(to: album) }
                     } label: {
-                        HStack {
-                            Image(systemName: "rectangle.stack").foregroundColor(.blue)
+                        HStack(spacing: LookTheme.Spacing.small) {
+                            Image(systemName: "rectangle.stack")
+                                .foregroundStyle(LookTheme.ColorToken.cyan)
+                                .frame(width: 26)
                             Text(album.name)
+                                .foregroundStyle(.primary)
                             Spacer()
                             if busyAlbumId == album.id {
                                 ProgressView()
                             } else if addedAlbumIds.contains(album.id) {
-                                Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(LookTheme.ColorToken.success)
+                            } else {
+                                Image(systemName: "plus.circle")
+                                    .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                             }
                         }
+                        .padding(.vertical, 2)
                     }
+                    .buttonStyle(.plain)
                     .disabled(busyAlbumId != nil)
                 }
             }

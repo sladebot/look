@@ -24,7 +24,7 @@ struct DedupView: View {
                         Task { await updateSettings(tolerance: newValue) }
                     }
                 Text("Lower tolerance = stricter matching (Hamming distance on perceptual hash).")
-                    .font(.caption)
+                    .font(LookTheme.Typography.caption)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
 
@@ -76,7 +76,10 @@ struct DedupView: View {
                                 img.resizable().aspectRatio(contentMode: .fill)
                             } placeholder: { Color.gray.opacity(0.1) }
                             .frame(width: 56, height: 56).clipped().cornerRadius(6)
-                            Text(photo.filename ?? photo.photoId).font(.caption).lineLimit(1)
+                            Text(photo.filename ?? photo.photoId)
+                                .font(LookTheme.Typography.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
                             Spacer()
                             Button("Keep") {
                                 pendingMerge = DedupMergeRequest(
@@ -85,12 +88,15 @@ struct DedupView: View {
                                     filename: photo.filename ?? photo.photoId
                                 )
                             }
-                            .font(.caption).buttonStyle(.borderedProminent)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
                         }
                     }
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .lookScreenBackground()
         .navigationTitle("Duplicates")
         .task {
             if !loadedSettings {
@@ -233,13 +239,13 @@ struct TasksView: View {
             ForEach(tasks) { task in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(task.taskType ?? "task").font(.headline)
+                        Text(task.taskType ?? "task").font(LookTheme.Typography.headline)
                         Spacer()
                         LookChip(title: task.status, systemImage: statusIcon(task.status), tint: statusColor(task.status))
                     }
                     if let phase = task.progress?["phase"]?.stringValue {
                         Text("Phase: \(phase)")
-                            .font(.caption)
+                            .font(LookTheme.Typography.caption)
                             .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     }
                     if let cur = task.progress?["current"]?.intValue,
@@ -248,23 +254,24 @@ struct TasksView: View {
                     }
                     if let created = task.createdAt {
                         Text(created)
-                            .font(.caption)
+                            .font(LookTheme.Typography.caption)
                             .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     }
                     if ["pending", "running"].contains(task.status) {
                         Button("Cancel", role: .destructive) {
                             pendingCancel = task
                         }
-                        .font(.caption)
                     }
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .lookScreenBackground()
         .navigationTitle("Tasks")
         .overlay {
             if isLoading && tasks.isEmpty {
                 LookLoadingState(title: "Loading tasks", message: "Checking the server queue.")
-                    .background(Color(.systemGroupedBackground).opacity(0.92))
+                    .background(LookTheme.ColorToken.paper.opacity(0.92))
             }
         }
         .task { await load() }
@@ -393,11 +400,13 @@ struct WatchListView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .lookScreenBackground()
         .navigationTitle("Watch Directories")
         .overlay {
             if isLoading && directories.isEmpty {
                 LookLoadingState(title: "Loading directories", message: "Reading the server watch list.")
-                    .background(Color(.systemGroupedBackground).opacity(0.92))
+                    .background(LookTheme.ColorToken.paper.opacity(0.92))
             }
         }
         .task { await load() }
@@ -566,10 +575,10 @@ struct MigrationsView: View {
                         )
                     }
                     ForEach(info.pending) { m in
-                        VStack(alignment: .leading) {
-                            Text("v\(m.version)").font(.caption.bold())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("v\(m.version)").font(LookTheme.Typography.captionEmphasis)
                             Text(m.description)
-                                .font(.caption)
+                                .font(LookTheme.Typography.secondary)
                                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         }
                     }
@@ -585,11 +594,13 @@ struct MigrationsView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .lookScreenBackground()
         .navigationTitle("Migrations")
         .overlay {
             if isLoading && info == nil {
                 LookLoadingState(title: "Checking migrations", message: "Reading the server schema status.")
-                    .background(Color(.systemGroupedBackground).opacity(0.92))
+                    .background(LookTheme.ColorToken.paper.opacity(0.92))
             }
         }
         .task { await load() }
@@ -674,15 +685,17 @@ struct TagCleanupView: View {
                                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         }
                     }
-                    .font(.caption)
+                    .font(LookTheme.Typography.secondary)
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .lookScreenBackground()
         .navigationTitle("Tag Cleanup")
         .overlay {
             if isLoading && duplicates.isEmpty {
                 LookLoadingState(title: "Loading tag suggestions", message: "Checking for duplicate tag names.")
-                    .background(Color(.systemGroupedBackground).opacity(0.92))
+                    .background(LookTheme.ColorToken.paper.opacity(0.92))
             }
         }
         .task { await load() }
@@ -798,8 +811,9 @@ private struct WatchDirectoryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(directory.path)
-                .font(.caption)
+                .font(LookTheme.Typography.mono)
                 .lineLimit(2)
+                .truncationMode(.middle)
                 .textSelection(.enabled)
 
             HStack(spacing: LookTheme.Spacing.tight) {
@@ -812,7 +826,7 @@ private struct WatchDirectoryRow: View {
                     Text("Added \(added.prefix(10))")
                 }
             }
-            .font(.caption)
+            .font(LookTheme.Typography.caption)
             .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
     }

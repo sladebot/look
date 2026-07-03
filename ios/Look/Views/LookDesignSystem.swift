@@ -6,15 +6,43 @@ enum LookTheme {
         static let paper = Color(hex: 0x15191D)
         static let surface = Color(hex: 0x22282E)
         static let elevated = Color(hex: 0x2A3138)
-        static let graphite = Color(hex: 0xEEF3F6)
-        static let readableSecondary = Color(hex: 0xC6D0D7)
-        static let readableTertiary = Color(hex: 0xAAB6BF)
+        static let graphite = Color(hex: 0xF2F6F9)
+        static let readableSecondary = Color(hex: 0xCBD5DC)
+        static let readableTertiary = Color(hex: 0xB4C0C9)
         static let mist = Color(hex: 0x39434C)
         static let line = Color(hex: 0x46515A)
         static let cyan = Color(hex: 0x20A7FF)
-        static let amber = Color(hex: 0xCFA44A)
+        static let amber = Color(hex: 0xD9B05C)
         static let success = Color(hex: 0x4CC27E)
-        static let danger = Color(hex: 0xC94545)
+        static let danger = Color(hex: 0xD25151)
+    }
+
+    /// Semantic type scale. Every role maps to a Dynamic Type text style so the
+    /// whole app scales with the user's preferred reading size. `caption` (SwiftUI
+    /// .footnote, 13pt) is the smallest size any readable content may use —
+    /// .caption/.caption2 are reserved for glyph sizing on decorative icons.
+    enum Typography {
+        /// Hero text on the connection/setup screen.
+        static let display = Font.largeTitle.weight(.bold)
+        /// Large on-screen titles (photo filename on the detail sheet).
+        static let title = Font.title2.weight(.semibold)
+        /// Section-level titles inside a screen.
+        static let sectionTitle = Font.title3.weight(.semibold)
+        /// Panel headers and row titles.
+        static let headline = Font.headline
+        /// Primary content.
+        static let body = Font.body
+        static let bodyEmphasis = Font.body.weight(.semibold)
+        /// Supporting copy, descriptions, row subtitles.
+        static let secondary = Font.subheadline
+        static let secondaryEmphasis = Font.subheadline.weight(.semibold)
+        /// Smallest readable size: timestamps, counts, badges.
+        static let caption = Font.footnote
+        static let captionEmphasis = Font.footnote.weight(.semibold)
+        /// Uppercased section eyebrows; always paired with tracking via eyebrow().
+        static let overline = Font.footnote.weight(.semibold)
+        /// Technical values: paths, URLs, coordinates.
+        static let mono = Font.system(.footnote, design: .monospaced)
     }
 
     enum Radius {
@@ -34,14 +62,16 @@ enum LookTheme {
 
     static func title(_ text: String) -> some View {
         Text(text)
-            .font(.system(.title2, design: .rounded).weight(.semibold))
+            .font(Typography.title)
             .foregroundStyle(ColorToken.graphite)
     }
 
+    /// The archive-label signature: amber, letter-spaced, uppercase section marker.
     static func eyebrow(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(ColorToken.readableSecondary)
+            .font(Typography.overline)
+            .tracking(1.1)
+            .foregroundStyle(ColorToken.amber)
     }
 }
 
@@ -65,21 +95,13 @@ struct LookPanel: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(inset)
-            .background {
-                RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [LookTheme.ColorToken.elevated, LookTheme.ColorToken.surface],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
+            .background(LookTheme.ColorToken.surface,
+                        in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                    .stroke(LookTheme.ColorToken.line.opacity(0.72), lineWidth: 1)
+                    .stroke(LookTheme.ColorToken.line.opacity(0.55), lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.16), radius: 14, y: 8)
+            .shadow(color: .black.opacity(0.12), radius: 10, y: 6)
     }
 }
 
@@ -91,7 +113,7 @@ struct LookInsetSurface: ViewModifier {
             .background(LookTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(LookTheme.ColorToken.line.opacity(0.68), lineWidth: 1)
+                    .stroke(LookTheme.ColorToken.line.opacity(0.55), lineWidth: 1)
             }
     }
 }
@@ -107,6 +129,7 @@ struct LookTextInputSurface: ViewModifier {
     }
 }
 
+/// Left accent bar marking a row or image as part of the "filmstrip".
 struct LookFilmRail: ViewModifier {
     var color: Color = LookTheme.ColorToken.darkroom
     var isActive = false
@@ -114,13 +137,10 @@ struct LookFilmRail: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .leading) {
-                Rectangle()
-                    .fill(color.opacity(isActive ? 1 : 0.75))
-                    .frame(width: isActive ? 5 : 3)
-            }
-            .overlay {
-                Rectangle()
-                    .stroke(color.opacity(isActive ? 0.9 : 0.18), lineWidth: isActive ? 2 : 1)
+                UnevenRoundedRectangle(topLeadingRadius: LookTheme.Radius.panel,
+                                       bottomLeadingRadius: LookTheme.Radius.panel)
+                    .fill(color.opacity(isActive ? 1 : 0.7))
+                    .frame(width: 3)
             }
     }
 }
@@ -162,10 +182,11 @@ struct LookStatusBanner: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(LookTheme.Typography.secondaryEmphasis)
+                    .foregroundStyle(LookTheme.ColorToken.graphite)
                 if let message, !message.isEmpty {
                     Text(message)
-                        .font(.subheadline)
+                        .font(LookTheme.Typography.secondary)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
@@ -182,15 +203,11 @@ struct LookStatusBanner: View {
         }
         .padding(LookTheme.Spacing.medium)
         .background(LookTheme.ColorToken.elevated, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(tone.color.opacity(0.30), lineWidth: 1)
-        }
         .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
+            UnevenRoundedRectangle(topLeadingRadius: LookTheme.Radius.panel,
+                                   bottomLeadingRadius: LookTheme.Radius.panel)
                 .fill(tone.color)
                 .frame(width: 3)
-                .padding(.vertical, 10)
         }
         .accessibilityElement(children: .combine)
     }
@@ -209,14 +226,14 @@ struct LookChip: View {
                 Image(systemName: systemImage)
             }
         }
-        .font(.caption.weight(.semibold))
+        .font(LookTheme.Typography.captionEmphasis)
         .foregroundStyle(tint)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(tint.opacity(0.09), in: Capsule())
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(tint.opacity(0.10), in: Capsule())
         .overlay {
             Capsule()
-                .stroke(tint.opacity(0.20), lineWidth: 1)
+                .stroke(tint.opacity(0.22), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
     }
@@ -227,9 +244,9 @@ struct LookConnectionPill: View {
 
     var body: some View {
         Label(title, systemImage: "checkmark.circle.fill")
-            .font(.caption2.weight(.bold))
+            .font(LookTheme.Typography.captionEmphasis)
             .foregroundStyle(LookTheme.ColorToken.success)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 9)
             .padding(.vertical, 5)
             .background(LookTheme.ColorToken.success.opacity(0.11), in: Capsule())
             .overlay {
@@ -247,17 +264,15 @@ struct LookNavTitle: View {
     var body: some View {
         VStack(spacing: 1) {
             Text(title)
-                .font(.system(.headline, design: .rounded).weight(.semibold))
+                .font(LookTheme.Typography.headline)
                 .foregroundStyle(LookTheme.ColorToken.graphite)
                 .lineLimit(1)
-                .minimumScaleFactor(0.82)
 
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.caption.weight(.medium))
+                    .font(LookTheme.Typography.caption)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.78)
             }
         }
         .multilineTextAlignment(.center)
@@ -281,11 +296,12 @@ struct LookEmptyState: View {
 
             VStack(spacing: 5) {
                 Text(title)
-                    .font(.headline)
+                    .font(LookTheme.Typography.headline)
+                    .foregroundStyle(LookTheme.ColorToken.graphite)
                     .multilineTextAlignment(.center)
                 if let message {
                     Text(message)
-                        .font(.subheadline)
+                        .font(LookTheme.Typography.secondary)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .multilineTextAlignment(.center)
                 }
@@ -312,10 +328,11 @@ struct LookLoadingState: View {
             ProgressView()
             VStack(spacing: 5) {
                 Text(title)
-                    .font(.headline)
+                    .font(LookTheme.Typography.headline)
+                    .foregroundStyle(LookTheme.ColorToken.graphite)
                 if let message {
                     Text(message)
-                        .font(.subheadline)
+                        .font(LookTheme.Typography.secondary)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .multilineTextAlignment(.center)
                 }

@@ -195,7 +195,9 @@ class PhotoStore: ObservableObject {
         if LookDemoScreenshots.isActive { return }
         #endif
         do {
-            albums = try await client.albums()
+            // /api/albums also returns smart collections (source == "smart_collection");
+            // those are surfaced separately via loadSmartCollections.
+            albums = try await client.albums().filter { $0.source != "smart_collection" }
         } catch {
             errorMessage = error.localizedDescription
         }

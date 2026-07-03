@@ -78,6 +78,7 @@ struct PhotosGrid: View {
     @State private var showCreateAlbum = false
     @State private var filter = PhotoGridFilter.all
     @State private var sort = PhotoGridSort.newest
+    @Namespace private var viewerZoomNamespace
 
     private let spacing = LookTheme.Spacing.hairline
 
@@ -164,6 +165,7 @@ struct PhotosGrid: View {
             .animation(.easeInOut(duration: 0.18), value: selectedPhotoIds.count)
             .fullScreenCover(item: $selectedPhoto) { photo in
                 NativePhotoViewer(photos: visiblePhotos, initialPhoto: photo)
+                    .modifier(PhotoZoomTransition(id: photo.id, namespace: viewerZoomNamespace))
             }
             .sheet(isPresented: $showAddToAlbum, onDismiss: {
                 selectionMode = false
@@ -174,9 +176,24 @@ struct PhotosGrid: View {
             .sheet(isPresented: $showCreateAlbum) {
                 CreateAlbumSheet()
             }
+            #if DEBUG
+            .task(id: store.photos.count) { applyScreenshotSelectionIfNeeded() }
+            #endif
         }
         .ignoresSafeArea(.container, edges: .bottom)
     }
+
+    #if DEBUG
+    /// Screenshot tooling hook: LOOK_UI_SELECT_COUNT=N pre-selects the first N
+    /// visible photos so multi-select can be captured without synthetic taps.
+    private func applyScreenshotSelectionIfNeeded() {
+        guard let raw = ProcessInfo.processInfo.environment["LOOK_UI_SELECT_COUNT"],
+              let count = Int(raw), count > 0,
+              selectedPhotoIds.isEmpty, !visiblePhotos.isEmpty else { return }
+        selectionMode = true
+        selectedPhotoIds = Set(visiblePhotos.prefix(count).map(\.id))
+    }
+    #endif
 
     // MARK: Gallery
 
@@ -185,9 +202,10 @@ struct PhotosGrid: View {
             let width = geo.size.width
             let horizontalInset = LookTheme.Spacing.tight * 2
             let contentWidth = max(1, width - horizontalInset)
-            let target = max(104, contentWidth / (width > 600 ? 4.8 : 3.35))
+            let target = targetRowHeight(containerWidth: width, contentWidth: contentWidth)
             ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
+                LazyVStack(alignment: .leading, spacing: LookTheme.Spacing.tight,
+                           pinnedViews: .sectionHeaders) {
                     statusBanner
 
                     if store.isSyncing {
@@ -197,28 +215,21 @@ struct PhotosGrid: View {
                     }
 
                     ForEach(secs) { section in
-                        PhotoDateStrip(
-                            title: displayDayTitle(for: section.id),
-                            count: section.photos.count
-                        )
-                        .padding(.horizontal, LookTheme.Spacing.screen)
-                        .padding(.top, LookTheme.Spacing.small)
-
-                        ForEach(PhotoLayout.rows(for: section.photos, width: contentWidth,
-                                                 target: target, spacing: spacing,
-                                                 aspect: photoAspect)) { row in
-                            HStack(spacing: spacing) {
-                                ForEach(row.items) { item in
-                                    cell(item, rowHeight: row.height)
-                                }
-                            }
+                        Section {
+                            sectionGrid(section, contentWidth: contentWidth, containerWidth: width, target: target)
+                                .padding(.horizontal, LookTheme.Spacing.tight)
+                                .id(section.id)
+                        } header: {
+                            PhotoDateStrip(
+                                title: displayDayTitle(for: section.id),
+                                count: section.photos.count
+                            )
                         }
-                        .padding(.horizontal, LookTheme.Spacing.tight)
-                        .id(section.id)
                     }
 
                 }
                 .padding(.top, LookTheme.Spacing.tight)
+                .padding(.bottom, 108)
                 .background(LookTheme.ColorToken.paper)
             }
             .scrollIndicators(.hidden)
@@ -228,6 +239,58 @@ struct PhotosGrid: View {
             .ignoresSafeArea(.container, edges: .bottom)
         }
         .background(LookTheme.ColorToken.paper.ignoresSafeArea())
+    }
+
+    private func targetRowHeight(containerWidth: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        return max(104, contentWidth / (containerWidth > 600 ? 4.8 : 3.35))
+    }
+
+    @ViewBuilder
+    private func sectionGrid(_ section: PhotoSection,
+                             contentWidth: CGFloat,
+                             containerWidth: CGFloat,
+                             target: CGFloat) -> some View {
+        if shouldUseUniformGrid(for: section, containerWidth: containerWidth) {
+            uniformSectionGrid(section.photos, contentWidth: contentWidth, containerWidth: containerWidth)
+        } else {
+            justifiedSectionGrid(section.photos, contentWidth: contentWidth, target: target)
+        }
+    }
+
+    private func shouldUseUniformGrid(for section: PhotoSection, containerWidth: CGFloat) -> Bool {
+        containerWidth < 700 && visiblePhotos.count <= 24 && section.photos.count <= 18
+    }
+
+    @ViewBuilder
+    private func uniformSectionGrid(_ photos: [Photo], contentWidth: CGFloat, containerWidth: CGFloat) -> some View {
+        let columns = containerWidth < 430 ? 3 : 4
+        let cellWidth = floor((contentWidth - CGFloat(columns - 1) * spacing) / CGFloat(columns))
+
+        ForEach(Array(stride(from: 0, to: photos.count, by: columns)), id: \.self) { start in
+            let end = min(start + columns, photos.count)
+            let rowPhotos = Array(photos[start..<end])
+            HStack(spacing: spacing) {
+                ForEach(rowPhotos) { photo in
+                    cell(JustifiedItem(photo: photo, width: cellWidth), rowHeight: cellWidth)
+                }
+                if rowPhotos.count < columns {
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func justifiedSectionGrid(_ photos: [Photo], contentWidth: CGFloat, target: CGFloat) -> some View {
+        ForEach(PhotoLayout.rows(for: photos, width: contentWidth,
+                                 target: target, spacing: spacing,
+                                 aspect: photoAspect)) { row in
+            HStack(spacing: spacing) {
+                ForEach(row.items) { item in
+                    cell(item, rowHeight: row.height)
+                }
+            }
+        }
     }
 
     private func cell(_ item: JustifiedItem, rowHeight: CGFloat) -> some View {
@@ -244,7 +307,7 @@ struct PhotosGrid: View {
         .overlay(alignment: .bottomLeading) {
             if photo.isFavorite == true && !selectionMode {
                 Image(systemName: "heart.fill")
-                    .font(.caption2.weight(.bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.45), radius: 4, y: 1)
                     .padding(6)
@@ -280,6 +343,7 @@ struct PhotosGrid: View {
             }
         }
         .contentShape(Rectangle())
+        .modifier(PhotoZoomSource(id: photo.id, namespace: viewerZoomNamespace))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(for: photo, selected: isSelected))
         .accessibilityHint(selectionMode ? "Double tap to \(isSelected ? "remove from" : "add to") selection" : "Double tap to open photo")
@@ -375,12 +439,12 @@ struct PhotosGrid: View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             HStack(spacing: LookTheme.Spacing.small) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.caption.weight(.bold))
+                    .font(LookTheme.Typography.captionEmphasis)
                     .foregroundStyle(LookTheme.ColorToken.cyan)
                     .frame(width: 16)
 
                 Text("Syncing library")
-                    .font(.caption.weight(.semibold))
+                    .font(LookTheme.Typography.secondaryEmphasis)
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                     .lineLimit(1)
 
@@ -388,20 +452,20 @@ struct PhotosGrid: View {
 
                 if let fraction = store.syncProgressFraction {
                     Text(fraction, format: .percent.precision(.fractionLength(0)))
-                        .font(.caption.weight(.semibold))
+                        .font(LookTheme.Typography.captionEmphasis)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .monospacedDigit()
                         .frame(width: 44, alignment: .trailing)
                 } else {
                     Text("Working")
-                        .font(.caption.weight(.semibold))
+                        .font(LookTheme.Typography.captionEmphasis)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .frame(width: 54, alignment: .trailing)
                 }
             }
 
             Text(store.syncProgressMessage ?? "Importing and updating thumbnails")
-                .font(.caption)
+                .font(LookTheme.Typography.caption)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -431,9 +495,9 @@ struct PhotosGrid: View {
                     .foregroundStyle(LookTheme.ColorToken.danger)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Library needs attention")
-                        .font(.subheadline.weight(.semibold))
+                        .font(LookTheme.Typography.secondaryEmphasis)
                     Text(message)
-                        .font(.subheadline)
+                        .font(LookTheme.Typography.secondary)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .lineLimit(3)
                 }
@@ -467,7 +531,7 @@ struct PhotosGrid: View {
                 .buttonStyle(.bordered)
                 .disabled(store.isSyncing)
             }
-            .font(.caption)
+            .font(LookTheme.Typography.secondary)
         }
         .padding(LookTheme.Spacing.medium)
         .background(LookTheme.ColorToken.danger.opacity(0.10), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
@@ -484,9 +548,9 @@ struct PhotosGrid: View {
                 .foregroundStyle(LookTheme.ColorToken.amber)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Sync completed with issues")
-                    .font(.subheadline.weight(.semibold))
+                    .font(LookTheme.Typography.secondaryEmphasis)
                 Text(message)
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(2)
             }
@@ -514,11 +578,11 @@ struct PhotosGrid: View {
     private var selectionActionBar: some View {
         HStack(spacing: LookTheme.Spacing.small) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(selectionSummary)
-                    .font(.subheadline.weight(.semibold))
+                Text("\(selectedPhotoIds.count) selected")
+                    .font(LookTheme.Typography.secondaryEmphasis)
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                 Text("\(visiblePhotos.count) visible")
-                    .font(.caption)
+                    .font(LookTheme.Typography.caption)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
             .lineLimit(1)
@@ -626,8 +690,9 @@ struct PhotosGrid: View {
                 }
                 .disabled(store.isSyncing)
             } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.title3.weight(.semibold))
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .overlay(alignment: .topTrailing) {
                             if store.isSyncing {
                                 Circle()
@@ -670,27 +735,57 @@ struct PhotosGrid: View {
     }
 }
 
+/// Opening a photo zooms out of its grid cell (Photos-style) on iOS 18+;
+/// earlier systems keep the default cover presentation.
+private struct PhotoZoomSource: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.matchedTransitionSource(id: id, in: namespace)
+        } else {
+            content
+        }
+    }
+}
+
+private struct PhotoZoomTransition: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.navigationTransition(.zoom(sourceID: id, in: namespace))
+        } else {
+            content
+        }
+    }
+}
+
+/// Day header, pinned while its section scrolls; the material backdrop keeps it
+/// legible as photos pass underneath.
 private struct PhotoDateStrip: View {
     let title: String
     let count: Int
 
     var body: some View {
-        HStack(spacing: LookTheme.Spacing.small) {
+        HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
             Text(title)
-                .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.82))
-            Text(count.formatted())
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .font(LookTheme.Typography.secondaryEmphasis)
+                .foregroundStyle(LookTheme.ColorToken.graphite)
             Spacer()
+            Text(count == 1 ? "1 photo" : "\(count.formatted()) photos")
+                .font(LookTheme.Typography.caption)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
-        .font(.caption.weight(.semibold))
+        .padding(.horizontal, LookTheme.Spacing.screen)
         .padding(.vertical, LookTheme.Spacing.small)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(LookTheme.ColorToken.line.opacity(0.36))
-                .frame(height: 1)
-        }
+        .frame(maxWidth: .infinity)
+        .background(.thinMaterial)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(count) photos")
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -791,8 +886,13 @@ private let dayKeyFormatter: DateFormatter = {
 
 private let displayDayFormatter: DateFormatter = {
     let f = DateFormatter()
-    f.locale = Locale(identifier: "en_US_POSIX")
     f.dateFormat = "EEEE, MMM d"
+    return f
+}()
+
+private let displayDayWithYearFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "MMM d, yyyy"
     return f
 }()
 
@@ -804,9 +904,15 @@ private func dayKey(_ photo: Photo) -> String {
 
 private func displayDayTitle(for key: String) -> String {
     guard key != "unknown", let date = dayKeyFormatter.date(from: key) else {
-        return "UNKNOWN DATE"
+        return "Unknown date"
     }
-    return displayDayFormatter.string(from: date).uppercased()
+    let calendar = Calendar.current
+    if calendar.isDateInToday(date) { return "Today" }
+    if calendar.isDateInYesterday(date) { return "Yesterday" }
+    if calendar.isDate(date, equalTo: .now, toGranularity: .year) {
+        return displayDayFormatter.string(from: date)
+    }
+    return displayDayWithYearFormatter.string(from: date)
 }
 
 // MARK: - Immersive viewer
@@ -862,6 +968,9 @@ struct NativePhotoViewer: View {
             .accessibilityAction(.magicTap) {
                 withAnimation(.easeInOut(duration: 0.18)) { showNext() }
             }
+            .padding(.top, chromeHidden ? 0 : 42)
+            .padding(.bottom, chromeHidden ? 0 : 104)
+            .animation(.easeInOut(duration: 0.2), value: chromeHidden)
             .ignoresSafeArea()
 
             VStack {
@@ -889,68 +998,108 @@ struct NativePhotoViewer: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 14) {
-            Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.white, .black.opacity(0.45))
-            }
-            .accessibilityLabel("Close viewer")
+        ZStack {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(.white.opacity(0.16), lineWidth: 1)
+                        }
+                }
+                .accessibilityLabel("Close viewer")
 
-            VStack(alignment: .leading, spacing: 2) {
+                Spacer()
+
+                Menu {
+                    Button { showAddToAlbum = true } label: {
+                        Label("Add to Album", systemImage: "rectangle.stack.badge.plus")
+                    }
+                    Button { showInfo = true } label: {
+                        Label("Info & Tags", systemImage: "info.circle")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(.white.opacity(0.16), lineWidth: 1)
+                        }
+                }
+                .accessibilityLabel("Photo actions")
+            }
+
+            VStack(spacing: 2) {
                 Text(currentPhoto.filename)
-                    .font(.subheadline.weight(.semibold))
+                    .font(LookTheme.Typography.secondaryEmphasis)
                     .foregroundColor(.white)
                     .lineLimit(1)
+                    .truncationMode(.middle)
                 Text("\(currentIndex + 1) of \(photos.count)")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.86))
+                    .font(LookTheme.Typography.caption)
+                    .foregroundColor(.white.opacity(0.9))
             }
-
-            Spacer()
-
-            Menu {
-                Button { showAddToAlbum = true } label: {
-                    Label("Add to Album", systemImage: "rectangle.stack.badge.plus")
-                }
-                Button { showInfo = true } label: {
-                    Label("Info & Tags", systemImage: "info.circle")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.white, .black.opacity(0.45))
-            }
-            .accessibilityLabel("Photo actions")
+            .padding(.horizontal, 72)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.black.opacity(0.35))
+        .padding(.top, 8)
+        .padding(.bottom, 18)
+        .background {
+            LinearGradient(
+                colors: [.black.opacity(0.62), .black.opacity(0.28), .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .top)
+        }
     }
 
     private var filmstrip: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     ForEach(filmstripPhotos) { photo in
                         CachedThumbnail(url: APIClient.shared.thumbnailURL(for: photo.id, size: 256),
                                         maxPixel: 162)
-                            .frame(width: 54, height: 54)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             .overlay {
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .stroke(photo.id == currentId ? .white : .clear, lineWidth: 2)
                             }
+                            .shadow(color: .black.opacity(photo.id == currentId ? 0.34 : 0), radius: 8, y: 4)
                             .id(photo.id)
                             .onTapGesture { withAnimation { currentId = photo.id } }
                             .accessibilityLabel(filmstripAccessibilityLabel(for: photo))
                             .accessibilityAddTraits(photo.id == currentId ? [.isImage, .isSelected] : .isImage)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
             }
-            .background(.black.opacity(0.45))
+            .frame(height: 84)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(.white.opacity(0.12), lineWidth: 1)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
+            .background {
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.42), .black.opacity(0.72)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea(edges: .bottom)
+            }
             .onChange(of: currentId) { _, id in
                 withAnimation { proxy.scrollTo(id, anchor: .center) }
             }

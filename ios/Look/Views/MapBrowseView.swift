@@ -31,6 +31,7 @@ struct MapBrowseView: View {
                                     selected = photo
                                 }
                             }
+                            .annotationTitles(.hidden)
                         }
                     }
                 }
@@ -57,7 +58,7 @@ struct MapBrowseView: View {
                         ProgressView()
                             .scaleEffect(0.8)
                         Text(hasLoaded ? "Searching area" : "Loading map photos")
-                            .font(.caption.weight(.semibold))
+                            .font(LookTheme.Typography.captionEmphasis)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -68,7 +69,7 @@ struct MapBrowseView: View {
                     Task { await loadNearby() }
                 } label: {
                     Label("Search this area", systemImage: "location.magnifyingglass")
-                        .font(.subheadline.weight(.semibold))
+                        .font(LookTheme.Typography.secondaryEmphasis)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                         .background(.ultraThinMaterial, in: Capsule())
@@ -173,7 +174,7 @@ private struct PhotoMapCallout: View {
                     }
                     .overlay(alignment: .bottomTrailing) {
                         Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.headline)
                             .foregroundStyle(.white, LookTheme.ColorToken.danger)
                             .background(Circle().fill(Color(.systemBackground)))
                             .offset(x: 5, y: 5)
@@ -181,12 +182,13 @@ private struct PhotoMapCallout: View {
                     .shadow(color: .black.opacity(0.24), radius: 5, y: 3)
 
                 Text(photo.filename)
-                    .font(.caption2.weight(.semibold))
+                    .font(LookTheme.Typography.captionEmphasis)
                     .lineLimit(1)
+                    .truncationMode(.middle)
                     .foregroundStyle(LookTheme.ColorToken.graphite)
-                    .padding(.horizontal, 7)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .frame(maxWidth: 96)
+                    .frame(maxWidth: 110)
                     .background(.ultraThinMaterial, in: Capsule())
             }
         }

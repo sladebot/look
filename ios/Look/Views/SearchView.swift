@@ -63,6 +63,17 @@ struct SearchView: View {
                 activeSearchID = UUID()
                 isLoading = false
             }
+            #if DEBUG
+            .task {
+                // Screenshot tooling hook: LOOK_UI_SEARCH_QUERY runs a real search
+                // on launch so the results grid can be captured without typing.
+                if query.isEmpty,
+                   let seeded = ProcessInfo.processInfo.environment["LOOK_UI_SEARCH_QUERY"],
+                   !seeded.isEmpty {
+                    submitSearch(seeded, updateField: true)
+                }
+            }
+            #endif
             .fullScreenCover(item: $selectedPhoto) { photo in
                 NativePhotoViewer(photos: results, initialPhoto: photo)
             }
@@ -115,7 +126,7 @@ struct SearchView: View {
             }
 
             Text("Search filenames, tags, camera text, and folder paths.")
-                .font(.subheadline)
+                .font(LookTheme.Typography.secondary)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -173,7 +184,7 @@ struct SearchView: View {
                             Button("Clear") {
                                 recentSearchesStorage = ""
                             }
-                            .font(.subheadline)
+                            .font(LookTheme.Typography.secondary)
                             .accessibilityLabel("Clear recent searches")
                         }
 
@@ -205,7 +216,7 @@ struct SearchView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         LookTheme.eyebrow("Results")
                         Text("\(results.count) photos for \"\(submittedQuery)\"")
-                            .font(.subheadline.weight(.semibold))
+                            .font(LookTheme.Typography.secondaryEmphasis)
                             .foregroundStyle(LookTheme.ColorToken.graphite)
                             .lineLimit(2)
                     }
@@ -274,12 +285,12 @@ struct SearchView: View {
             }
 
             Text(title)
-                .font(.headline)
+                .font(LookTheme.Typography.headline)
                 .multilineTextAlignment(.center)
 
             if let message {
                 Text(message)
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)

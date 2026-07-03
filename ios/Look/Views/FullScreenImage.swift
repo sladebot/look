@@ -34,7 +34,7 @@ struct FullScreenImage: View {
     private let navigationThreshold: CGFloat = 72
 
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { proxy in
             Group {
                 if let uiImage {
                     imageView(uiImage)
@@ -45,6 +45,7 @@ struct FullScreenImage: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
         }
         .background(Color.black)
         .task(id: "\(photo.id)|\(isActive)") {
@@ -154,9 +155,9 @@ struct FullScreenImage: View {
     }
 
     private var failureState: some View {
-        VStack {
+        VStack(spacing: 8) {
             Image(systemName: "photo.badge.exclamationmark").font(.largeTitle)
-            Text("Failed to load image").font(.caption)
+            Text("Failed to load image").font(LookTheme.Typography.secondary)
         }
         .foregroundColor(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -65,7 +65,7 @@ private struct AlbumListRow: View {
     var body: some View {
         HStack(spacing: LookTheme.Spacing.medium) {
             Image(systemName: "rectangle.stack.fill")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(LookTheme.ColorToken.graphite)
                 .frame(width: 42, height: 42)
                 .background(LookTheme.ColorToken.graphite.opacity(0.12), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
@@ -73,11 +73,11 @@ private struct AlbumListRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(album.name)
-                    .font(.body.weight(.semibold))
+                    .font(LookTheme.Typography.bodyEmphasis)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(2)
             }
@@ -86,7 +86,7 @@ private struct AlbumListRow: View {
 
             if let countText {
                 Text(countText)
-                    .font(.caption.weight(.semibold))
+                    .font(LookTheme.Typography.captionEmphasis)
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -94,7 +94,7 @@ private struct AlbumListRow: View {
             }
 
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                 .accessibilityHidden(true)
         }

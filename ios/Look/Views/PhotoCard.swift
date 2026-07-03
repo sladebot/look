@@ -15,7 +15,7 @@ struct PhotoCard: View {
             .overlay(alignment: .bottomLeading) {
                 if photo.isFavorite == true && !selectionMode {
                     Image(systemName: "heart.fill")
-                        .font(.caption2.weight(.bold))
+                        .font(.caption.weight(.bold))
                         .foregroundStyle(.white)
                         .padding(6)
                         .shadow(color: .black.opacity(0.4), radius: 4, y: 1)

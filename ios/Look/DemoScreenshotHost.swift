@@ -152,12 +152,12 @@ private struct DemoWorkflowFrame<Content: View>: View {
         HStack(alignment: .center, spacing: LookTheme.Spacing.medium) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(.title2, design: .rounded).weight(.semibold))
+                    .font(LookTheme.Typography.title)
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(LookTheme.Typography.caption)
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .lineLimit(1)
             }
 
@@ -200,7 +200,7 @@ private struct DemoGalleryWorkflow: View {
                             .padding(.top, LookTheme.Spacing.small)
                     }
 
-                    DemoDateStrip(title: "MONDAY, JUN 8", count: 600)
+                    DemoDateStrip(title: "Monday, Jun 8", count: 600)
 
                     ForEach(PhotoLayout.rows(
                         for: Array(DemoData.photos.prefix(42)),
@@ -282,14 +282,15 @@ private struct DemoDateStrip: View {
     let count: Int
 
     var body: some View {
-        HStack(spacing: LookTheme.Spacing.small) {
+        HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
             Text(title)
-            Text("\(count)")
-                .foregroundStyle(.secondary)
+                .font(LookTheme.Typography.secondaryEmphasis)
+                .foregroundStyle(LookTheme.ColorToken.graphite)
             Spacer()
+            Text("\(count) photos")
+                .font(LookTheme.Typography.caption)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
-        .font(.system(.subheadline, design: .monospaced).weight(.semibold))
-        .foregroundStyle(LookTheme.ColorToken.graphite.opacity(0.82))
         .padding(.horizontal, LookTheme.Spacing.screen)
         .padding(.vertical, LookTheme.Spacing.medium)
         .background(LookTheme.ColorToken.paper)
@@ -301,20 +302,21 @@ private struct DemoSyncStrip: View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             HStack(spacing: LookTheme.Spacing.small) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.caption.weight(.bold))
+                    .font(LookTheme.Typography.captionEmphasis)
                     .foregroundStyle(LookTheme.ColorToken.cyan)
                 Text("Syncing library")
-                    .font(.caption.weight(.semibold))
+                    .font(LookTheme.Typography.secondaryEmphasis)
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                 Spacer()
                 Text("60%")
-                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(LookTheme.Typography.captionEmphasis)
+                    .monospacedDigit()
+                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
 
             Text("Processing 1,122 of 1,856 mock photos")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(LookTheme.Typography.caption)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
 
             DemoProgressBar(value: 0.60)
         }
@@ -362,7 +364,7 @@ private struct DemoPhotoTile: View {
                 .overlay(alignment: .bottomLeading) {
                     if photo.isFavorite == true && !selectionMode {
                         Image(systemName: "heart.fill")
-                            .font(.caption2.weight(.bold))
+                            .font(.caption.weight(.bold))
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.45), radius: 4, y: 1)
                             .padding(6)

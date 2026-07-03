@@ -87,7 +87,7 @@ struct SettingsView: View {
             }
 
             Text("Examples: http://100.86.254.112:5678 or http://studio.tailnet-name.ts.net:5678")
-                .font(.subheadline)
+                .font(LookTheme.Typography.secondary)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -203,7 +203,7 @@ struct SettingsView: View {
 
             if let cacheMessage {
                 Text(cacheMessage)
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
         }
@@ -304,9 +304,9 @@ struct SettingsView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.headline)
+                    .font(LookTheme.Typography.headline)
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -316,10 +316,10 @@ struct SettingsView: View {
     private func fieldLabel(_ title: String, detail: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(LookTheme.Typography.secondaryEmphasis)
             Spacer()
             Text(detail)
-                .font(.caption)
+                .font(LookTheme.Typography.caption)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
         }
     }
@@ -331,12 +331,13 @@ struct SettingsView: View {
                 .frame(width: 22)
                 .accessibilityHidden(true)
             Text(title)
+                .foregroundStyle(LookTheme.ColorToken.graphite)
             Spacer(minLength: LookTheme.Spacing.small)
             Text(value)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .multilineTextAlignment(.trailing)
         }
-        .font(.subheadline)
+        .font(LookTheme.Typography.secondary)
     }
 
     private func toolLink<Destination: View>(
@@ -353,10 +354,11 @@ struct SettingsView: View {
                     .frame(width: 24)
                     .accessibilityHidden(true)
                 Text(title)
+                    .font(LookTheme.Typography.body)
                     .foregroundStyle(.primary)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(LookTheme.ColorToken.readableTertiary)
                     .accessibilityHidden(true)
             }

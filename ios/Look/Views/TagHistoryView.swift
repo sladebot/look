@@ -84,7 +84,7 @@ private struct TagHistoryRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(entry.tag)
-                        .font(.body.weight(.semibold))
+                        .font(LookTheme.Typography.bodyEmphasis)
                         .lineLimit(2)
 
                     Spacer(minLength: LookTheme.Spacing.small)
@@ -102,7 +102,7 @@ private struct TagHistoryRow: View {
                         Label(user, systemImage: "person.crop.circle")
                     }
                 }
-                .font(.caption)
+                .font(LookTheme.Typography.caption)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
             }
         }

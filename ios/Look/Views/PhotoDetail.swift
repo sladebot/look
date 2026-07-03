@@ -129,7 +129,7 @@ struct PhotoDetail: View {
 
             HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
                 Text(photo.filename)
-                    .font(.system(.title2, design: .rounded).weight(.semibold))
+                    .font(LookTheme.Typography.title)
                     .foregroundStyle(LookTheme.ColorToken.graphite)
                     .lineLimit(3)
                     .textSelection(.enabled)
@@ -688,10 +688,10 @@ private struct PhotoDetailActionRow: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.body.weight(.semibold))
+                        .font(LookTheme.Typography.bodyEmphasis)
                         .foregroundStyle(LookTheme.ColorToken.graphite)
                     Text(detail)
-                        .font(.subheadline)
+                        .font(LookTheme.Typography.secondary)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .lineLimit(2)
                 }
@@ -751,7 +751,7 @@ private struct PhotoDetailInfoRow: View {
                 .accessibilityHidden(true)
 
             Text(title)
-                .font(.subheadline.weight(.medium))
+                .font(LookTheme.Typography.secondaryEmphasis)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                 .frame(width: 92, alignment: .leading)
         }
@@ -798,13 +798,13 @@ private struct PhotoDetailSectionLabel: View {
     var body: some View {
         HStack(spacing: LookTheme.Spacing.tight) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(LookTheme.Typography.secondaryEmphasis)
                 .foregroundStyle(LookTheme.ColorToken.graphite)
 
             Text(count.formatted())
-                .font(.caption.weight(.bold))
+                .font(LookTheme.Typography.captionEmphasis)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(LookTheme.ColorToken.mist, in: Capsule())
                 .accessibilityLabel("\(count) \(title.lowercased())")
