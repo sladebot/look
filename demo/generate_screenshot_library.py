@@ -371,13 +371,13 @@ def seed_server(base_url, db_path):
     import urllib.parse
     import urllib.request
 
-    def get(path):
-        with urllib.request.urlopen(base_url + path) as r:
+    def get(endpoint):
+        with urllib.request.urlopen(base_url + endpoint) as r:
             return json.load(r)
 
-    def post(path, **params):
+    def post(endpoint, **params):
         qs = urllib.parse.urlencode(params)
-        req = urllib.request.Request(f"{base_url}{path}?{qs}", method="POST")
+        req = urllib.request.Request(f"{base_url}{endpoint}?{qs}", method="POST")
         with urllib.request.urlopen(req) as r:
             return json.load(r)
 
