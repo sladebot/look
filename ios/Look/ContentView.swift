@@ -96,6 +96,8 @@ struct ContentView: View {
                     }
             }
         }
+        .tint(LookTheme.ColorToken.accentControl)
+        .preferredColorScheme(.dark)
         .task {
             await performInitialConnectionCheck()
         }
@@ -123,7 +125,7 @@ struct ContentView: View {
                 .tabItem { Label(LookTab.settings.title, systemImage: LookTab.settings.systemImage) }
                 .tag(LookTab.settings)
         }
-        .tint(LookTheme.ColorToken.cyan)
+        .tint(LookTheme.ColorToken.accentControl)
         .background(LookTheme.ColorToken.paper.ignoresSafeArea())
         .toolbarBackground(.automatic, for: .tabBar)
         .toolbarColorScheme(.dark, for: .tabBar)

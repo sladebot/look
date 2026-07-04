@@ -661,7 +661,7 @@ struct PhotosGrid: View {
                 Label("Add", systemImage: "rectangle.stack.badge.plus")
             }
             .buttonStyle(.borderedProminent)
-            .tint(LookTheme.ColorToken.cyan)
+            .tint(LookTheme.ColorToken.accentControl)
             .disabled(selectedPhotoIds.isEmpty)
             .controlSize(.small)
         }

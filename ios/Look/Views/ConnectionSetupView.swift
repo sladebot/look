@@ -214,6 +214,7 @@ struct ConnectionSetupView: View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .font(LookTheme.Typography.secondaryEmphasis)
+                .foregroundStyle(LookTheme.ColorToken.graphite)
             Spacer()
             Text(detail)
                 .font(LookTheme.Typography.caption)

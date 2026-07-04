@@ -118,7 +118,7 @@ struct DemoScreenshotHost: View {
                 .tabItem { Label("Settings", systemImage: "gear") }
                 .tag(DemoTab.settings)
         }
-        .tint(LookTheme.ColorToken.cyan)
+        .tint(LookTheme.ColorToken.accentControl)
         .background(LookTheme.ColorToken.paper.ignoresSafeArea())
         .toolbarBackground(.automatic, for: .tabBar)
         .toolbarColorScheme(.dark, for: .tabBar)

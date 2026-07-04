@@ -1,20 +1,29 @@
 import SwiftUI
 
 enum LookTheme {
+    /// "Archival Bronze": warm true-neutral charcoals (no blue cast, so the
+    /// photographs read truer) with a single bronze identity accent — the
+    /// color of frame fittings and archival box clasps. Semantic green/red
+    /// are reserved for status.
     enum ColorToken {
-        static let darkroom = Color(hex: 0x090B0E)
-        static let paper = Color(hex: 0x15191D)
-        static let surface = Color(hex: 0x22282E)
-        static let elevated = Color(hex: 0x2A3138)
-        static let graphite = Color(hex: 0xF2F6F9)
-        static let readableSecondary = Color(hex: 0xCBD5DC)
-        static let readableTertiary = Color(hex: 0xB4C0C9)
-        static let mist = Color(hex: 0x39434C)
-        static let line = Color(hex: 0x46515A)
-        static let cyan = Color(hex: 0x20A7FF)
-        static let amber = Color(hex: 0xD9B05C)
-        static let success = Color(hex: 0x4CC27E)
-        static let danger = Color(hex: 0xD25151)
+        static let darkroom = Color(hex: 0x0D0C0B)
+        static let paper = Color(hex: 0x161514)
+        static let surface = Color(hex: 0x201E1C)
+        static let elevated = Color(hex: 0x292623)
+        static let graphite = Color(hex: 0xF5F3EF)
+        static let readableSecondary = Color(hex: 0xCDC9C1)
+        static let readableTertiary = Color(hex: 0xB3AEA4)
+        static let mist = Color(hex: 0x3B3833)
+        static let line = Color(hex: 0x474439)
+        /// Identity accent for text, icons, chips, eyebrows, selection.
+        static let accent = Color(hex: 0xD3A94F)
+        /// Deeper bronze for filled controls, so white labels keep contrast.
+        static let accentControl = Color(hex: 0x8F7128)
+        /// Legacy aliases — older call sites re-point to the single accent.
+        static let cyan = accent
+        static let amber = accent
+        static let success = Color(hex: 0x55BD7F)
+        static let danger = Color(hex: 0xD25F51)
     }
 
     /// Semantic type scale. Every role maps to a Dynamic Type text style so the
@@ -22,12 +31,14 @@ enum LookTheme {
     /// .footnote, 13pt) is the smallest size any readable content may use —
     /// .caption/.caption2 are reserved for glyph sizing on decorative icons.
     enum Typography {
+        /// Display roles use the serif design (New York): paired with the
+        /// tracked bronze eyebrows they read like gallery wall labels.
         /// Hero text on the connection/setup screen.
-        static let display = Font.largeTitle.weight(.bold)
+        static let display = Font.system(.largeTitle, design: .serif).weight(.bold)
         /// Large on-screen titles (photo filename on the detail sheet).
-        static let title = Font.title2.weight(.semibold)
+        static let title = Font.system(.title2, design: .serif).weight(.semibold)
         /// Section-level titles inside a screen.
-        static let sectionTitle = Font.title3.weight(.semibold)
+        static let sectionTitle = Font.system(.title3, design: .serif).weight(.semibold)
         /// Panel headers and row titles.
         static let headline = Font.headline
         /// Primary content.
