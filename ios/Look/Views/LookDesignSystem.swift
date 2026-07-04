@@ -1,29 +1,29 @@
 import SwiftUI
 
 enum LookTheme {
-    /// "Archival Bronze": warm true-neutral charcoals (no blue cast, so the
-    /// photographs read truer) with a single bronze identity accent — the
-    /// color of frame fittings and archival box clasps. Semantic green/red
-    /// are reserved for status.
+    /// "Selenium": the cool neutral black of film base and selenium-toned
+    /// silver — the archival process photographers use to make prints
+    /// permanent. One muted selenium-violet identity accent; semantic
+    /// green/red are reserved for status.
     enum ColorToken {
-        static let darkroom = Color(hex: 0x0D0C0B)
-        static let paper = Color(hex: 0x161514)
-        static let surface = Color(hex: 0x201E1C)
-        static let elevated = Color(hex: 0x292623)
-        static let graphite = Color(hex: 0xF5F3EF)
-        static let readableSecondary = Color(hex: 0xCDC9C1)
-        static let readableTertiary = Color(hex: 0xB3AEA4)
-        static let mist = Color(hex: 0x3B3833)
-        static let line = Color(hex: 0x474439)
+        static let darkroom = Color(hex: 0x0B0B0D)
+        static let paper = Color(hex: 0x141416)
+        static let surface = Color(hex: 0x1D1D21)
+        static let elevated = Color(hex: 0x26262B)
+        static let graphite = Color(hex: 0xF2F2F5)
+        static let readableSecondary = Color(hex: 0xC7C7CE)
+        static let readableTertiary = Color(hex: 0xA9A9B2)
+        static let mist = Color(hex: 0x37373E)
+        static let line = Color(hex: 0x414149)
         /// Identity accent for text, icons, chips, eyebrows, selection.
-        static let accent = Color(hex: 0xD3A94F)
-        /// Deeper bronze for filled controls, so white labels keep contrast.
-        static let accentControl = Color(hex: 0x8F7128)
+        static let accent = Color(hex: 0xB7A9E6)
+        /// Deeper violet for filled controls, so white labels keep contrast.
+        static let accentControl = Color(hex: 0x6F5FBE)
         /// Legacy aliases — older call sites re-point to the single accent.
         static let cyan = accent
         static let amber = accent
-        static let success = Color(hex: 0x55BD7F)
-        static let danger = Color(hex: 0xD25F51)
+        static let success = Color(hex: 0x4CC27E)
+        static let danger = Color(hex: 0xE0655A)
     }
 
     /// Semantic type scale. Every role maps to a Dynamic Type text style so the
@@ -31,14 +31,12 @@ enum LookTheme {
     /// .footnote, 13pt) is the smallest size any readable content may use —
     /// .caption/.caption2 are reserved for glyph sizing on decorative icons.
     enum Typography {
-        /// Display roles use the serif design (New York): paired with the
-        /// tracked bronze eyebrows they read like gallery wall labels.
         /// Hero text on the connection/setup screen.
-        static let display = Font.system(.largeTitle, design: .serif).weight(.bold)
+        static let display = Font.largeTitle.weight(.bold)
         /// Large on-screen titles (photo filename on the detail sheet).
-        static let title = Font.system(.title2, design: .serif).weight(.semibold)
+        static let title = Font.title2.weight(.semibold)
         /// Section-level titles inside a screen.
-        static let sectionTitle = Font.system(.title3, design: .serif).weight(.semibold)
+        static let sectionTitle = Font.title3.weight(.semibold)
         /// Panel headers and row titles.
         static let headline = Font.headline
         /// Primary content.
@@ -51,7 +49,9 @@ enum LookTheme {
         static let caption = Font.footnote
         static let captionEmphasis = Font.footnote.weight(.semibold)
         /// Uppercased section eyebrows; always paired with tracking via eyebrow().
-        static let overline = Font.footnote.weight(.semibold)
+        /// Monospaced — the "edge print" signature, echoing the frame markings
+        /// on film stock.
+        static let overline = Font.system(.footnote, design: .monospaced).weight(.semibold)
         /// Technical values: paths, URLs, coordinates.
         static let mono = Font.system(.footnote, design: .monospaced)
     }
@@ -77,12 +77,13 @@ enum LookTheme {
             .foregroundStyle(ColorToken.graphite)
     }
 
-    /// The archive-label signature: amber, letter-spaced, uppercase section marker.
+    /// The edge-print signature: monospaced, letter-spaced, uppercase section
+    /// marker in selenium violet — like the frame markings on film stock.
     static func eyebrow(_ text: String) -> some View {
         Text(text.uppercased())
             .font(Typography.overline)
-            .tracking(1.1)
-            .foregroundStyle(ColorToken.amber)
+            .tracking(1.2)
+            .foregroundStyle(ColorToken.accent)
     }
 }
 
