@@ -490,12 +490,14 @@ struct PhotosGrid: View {
                         .font(LookTheme.Typography.captionEmphasis)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
                         .monospacedDigit()
-                        .frame(width: 44, alignment: .trailing)
+                        .fixedSize()
+                        .frame(minWidth: 44, alignment: .trailing)
                 } else {
                     Text("Working")
                         .font(LookTheme.Typography.captionEmphasis)
                         .foregroundStyle(LookTheme.ColorToken.readableSecondary)
-                        .frame(width: 54, alignment: .trailing)
+                        .fixedSize()
+                        .frame(minWidth: 54, alignment: .trailing)
                 }
             }
 

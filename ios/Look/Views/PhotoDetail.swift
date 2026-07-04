@@ -753,12 +753,12 @@ private struct PhotoDetailInfoRow: View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 6) {
-                    titleLabel
+                    titleLabel(fixedWidth: false)
                     valueLabel
                 }
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    titleLabel
+                    titleLabel(fixedWidth: true)
                     valueLabel
                 }
             }
@@ -768,7 +768,10 @@ private struct PhotoDetailInfoRow: View {
         .accessibilityLabel("\(title), \(value)")
     }
 
-    private var titleLabel: some View {
+    /// Fixed-width label aligns the columns at normal sizes; at accessibility
+    /// sizes the row stacks vertically, so the label takes its natural width
+    /// to avoid an awkward narrow column.
+    private func titleLabel(fixedWidth: Bool) -> some View {
         HStack(spacing: LookTheme.Spacing.small) {
             Image(systemName: systemImage)
                 .font(.body)
@@ -779,7 +782,7 @@ private struct PhotoDetailInfoRow: View {
             Text(title)
                 .font(LookTheme.Typography.secondaryEmphasis)
                 .foregroundStyle(LookTheme.ColorToken.readableSecondary)
-                .frame(width: 92, alignment: .leading)
+                .frame(width: fixedWidth ? 92 : nil, alignment: .leading)
         }
     }
 
