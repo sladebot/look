@@ -728,6 +728,17 @@ async def remove_photo_from_album(album_id: str, photo_id: str, _auth=_API_AUTH)
     return {"status": "ok"}
 
 
+# ─── favorites ───────────────────────────────────────────────────────────────
+@app.post("/api/photos/{photo_id}/favorite")
+async def set_photo_favorite(photo_id: str, value: bool = True, _auth=_API_AUTH):
+    """Mark or unmark a photo as favorite."""
+    photo = db.get_photo(photo_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    db.set_favorite(photo_id, value)
+    return {"photo_id": photo_id, "is_favorite": value}
+
+
 # ─── tags ────────────────────────────────────────────────────────────────────
 @app.get("/api/photos/{photo_id}/tags")
 async def get_photo_tags(photo_id: str):

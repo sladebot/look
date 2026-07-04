@@ -232,6 +232,27 @@ class PhotoStore: ObservableObject {
         await loadPhotos(reset: true)
     }
 
+    /// Optimistically set a photo's favorite flag; reverts on server failure.
+    /// Returns whether the server accepted the change.
+    @discardableResult
+    func setFavorite(_ photoId: String, to value: Bool) async -> Bool {
+        applyLocalFavorite(photoId, value)
+        do {
+            _ = try await client.setFavorite(photoId, favorite: value)
+            return true
+        } catch {
+            applyLocalFavorite(photoId, !value)
+            errorMessage = "Could not update favorite: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func applyLocalFavorite(_ photoId: String, _ value: Bool) {
+        if let index = photos.firstIndex(where: { $0.id == photoId }) {
+            photos[index].isFavorite = value
+        }
+    }
+
     // MARK: - Albums
 
     func createAlbum(name: String, description: String = "") async {

@@ -412,3 +412,42 @@ def test_dedup_scan_rate_limit():
         assert 'retry_after' in data
     finally:
         client.close()
+
+
+# ── Favorites endpoint ────────────────────────────────────────────────────────
+
+def test_set_photo_favorite_toggles_flag():
+    """POST /api/photos/{id}/favorite should set and clear is_favorite."""
+    db_path = str(Path(tempfile.mkdtemp()) / "test_favorite.db")
+
+    import api.server
+    from api.server import PhotoDatabase as PD
+
+    db = PD(db_path)
+    db.store_photo({
+        'id': 'fav1', 'filename': 'sunset.jpg', 'filepath': '/tmp/sunset.jpg',
+        'width': 100, 'height': 100, 'mime_type': 'image/jpeg', 'indexed_at': '2024-01-01',
+    })
+
+    old_db = api.server.db
+    api.server.db = db
+    try:
+        transport = ASGITransport(app=app)
+        client = httpx.Client(transport=transport, base_url="http://test")
+        try:
+            resp = client.post("/api/photos/fav1/favorite")
+            assert resp.status_code == 200
+            assert resp.json() == {"photo_id": "fav1", "is_favorite": True}
+            assert db.get_photo("fav1")["is_favorite"] == 1
+
+            resp = client.post("/api/photos/fav1/favorite", params={"value": "false"})
+            assert resp.status_code == 200
+            assert resp.json()["is_favorite"] is False
+            assert db.get_photo("fav1")["is_favorite"] == 0
+
+            resp = client.post("/api/photos/missing/favorite")
+            assert resp.status_code == 404
+        finally:
+            client.close()
+    finally:
+        api.server.db = old_db

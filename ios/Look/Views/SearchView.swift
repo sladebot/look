@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SearchView: View {
+    @EnvironmentObject var store: PhotoStore
     @State private var query = ""
     @State private var submittedQuery = ""
     @State private var results: [Photo] = []
@@ -76,6 +77,11 @@ struct SearchView: View {
             #endif
             .fullScreenCover(item: $selectedPhoto) { photo in
                 NativePhotoViewer(photos: results, initialPhoto: photo)
+            }
+            .task {
+                if store.allTags.isEmpty {
+                    await store.loadAllTags()
+                }
             }
         }
     }
@@ -199,6 +205,27 @@ struct SearchView: View {
                                     .buttonStyle(.plain)
                                     .accessibilityLabel("Search for \(recentQuery)")
                                 }
+                            }
+                        }
+                    }
+                    .lookPanel()
+                }
+
+                if !store.allTags.isEmpty {
+                    VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+                        LookTheme.eyebrow("Browse Tags")
+
+                        FlowLayout(spacing: LookTheme.Spacing.tight) {
+                            ForEach(store.allTags.prefix(18)) { info in
+                                Button {
+                                    submitSearch(info.tag, updateField: true)
+                                } label: {
+                                    LookChip(title: info.count.map { "\(info.tag) · \($0)" } ?? info.tag,
+                                             systemImage: "tag",
+                                             tint: LookTheme.ColorToken.cyan)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Search tag \(info.tag), \(info.count) photos")
                             }
                         }
                     }

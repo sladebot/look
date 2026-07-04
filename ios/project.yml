@@ -10,7 +10,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.sladebot.look
       DEVELOPMENT_TEAM: 22BH2R3K7H
       MARKETING_VERSION: "1.1"
-      CURRENT_PROJECT_VERSION: "2"
+      CURRENT_PROJECT_VERSION: "6"
       INFOPLIST_KEY_CFBundleDisplayName: "Look"
       INFOPLIST_KEY_UIRequiredDeviceCapabilities: "arm64"
     info:

@@ -12,7 +12,7 @@ struct Photo: Codable, Identifiable, Equatable {
     let mimeType: String?
     let createdAt: String?
     let hasThumbnail: Bool?
-    let isFavorite: Bool?
+    var isFavorite: Bool?
     let exif: EXIFData?
     /// Top-level GPS columns returned by the server (gps_lat/gps_lon). The
     /// nested `exif.gps` is preferred when present; these are the fallback.
@@ -177,6 +177,16 @@ struct TagInfo: Codable, Identifiable {
 
 struct TagListResponse: Codable {
     let tags: [String]?
+}
+
+struct FavoriteResponse: Codable {
+    let photoId: String
+    let isFavorite: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case photoId = "photo_id"
+        case isFavorite = "is_favorite"
+    }
 }
 
 struct AllTagsResponse: Codable {

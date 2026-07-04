@@ -139,6 +139,7 @@ See `.env.example` for the current template.
 | GET | `/api/full/{photo_id}` · `/api/download/jpeg/{id}` · `/api/download/raw/{id}` | Full image / downloads |
 | POST | `/api/import` | Param: `path`; requires API key |
 | GET/POST/DELETE | `/api/photos/{id}/tags` | Tag management (+ `/history`, `/auto`, `/suggest`) |
+| POST | `/api/photos/{id}/favorite` | Mark/unmark favorite via `value` (bool, default true); requires API key |
 | GET | `/api/tags` · POST `/api/tags/merge` | Tags with counts; atomic merge |
 | GET | `/api/search` | Search across filename/path/tags/camera/date |
 | CRUD | `/api/albums` (+ `/photos/{id}`) | Album CRUD and membership |
@@ -216,6 +217,7 @@ Coverage includes: scanner, dedup, GPS/geo, migrations, rate limiter, RAW import
 | REST API | Complete |
 | Web UI (React: gallery, modals, search, admin) | Complete |
 | Native iOS/iPad client (SwiftUI) | Complete |
+| Favorites (toggle from iOS + API) | Complete |
 | Automatic file watching (daemon) | Complete |
 | Tags API | Complete |
 | Optional API key auth | Complete |

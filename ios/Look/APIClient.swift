@@ -233,6 +233,11 @@ class APIClient {
     func allTags() async throws -> AllTagsResponse { try await get("/api/tags") }
 
     @discardableResult
+    func setFavorite(_ photoId: String, favorite: Bool) async throws -> FavoriteResponse {
+        try await request("/api/photos/\(photoId)/favorite?value=\(favorite)", method: "POST")
+    }
+
+    @discardableResult
     func mergeTags(source: String, target: String) async throws -> GenericStatusResponse {
         try await request("/api/tags/merge?source=\(encode(source))&target=\(encode(target))", method: "POST")
     }

@@ -79,8 +79,15 @@ struct PhotosGrid: View {
     @State private var filter = PhotoGridFilter.all
     @State private var sort = PhotoGridSort.newest
     @Namespace private var viewerZoomNamespace
+    /// Grid density, adjusted by pinching: 0 = dense, 1 = default, 2 = large.
+    @AppStorage("photos_grid_zoom_step") private var gridZoomStep = 1
 
     private let spacing = LookTheme.Spacing.hairline
+    private static let gridZoomFactors: [CGFloat] = [0.72, 1.0, 1.42]
+
+    private var gridZoomFactor: CGFloat {
+        Self.gridZoomFactors[min(max(gridZoomStep, 0), Self.gridZoomFactors.count - 1)]
+    }
 
     private var selectedPhotos: [Photo] {
         store.photos.filter { selectedPhotoIds.contains($0.id) }
@@ -208,6 +215,12 @@ struct PhotosGrid: View {
                            pinnedViews: .sectionHeaders) {
                     statusBanner
 
+                    if filter != .all {
+                        activeFilterStrip
+                            .padding(.horizontal, LookTheme.Spacing.screen)
+                            .padding(.top, LookTheme.Spacing.tight)
+                    }
+
                     if store.isSyncing {
                         syncStatusStrip
                             .padding(.horizontal, LookTheme.Spacing.screen)
@@ -236,13 +249,31 @@ struct PhotosGrid: View {
             .contentMargins(.bottom, 0, for: .scrollContent)
             .background(LookTheme.ColorToken.paper)
             .refreshable { await store.syncNow() }
+            .simultaneousGesture(
+                MagnificationGesture()
+                    .onEnded { value in
+                        let newStep: Int
+                        if value > 1.18 {
+                            newStep = min(gridZoomStep + 1, Self.gridZoomFactors.count - 1)
+                        } else if value < 0.85 {
+                            newStep = max(gridZoomStep - 1, 0)
+                        } else {
+                            return
+                        }
+                        guard newStep != gridZoomStep else { return }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            gridZoomStep = newStep
+                        }
+                    }
+            )
             .ignoresSafeArea(.container, edges: .bottom)
         }
         .background(LookTheme.ColorToken.paper.ignoresSafeArea())
     }
 
     private func targetRowHeight(containerWidth: CGFloat, contentWidth: CGFloat) -> CGFloat {
-        return max(104, contentWidth / (containerWidth > 600 ? 4.8 : 3.35))
+        return max(88, contentWidth / (containerWidth > 600 ? 4.8 : 3.35) * gridZoomFactor)
     }
 
     @ViewBuilder
@@ -263,7 +294,8 @@ struct PhotosGrid: View {
 
     @ViewBuilder
     private func uniformSectionGrid(_ photos: [Photo], contentWidth: CGFloat, containerWidth: CGFloat) -> some View {
-        let columns = containerWidth < 430 ? 3 : 4
+        let baseColumns = containerWidth < 430 ? 3 : 4
+        let columns = max(2, baseColumns + (gridZoomStep == 0 ? 1 : gridZoomStep == 2 ? -1 : 0))
         let cellWidth = floor((contentWidth - CGFloat(columns - 1) * spacing) / CGFloat(columns))
 
         ForEach(Array(stride(from: 0, to: photos.count, by: columns)), id: \.self) { start in
@@ -354,6 +386,7 @@ struct PhotosGrid: View {
         }
         .onLongPressGesture {
             guard !selectionMode else { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             selectionMode = true
             selectedPhotoIds = [photo.id]
         }
@@ -400,11 +433,13 @@ struct PhotosGrid: View {
     private var emptyState: some View {
         VStack(spacing: LookTheme.Spacing.medium) {
             LookEmptyState(
-                title: store.photos.isEmpty ? "No photos yet" : "No matches",
+                title: store.photos.isEmpty ? "No photos yet" : "No \(filter.title.lowercased()) photos",
                 systemImage: store.photos.isEmpty ? "photo.on.rectangle.angled" : "line.3.horizontal.decrease.circle",
-                message: store.photos.isEmpty ? "Import photos on the server to begin." : "Adjust the filter to return to the full library.",
-                actionTitle: store.photos.isEmpty ? "Sync Library" : nil,
-                action: store.photos.isEmpty ? { Task { await store.syncNow() } } : nil
+                message: store.photos.isEmpty ? "Import photos on the server to begin." : "Nothing in the library matches the \(filter.title) filter.",
+                actionTitle: store.photos.isEmpty ? "Sync Library" : "Show All Photos",
+                action: store.photos.isEmpty
+                    ? { Task { await store.syncNow() } }
+                    : { withAnimation { filter = .all } }
             )
             if let message = store.errorMessage, !message.isEmpty {
                 errorStatusStrip(message)
@@ -571,6 +606,27 @@ struct PhotosGrid: View {
         .overlay {
             RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
                 .stroke(LookTheme.ColorToken.amber.opacity(0.32), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Visible reminder that the grid is filtered, with a one-tap way out —
+    /// otherwise an active Favorites/RAW filter silently "hides" the library.
+    private var activeFilterStrip: some View {
+        HStack(spacing: LookTheme.Spacing.small) {
+            LookChip(title: "\(filter.title) only",
+                     systemImage: filter.systemImage,
+                     tint: LookTheme.ColorToken.cyan)
+            Text(visiblePhotos.count == 1 ? "1 photo" : "\(visiblePhotos.count) photos")
+                .font(LookTheme.Typography.caption)
+                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+            Spacer()
+            Button("Show All") {
+                withAnimation { filter = .all }
+            }
+            .font(LookTheme.Typography.captionEmphasis)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
         .accessibilityElement(children: .combine)
     }
@@ -921,11 +977,16 @@ struct NativePhotoViewer: View {
     let photos: [Photo]
     let initialPhoto: Photo
 
+    @EnvironmentObject private var store: PhotoStore
     @Environment(\.dismiss) private var dismiss
     @State private var currentId: String
     @State private var showInfo = false
     @State private var showAddToAlbum = false
     @State private var chromeHidden = false
+    /// Local favorite state for photos outside store.photos (albums, search).
+    @State private var favoriteOverrides: [String: Bool] = [:]
+    @State private var shareItem: ShareItem?
+    @State private var isPreparingShare = false
 
     init(photos: [Photo], initialPhoto: Photo) {
         self.photos = photos
@@ -982,8 +1043,44 @@ struct NativePhotoViewer: View {
         .statusBarHidden(chromeHidden)
         .sheet(isPresented: $showInfo) { PhotoDetail(photo: currentPhoto) }
         .sheet(isPresented: $showAddToAlbum) { AddToAlbumSheet(photo: currentPhoto) }
+        .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
         .task(id: currentId) {
             await prefetchAdjacentPreviews()
+        }
+    }
+
+    private var isCurrentFavorite: Bool {
+        if let override = favoriteOverrides[currentId] { return override }
+        if let inStore = store.photos.first(where: { $0.id == currentId }) {
+            return inStore.isFavorite ?? false
+        }
+        return currentPhoto.isFavorite ?? false
+    }
+
+    private func toggleFavorite() {
+        let photoId = currentId
+        let newValue = !isCurrentFavorite
+        favoriteOverrides[photoId] = newValue
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task {
+            let accepted = await store.setFavorite(photoId, to: newValue)
+            if !accepted {
+                favoriteOverrides[photoId] = !newValue
+            }
+        }
+    }
+
+    private func shareCurrentPhoto() {
+        guard !isPreparingShare else { return }
+        isPreparingShare = true
+        let photo = currentPhoto
+        Task {
+            defer { isPreparingShare = false }
+            guard let data = try? await APIClient.shared.downloadJPEGData(photo.id) else { return }
+            let name = (photo.filename as NSString).deletingPathExtension + ".jpg"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+            try? data.write(to: url)
+            shareItem = ShareItem(url: url)
         }
     }
 
@@ -1015,25 +1112,46 @@ struct NativePhotoViewer: View {
 
                 Spacer()
 
-                Menu {
-                    Button { showAddToAlbum = true } label: {
-                        Label("Add to Album", systemImage: "rectangle.stack.badge.plus")
+                HStack(spacing: 10) {
+                    Button { toggleFavorite() } label: {
+                        Image(systemName: isCurrentFavorite ? "heart.fill" : "heart")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(isCurrentFavorite ? Color.pink : .white)
+                            .frame(width: 42, height: 42)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay {
+                                Circle()
+                                    .stroke(.white.opacity(0.16), lineWidth: 1)
+                            }
+                            .contentTransition(.symbolEffect(.replace))
                     }
-                    Button { showInfo = true } label: {
-                        Label("Info & Tags", systemImage: "info.circle")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 42, height: 42)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .overlay {
-                            Circle()
-                                .stroke(.white.opacity(0.16), lineWidth: 1)
+                    .accessibilityLabel(isCurrentFavorite ? "Remove from favorites" : "Add to favorites")
+
+                    Menu {
+                        Button { showAddToAlbum = true } label: {
+                            Label("Add to Album", systemImage: "rectangle.stack.badge.plus")
                         }
+                        Button { shareCurrentPhoto() } label: {
+                            Label(isPreparingShare ? "Preparing…" : "Share Photo",
+                                  systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(isPreparingShare)
+                        Button { showInfo = true } label: {
+                            Label("Info & Tags", systemImage: "info.circle")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 42, height: 42)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay {
+                                Circle()
+                                    .stroke(.white.opacity(0.16), lineWidth: 1)
+                            }
+                    }
+                    .accessibilityLabel("Photo actions")
                 }
-                .accessibilityLabel("Photo actions")
             }
 
             VStack(spacing: 2) {
@@ -1046,7 +1164,7 @@ struct NativePhotoViewer: View {
                     .font(LookTheme.Typography.caption)
                     .foregroundColor(.white.opacity(0.9))
             }
-            .padding(.horizontal, 72)
+            .padding(.horizontal, 104)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)

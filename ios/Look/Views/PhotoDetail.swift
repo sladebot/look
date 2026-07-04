@@ -17,6 +17,7 @@ struct PhotoDetail: View {
     @State private var status: PhotoDetailStatus?
     @State private var isDownloading = false
     @State private var shareItem: ShareItem?
+    @State private var isFavorite = false
 
     private let imageSaver = ImageSaver()
     private var isRawOriginal: Bool { Self.rawExtensions.contains(photo.fileExtension) }
@@ -97,6 +98,8 @@ struct PhotoDetail: View {
             .sheet(isPresented: $showTagHistory) { TagHistoryView(photoId: photo.id) }
             .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
             .task {
+                isFavorite = store.photos.first(where: { $0.id == photo.id })?.isFavorite
+                    ?? photo.isFavorite ?? false
                 await loadTags()
                 await loadSuggestions()
             }
@@ -134,11 +137,21 @@ struct PhotoDetail: View {
                     .lineLimit(3)
                     .textSelection(.enabled)
                     .accessibilityLabel("Filename, \(photo.filename)")
-                if photo.isFavorite == true {
-                    Image(systemName: "heart.fill")
-                        .foregroundColor(.pink)
-                        .accessibilityLabel("Favorite")
+
+                Spacer(minLength: LookTheme.Spacing.tight)
+
+                Button {
+                    toggleFavorite()
+                } label: {
+                    Image(systemName: isFavorite ? "heart.fill" : "heart")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isFavorite ? Color.pink : LookTheme.ColorToken.readableSecondary)
+                        .frame(width: 38, height: 38)
+                        .background(LookTheme.ColorToken.surface, in: Circle())
+                        .contentTransition(.symbolEffect(.replace))
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
             }
             if let date = PhotoDetailMetadataFormatter.displayDate(from: photo.createdAt) {
                 Label(date, systemImage: "calendar")
@@ -532,6 +545,19 @@ struct PhotoDetail: View {
             showSuccess("RAW original ready to share")
         } catch {
             showError("RAW export failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func toggleFavorite() {
+        let newValue = !isFavorite
+        isFavorite = newValue
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task {
+            let accepted = await store.setFavorite(photo.id, to: newValue)
+            if !accepted {
+                isFavorite = !newValue
+                showError("Could not update favorite")
+            }
         }
     }
 
