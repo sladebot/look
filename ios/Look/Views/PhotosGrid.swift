@@ -1066,6 +1066,10 @@ struct NativePhotoViewer: View {
             let accepted = await store.setFavorite(photoId, to: newValue)
             if !accepted {
                 favoriteOverrides[photoId] = !newValue
+            } else if store.photos.contains(where: { $0.id == photoId }) {
+                // Store is now the source of truth; drop the local override so
+                // later changes (e.g. from the detail sheet) aren't masked.
+                favoriteOverrides[photoId] = nil
             }
         }
     }
