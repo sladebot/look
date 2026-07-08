@@ -29,6 +29,9 @@ enum LookTheme {
         /// Deeper violet for filled controls so white labels keep ~5:1 contrast.
         static let accentControl = Color(hex: 0x6A5AE0)
         static let success = Color(hex: 0x4CC27E)
+        /// Warning amber — legible on `elevated`, distinct from `danger` so
+        /// cautions don't read as errors.
+        static let warning = Color(hex: 0xE5B84E)
         static let danger = Color(hex: 0xFF6B5E)
     }
 
@@ -161,7 +164,7 @@ struct LookStatusBanner: View {
             switch self {
             case .info: return LookTheme.ColorToken.accent
             case .success: return LookTheme.ColorToken.success
-            case .warning: return LookTheme.ColorToken.danger
+            case .warning: return LookTheme.ColorToken.warning
             case .error: return LookTheme.ColorToken.danger
             }
         }
@@ -370,6 +373,37 @@ extension View {
     /// Text field chrome: .body input on `surface` with hairline stroke.
     func lookTextInput() -> some View {
         modifier(LookTextInput())
+    }
+}
+
+// MARK: - Photo zoom transition
+
+/// Opening a photo zooms out of its grid cell (Photos-style) on iOS 18+;
+/// earlier systems keep the default cover presentation. Shared so any grid or
+/// list of thumbnails (Photos, albums, search) drives the same matched zoom.
+struct LookZoomSource: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.matchedTransitionSource(id: id, in: namespace)
+        } else {
+            content
+        }
+    }
+}
+
+struct LookZoomTransition: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.navigationTransition(.zoom(sourceID: id, in: namespace))
+        } else {
+            content
+        }
     }
 }
 

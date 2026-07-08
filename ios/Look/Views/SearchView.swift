@@ -12,6 +12,7 @@ struct SearchView: View {
     @State private var activeSearchID = UUID()
     @State private var ignoreNextQueryChange = false
     @AppStorage("recent_searches") private var recentSearchesStorage = ""
+    @Namespace private var viewerZoomNamespace
 
     private let columns = [
         GridItem(.adaptive(minimum: 112), spacing: 4)
@@ -77,6 +78,7 @@ struct SearchView: View {
             #endif
             .fullScreenCover(item: $selectedPhoto) { photo in
                 NativePhotoViewer(photos: results, initialPhoto: photo)
+                    .modifier(LookZoomTransition(id: photo.id, namespace: viewerZoomNamespace))
             }
             .task {
                 if store.allTags.isEmpty {
@@ -174,13 +176,14 @@ struct SearchView: View {
     private var emptySearchView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
-                LookEmptyState(
-                    title: "Search your photo library",
-                    systemImage: "photo.stack",
-                    message: "Find photos by filename, tag, camera text, or folder path."
-                )
-                .lookCard(inset: 0)
-                .frame(minHeight: 260)
+                if recentSearches.isEmpty && store.allTags.isEmpty {
+                    LookEmptyState(
+                        title: "Search your photo library",
+                        systemImage: "photo.stack",
+                        message: "Find photos by filename, tag, camera text, or folder path."
+                    )
+                    .lookCard(inset: 0)
+                }
 
                 if !recentSearches.isEmpty {
                     VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
@@ -254,6 +257,7 @@ struct SearchView: View {
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(results) { photo in
                         PhotoCard(photo: photo)
+                            .modifier(LookZoomSource(id: photo.id, namespace: viewerZoomNamespace))
                             .onTapGesture { selectedPhoto = photo }
                             .accessibilityLabel("Open \(photo.filename)")
                     }

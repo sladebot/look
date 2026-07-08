@@ -7,6 +7,7 @@ struct AlbumDetail: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var selected: Photo?
+    @Namespace private var viewerZoomNamespace
 
     private let columns = [
         GridItem(.adaptive(minimum: 112), spacing: 4)
@@ -46,6 +47,7 @@ struct AlbumDetail: View {
                         LazyVGrid(columns: columns, spacing: 4) {
                             ForEach(photos) { photo in
                                 PhotoCard(photo: photo)
+                                    .modifier(LookZoomSource(id: photo.id, namespace: viewerZoomNamespace))
                                     .onTapGesture { selected = photo }
                                     .contextMenu {
                                         Button(role: .destructive) {
@@ -68,6 +70,7 @@ struct AlbumDetail: View {
         .task { await loadPhotos() }
         .fullScreenCover(item: $selected) { photo in
             NativePhotoViewer(photos: photos, initialPhoto: photo)
+                .modifier(LookZoomTransition(id: photo.id, namespace: viewerZoomNamespace))
         }
     }
 

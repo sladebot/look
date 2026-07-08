@@ -175,7 +175,7 @@ struct PhotosGrid: View {
             .animation(.easeInOut(duration: 0.18), value: selectedPhotoIds.count)
             .fullScreenCover(item: $selectedPhoto) { photo in
                 NativePhotoViewer(photos: visiblePhotos, initialPhoto: photo)
-                    .modifier(PhotoZoomTransition(id: photo.id, namespace: viewerZoomNamespace))
+                    .modifier(LookZoomTransition(id: photo.id, namespace: viewerZoomNamespace))
             }
             .sheet(isPresented: $showAddToAlbum, onDismiss: {
                 selectionMode = false
@@ -376,7 +376,7 @@ struct PhotosGrid: View {
             }
         }
         .contentShape(Rectangle())
-        .modifier(PhotoZoomSource(id: photo.id, namespace: viewerZoomNamespace))
+        .modifier(LookZoomSource(id: photo.id, namespace: viewerZoomNamespace))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(for: photo, selected: isSelected))
         .accessibilityHint(selectionMode ? "Double tap to \(isSelected ? "remove from" : "add to") selection" : "Double tap to open photo")
@@ -852,55 +852,37 @@ struct PhotosGrid: View {
     }
 }
 
-/// Opening a photo zooms out of its grid cell (Photos-style) on iOS 18+;
-/// earlier systems keep the default cover presentation.
-private struct PhotoZoomSource: ViewModifier {
-    let id: String
-    let namespace: Namespace.ID
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.matchedTransitionSource(id: id, in: namespace)
-        } else {
-            content
-        }
-    }
-}
-
-private struct PhotoZoomTransition: ViewModifier {
-    let id: String
-    let namespace: Namespace.ID
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.navigationTransition(.zoom(sourceID: id, in: namespace))
-        } else {
-            content
-        }
-    }
-}
-
-/// Day header, pinned while its section scrolls; the material backdrop keeps it
-/// legible as photos pass underneath.
+/// Day header, pinned while its section scrolls. Instead of a full-width bar,
+/// the title and count sit in compact capsule scrims (.thinMaterial just behind
+/// the text) so they stay legible as photos pass underneath without striping
+/// the grid — the difference is most visible on iPad's wide rows.
 private struct PhotoDateStrip: View {
     let title: String
     let count: Int
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
+        HStack(spacing: LookTheme.Spacing.small) {
             Text(title)
-                .font(LookTheme.Typography.headline)
+                .font(LookTheme.Typography.secondaryEmphasis)
                 .foregroundStyle(LookTheme.ColorToken.primaryText)
-            Spacer()
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.thinMaterial, in: Capsule())
+                .environment(\.colorScheme, .dark)
+
+            Spacer(minLength: 0)
+
             Text(count == 1 ? "1 photo" : "\(count.formatted()) photos")
-                .font(LookTheme.Typography.secondary)
+                .font(LookTheme.Typography.caption)
                 .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.thinMaterial, in: Capsule())
+                .environment(\.colorScheme, .dark)
         }
         .padding(.horizontal, LookTheme.Spacing.screen)
-        .padding(.vertical, LookTheme.Spacing.small)
+        .padding(.vertical, LookTheme.Spacing.tight)
         .frame(maxWidth: .infinity)
-        .background(.thinMaterial)
-        .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(count) photos")
         .accessibilityAddTraits(.isHeader)

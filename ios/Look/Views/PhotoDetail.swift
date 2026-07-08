@@ -16,6 +16,7 @@ struct PhotoDetail: View {
     @State private var showTagHistory = false
     @State private var status: PhotoDetailStatus?
     @State private var isDownloading = false
+    @State private var isSharing = false
     @State private var shareItem: ShareItem?
     @State private var isFavorite = false
 
@@ -30,7 +31,7 @@ struct PhotoDetail: View {
                     imageSection
                     VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
                         titleSection
-                        actionRowsSection
+                        quickActionsRow
                         metadataSection
                         if photo.hasLocation { mapSection }
                         tagsSection
@@ -121,15 +122,6 @@ struct PhotoDetail: View {
 
     private var titleSection: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
-            HStack(alignment: .center, spacing: LookTheme.Spacing.small) {
-                LookTheme.sectionHeader(isRawOriginal ? "RAW original" : "Archive photo")
-                Spacer(minLength: LookTheme.Spacing.small)
-                if let fileKind = PhotoDetailMetadataFormatter.fileKind(filename: photo.filename,
-                                                                        mimeType: photo.mimeType) {
-                    LookChip(title: fileKind, systemImage: "doc", tint: LookTheme.ColorToken.accent)
-                }
-            }
-
             HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
                 Text(photo.filename)
                     .font(LookTheme.Typography.title)
@@ -138,21 +130,14 @@ struct PhotoDetail: View {
                     .textSelection(.enabled)
                     .accessibilityLabel("Filename, \(photo.filename)")
 
-                Spacer(minLength: LookTheme.Spacing.tight)
+                Spacer(minLength: LookTheme.Spacing.small)
 
-                Button {
-                    toggleFavorite()
-                } label: {
-                    Image(systemName: isFavorite ? "heart.fill" : "heart")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(isFavorite ? Color.pink : LookTheme.ColorToken.secondaryText)
-                        .frame(width: 38, height: 38)
-                        .background(LookTheme.ColorToken.surface, in: Circle())
-                        .contentTransition(.symbolEffect(.replace))
+                if let fileKind = PhotoDetailMetadataFormatter.fileKind(filename: photo.filename,
+                                                                        mimeType: photo.mimeType) {
+                    LookChip(title: fileKind, systemImage: "doc", tint: LookTheme.ColorToken.accent)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
             }
+
             if let date = PhotoDetailMetadataFormatter.displayDate(from: photo.createdAt) {
                 Label(date, systemImage: "calendar")
                     .font(.subheadline)
@@ -175,45 +160,79 @@ struct PhotoDetail: View {
         }
     }
 
-    private var actionRowsSection: some View {
-        PhotoDetailPanel(header: "Actions") {
-            VStack(spacing: 0) {
-                PhotoDetailActionRow(systemImage: "rectangle.stack.badge.plus",
-                                     title: "Add to Album",
-                                     detail: "Place this frame into an album") {
-                    showAddToAlbum = true
-                }
+    /// Compact primary actions sitting directly under the title. The toolbar
+    /// menu still carries the secondary/rarer actions (RAW export, Tag History),
+    /// so this row stays to four high-frequency taps.
+    private var quickActionsRow: some View {
+        HStack(spacing: LookTheme.Spacing.small) {
+            quickAction(title: isFavorite ? "Favorited" : "Favorite",
+                        systemImage: isFavorite ? "heart.fill" : "heart",
+                        iconTint: isFavorite ? Color.pink : LookTheme.ColorToken.accent,
+                        accessibility: isFavorite ? "Remove from favorites" : "Add to favorites") {
+                toggleFavorite()
+            }
 
-                PhotoDetailSeparator()
+            quickAction(title: "Album",
+                        systemImage: "rectangle.stack.badge.plus",
+                        accessibility: "Add to album") {
+                showAddToAlbum = true
+            }
 
-                PhotoDetailActionRow(systemImage: "square.and.arrow.down",
-                                     title: "Save JPEG",
-                                     detail: "Export a camera-roll copy",
-                                     isWorking: isDownloading) {
-                    Task { await saveJPEG() }
-                }
-                .disabled(isDownloading)
+            quickAction(title: "Save JPEG",
+                        systemImage: "square.and.arrow.down",
+                        accessibility: "Save JPEG to Photos",
+                        isWorking: isDownloading,
+                        disabled: isDownloading) {
+                Task { await saveJPEG() }
+            }
 
-                if isRawOriginal {
-                    PhotoDetailSeparator()
-                    PhotoDetailActionRow(systemImage: "doc.badge.arrow.up",
-                                         title: "Export RAW Original",
-                                         detail: "Share the \(photo.fileExtension.uppercased()) source file",
-                                         isWorking: isDownloading) {
-                        Task { await shareRAW() }
-                    }
-                    .disabled(isDownloading)
-                }
-
-                PhotoDetailSeparator()
-
-                PhotoDetailActionRow(systemImage: "clock.arrow.circlepath",
-                                     title: "Tag History",
-                                     detail: "Review archive edits") {
-                    showTagHistory = true
-                }
+            quickAction(title: "Share",
+                        systemImage: "square.and.arrow.up",
+                        accessibility: "Share photo",
+                        isWorking: isSharing,
+                        disabled: isSharing) {
+                Task { await shareJPEG() }
             }
         }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func quickAction(title: String,
+                             systemImage: String,
+                             iconTint: Color = LookTheme.ColorToken.accent,
+                             accessibility: String,
+                             isWorking: Bool = false,
+                             disabled: Bool = false,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: LookTheme.Spacing.tight) {
+                ZStack {
+                    if isWorking {
+                        ProgressView()
+                    } else {
+                        Image(systemName: systemImage)
+                            .font(.title3)
+                            .foregroundStyle(iconTint)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                }
+                .frame(height: 24)
+
+                Text(title)
+                    .font(LookTheme.Typography.caption)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.vertical, LookTheme.Spacing.small)
+            .lookSurface(radius: LookTheme.Radius.control)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.55 : 1)
+        .accessibilityLabel(accessibility)
     }
 
     private var metadataSection: some View {
@@ -534,6 +553,21 @@ struct PhotoDetail: View {
         }
     }
 
+    private func shareJPEG() async {
+        guard !isSharing else { return }
+        isSharing = true
+        defer { isSharing = false }
+        do {
+            let data = try await APIClient.shared.downloadJPEGData(photo.id)
+            let name = (photo.filename as NSString).deletingPathExtension + ".jpg"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+            try data.write(to: url)
+            shareItem = ShareItem(url: url)
+        } catch {
+            showError("Share failed: \(error.localizedDescription)")
+        }
+    }
+
     private func shareRAW() async {
         isDownloading = true
         defer { isDownloading = false }
@@ -687,58 +721,6 @@ private struct PhotoDetailPanel<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .lookCard(inset: LookTheme.Spacing.medium)
         }
-    }
-}
-
-private struct PhotoDetailActionRow: View {
-    let systemImage: String
-    let title: String
-    let detail: String
-    var isWorking = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: LookTheme.Spacing.small) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
-                        .fill(LookTheme.ColorToken.accent.opacity(0.12))
-
-                    Image(systemName: systemImage)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(LookTheme.ColorToken.accent)
-                        .accessibilityHidden(true)
-                }
-                .frame(width: 36, height: 36)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(LookTheme.Typography.bodyEmphasis)
-                        .foregroundStyle(LookTheme.ColorToken.primaryText)
-                    Text(detail)
-                        .font(LookTheme.Typography.secondary)
-                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: LookTheme.Spacing.small)
-
-                if isWorking {
-                    ProgressView()
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
-                        .accessibilityHidden(true)
-                }
-            }
-            .padding(.vertical, LookTheme.Spacing.small)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
-        .accessibilityHint(detail)
     }
 }
 

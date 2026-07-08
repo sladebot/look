@@ -266,7 +266,17 @@ class PhotoDatabase:
 
     def get_albums(self) -> list:
         with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM albums ORDER BY name").fetchall()
+            rows = conn.execute("""
+                SELECT a.*, (
+                    SELECT p.id FROM album_photos ap
+                    JOIN photos p ON p.id = ap.photo_id
+                    WHERE ap.album_id = a.id
+                    ORDER BY p.created_at DESC
+                    LIMIT 1
+                ) AS cover_photo_id
+                FROM albums a
+                ORDER BY a.name
+            """).fetchall()
             return [dict(row) for row in rows]
 
     def get_album(self, album_id: str) -> dict:

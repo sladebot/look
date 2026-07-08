@@ -137,11 +137,31 @@ struct Album: Codable, Identifiable {
     let photoCount: Int?
     let source: String?
     let photos: [Photo]?
+    let coverPhotoId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, description
         case photoCount = "photo_count"
         case source, photos
+        case coverPhotoId = "cover_photo_id"
+    }
+
+    init(
+        id: String,
+        name: String,
+        description: String? = nil,
+        photoCount: Int? = nil,
+        source: String? = nil,
+        photos: [Photo]? = nil,
+        coverPhotoId: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.photoCount = photoCount
+        self.source = source
+        self.photos = photos
+        self.coverPhotoId = coverPhotoId
     }
 }
 

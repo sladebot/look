@@ -13,8 +13,6 @@ struct LibraryView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
-                    libraryHeader
-
                     if let message = actionMessage ?? store.errorMessage {
                         LookStatusBanner(
                             title: "Library update failed",
@@ -59,7 +57,8 @@ struct LibraryView: View {
                                             title: album.name,
                                             subtitle: album.description?.nilIfBlank ?? "Manual photo collection.",
                                             badge: photoCountText(album.photoCount),
-                                            tint: LookTheme.ColorToken.primaryText
+                                            tint: LookTheme.ColorToken.primaryText,
+                                            coverPhotoId: album.coverPhotoId
                                         )
                                     }
                                     .buttonStyle(.plain)
@@ -161,26 +160,6 @@ struct LibraryView: View {
         }
     }
 
-    private var libraryHeader: some View {
-        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    LookTheme.sectionHeader("Collections")
-                    Text("Organize the library")
-                        .font(LookTheme.Typography.sectionTitle)
-                        .foregroundStyle(LookTheme.ColorToken.primaryText)
-                }
-                Spacer()
-            }
-
-            HStack(spacing: LookTheme.Spacing.small) {
-                LibraryMetric(title: "Albums", value: "\(store.albums.count)", tint: LookTheme.ColorToken.primaryText)
-                LibraryMetric(title: "Smart", value: "\(store.smartCollections.count)", tint: LookTheme.ColorToken.accent)
-            }
-        }
-        .lookCard()
-    }
-
     private func photoCountText(_ count: Int?) -> String? {
         guard let count else { return nil }
         return count == 1 ? "1 photo" : "\(count) photos"
@@ -249,18 +228,26 @@ private struct LibraryCollectionRow: View {
     let subtitle: String
     var badge: String?
     let tint: Color
+    var coverPhotoId: String? = nil
 
     var body: some View {
         HStack(spacing: LookTheme.Spacing.medium) {
-            ZStack {
-                RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
-                    .fill(tint.opacity(0.13))
-                Image(systemName: icon)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(tint)
+            if let coverPhotoId {
+                CachedThumbnail(url: APIClient.shared.thumbnailURL(for: coverPhotoId, size: 256))
+                    .frame(width: 52, height: 52)
+                    .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.thumbnail, style: .continuous))
+                    .accessibilityHidden(true)
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
+                        .fill(tint.opacity(0.13))
+                    Image(systemName: icon)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(tint)
+                }
+                .frame(width: 44, height: 44)
+                .accessibilityHidden(true)
             }
-            .frame(width: 44, height: 44)
-            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
@@ -292,26 +279,6 @@ private struct LibraryCollectionRow: View {
         .padding(LookTheme.Spacing.medium)
         .lookSurface()
         .accessibilityElement(children: .combine)
-    }
-}
-
-private struct LibraryMetric: View {
-    let title: String
-    let value: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(LookTheme.Typography.sectionTitle)
-                .foregroundStyle(tint)
-            Text(title)
-                .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.secondaryText)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(LookTheme.Spacing.small)
-        .background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
     }
 }
 
@@ -392,6 +359,7 @@ struct SmartAlbumDetail: View {
     @State private var isEvaluating = false
     @State private var errorMessage: String?
     @State private var selected: Photo?
+    @Namespace private var viewerZoomNamespace
 
     private let columns = [GridItem(.adaptive(minimum: 112), spacing: 4)]
 
@@ -436,6 +404,7 @@ struct SmartAlbumDetail: View {
                         LazyVGrid(columns: columns, spacing: 4) {
                             ForEach(photos) { photo in
                                 PhotoCard(photo: photo)
+                                    .modifier(LookZoomSource(id: photo.id, namespace: viewerZoomNamespace))
                                     .onTapGesture { selected = photo }
                             }
                         }
@@ -468,6 +437,7 @@ struct SmartAlbumDetail: View {
         .task { await load() }
         .fullScreenCover(item: $selected) { photo in
             NativePhotoViewer(photos: photos, initialPhoto: photo)
+                .modifier(LookZoomTransition(id: photo.id, namespace: viewerZoomNamespace))
         }
     }
 

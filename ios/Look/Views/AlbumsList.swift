@@ -64,12 +64,19 @@ private struct AlbumListRow: View {
 
     var body: some View {
         HStack(spacing: LookTheme.Spacing.medium) {
-            Image(systemName: "rectangle.stack.fill")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.primaryText)
-                .frame(width: 42, height: 42)
-                .background(LookTheme.ColorToken.primaryText.opacity(0.12), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
-                .accessibilityHidden(true)
+            if let coverPhotoId = album.coverPhotoId {
+                CachedThumbnail(url: APIClient.shared.thumbnailURL(for: coverPhotoId, size: 256))
+                    .frame(width: 52, height: 52)
+                    .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.thumbnail, style: .continuous))
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: "rectangle.stack.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
+                    .frame(width: 42, height: 42)
+                    .background(LookTheme.ColorToken.primaryText.opacity(0.12), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
+                    .accessibilityHidden(true)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(album.name)

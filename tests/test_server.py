@@ -451,3 +451,46 @@ def test_set_photo_favorite_toggles_flag():
             client.close()
     finally:
         api.server.db = old_db
+
+
+def test_albums_include_cover_photo_id():
+    """GET /api/albums should expose cover_photo_id (newest photo, or None when empty)."""
+    db_path = str(Path(tempfile.mkdtemp()) / "test_album_cover.db")
+
+    import api.server
+    from api.server import PhotoDatabase as PD
+
+    db = PD(db_path)
+    db.store_photo({
+        'id': 'photo_old', 'filename': 'old.jpg', 'filepath': '/tmp/old.jpg',
+        'width': 100, 'height': 100, 'mime_type': 'image/jpeg',
+        'created_at': '2024-01-01T00:00:00', 'indexed_at': '2024-01-01',
+    })
+    db.store_photo({
+        'id': 'photo_new', 'filename': 'new.jpg', 'filepath': '/tmp/new.jpg',
+        'width': 100, 'height': 100, 'mime_type': 'image/jpeg',
+        'created_at': '2024-06-01T00:00:00', 'indexed_at': '2024-06-01',
+    })
+
+    filled = db.create_album("Filled")
+    db.add_photo_to_album(filled, 'photo_old')
+    db.add_photo_to_album(filled, 'photo_new')
+    empty = db.create_album("Empty")
+
+    old_db = api.server.db
+    api.server.db = db
+    try:
+        transport = ASGITransport(app=app)
+        client = httpx.Client(transport=transport, base_url="http://test")
+        try:
+            resp = client.get("/api/albums")
+            assert resp.status_code == 200
+            albums = {a['id']: a for a in resp.json()['albums']}
+            # Newest photo (by created_at) is the cover.
+            assert albums[filled]['cover_photo_id'] == 'photo_new'
+            # Album with no photos has no cover.
+            assert albums[empty]['cover_photo_id'] is None
+        finally:
+            client.close()
+    finally:
+        api.server.db = old_db
