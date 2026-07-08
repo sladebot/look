@@ -25,7 +25,7 @@ struct DedupView: View {
                     }
                 Text("Lower tolerance = stricter matching (Hamming distance on perceptual hash).")
                     .font(LookTheme.Typography.caption)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
             }
 
             if loadedSettings && !enabled {
@@ -246,7 +246,7 @@ struct TasksView: View {
                     if let phase = task.progress?["phase"]?.stringValue {
                         Text("Phase: \(phase)")
                             .font(LookTheme.Typography.caption)
-                            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                            .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     }
                     if let cur = task.progress?["current"]?.intValue,
                        let total = task.progress?["total_scanned"]?.intValue, total > 0 {
@@ -255,7 +255,7 @@ struct TasksView: View {
                     if let created = task.createdAt {
                         Text(created)
                             .font(LookTheme.Typography.caption)
-                            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                            .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     }
                     if ["pending", "running"].contains(task.status) {
                         Button("Cancel", role: .destructive) {
@@ -271,7 +271,7 @@ struct TasksView: View {
         .overlay {
             if isLoading && tasks.isEmpty {
                 LookLoadingState(title: "Loading tasks", message: "Checking the server queue.")
-                    .background(LookTheme.ColorToken.paper.opacity(0.92))
+                    .background(LookTheme.ColorToken.canvas.opacity(0.92))
             }
         }
         .task { await load() }
@@ -291,7 +291,7 @@ struct TasksView: View {
     private func statusColor(_ status: String) -> Color {
         status == "completed" ? .green
             : status == "failed" ? LookTheme.ColorToken.danger
-            : status == "running" ? LookTheme.ColorToken.cyan : .secondary
+            : status == "running" ? LookTheme.ColorToken.accent : .secondary
     }
 
     private func statusIcon(_ status: String) -> String {
@@ -406,7 +406,7 @@ struct WatchListView: View {
         .overlay {
             if isLoading && directories.isEmpty {
                 LookLoadingState(title: "Loading directories", message: "Reading the server watch list.")
-                    .background(LookTheme.ColorToken.paper.opacity(0.92))
+                    .background(LookTheme.ColorToken.canvas.opacity(0.92))
             }
         }
         .task { await load() }
@@ -564,7 +564,7 @@ struct MigrationsView: View {
                 Section("Schema") {
                     HStack { Text("Current version"); Spacer()
                         Text("\(info.currentVersion)")
-                            .foregroundStyle(LookTheme.ColorToken.readableSecondary) }
+                            .foregroundStyle(LookTheme.ColorToken.secondaryText) }
                 }
                 Section("Pending (\(info.pending.count))") {
                     if info.pending.isEmpty {
@@ -579,7 +579,7 @@ struct MigrationsView: View {
                             Text("v\(m.version)").font(LookTheme.Typography.captionEmphasis)
                             Text(m.description)
                                 .font(LookTheme.Typography.secondary)
-                                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         }
                     }
                 }
@@ -600,7 +600,7 @@ struct MigrationsView: View {
         .overlay {
             if isLoading && info == nil {
                 LookLoadingState(title: "Checking migrations", message: "Reading the server schema status.")
-                    .background(LookTheme.ColorToken.paper.opacity(0.92))
+                    .background(LookTheme.ColorToken.canvas.opacity(0.92))
             }
         }
         .task { await load() }
@@ -682,7 +682,7 @@ struct TagCleanupView: View {
                         Spacer()
                         if let c = dup.c {
                             Text("\(c)")
-                                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         }
                     }
                     .font(LookTheme.Typography.secondary)
@@ -695,7 +695,7 @@ struct TagCleanupView: View {
         .overlay {
             if isLoading && duplicates.isEmpty {
                 LookLoadingState(title: "Loading tag suggestions", message: "Checking for duplicate tag names.")
-                    .background(LookTheme.ColorToken.paper.opacity(0.92))
+                    .background(LookTheme.ColorToken.canvas.opacity(0.92))
             }
         }
         .task { await load() }
@@ -827,7 +827,7 @@ private struct WatchDirectoryRow: View {
                 }
             }
             .font(LookTheme.Typography.caption)
-            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+            .foregroundStyle(LookTheme.ColorToken.secondaryText)
         }
     }
 }

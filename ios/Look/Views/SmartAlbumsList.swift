@@ -31,11 +31,11 @@ struct SmartAlbumsList: View {
                             systemImage: "sparkles.rectangle.stack",
                             message: "Create smart albums on the Look server to group photos by saved rules."
                         )
-                        .lookPanel(inset: 0)
+                        .lookCard(inset: 0)
                         .frame(minHeight: 320)
                     } else {
                         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
-                            LookTheme.eyebrow("\(store.smartCollections.count) Smart Albums")
+                            LookTheme.sectionHeader("\(store.smartCollections.count) smart albums")
                             ForEach(store.smartCollections) { collection in
                                 Button(action: { Task { await loadCollectionPhotos(collection) } }) {
                                     SmartAlbumListRow(
@@ -118,9 +118,9 @@ private struct SmartAlbumListRow: View {
         HStack(spacing: LookTheme.Spacing.medium) {
             Image(systemName: "sparkles.rectangle.stack.fill")
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.amber)
+                .foregroundStyle(LookTheme.ColorToken.accent)
                 .frame(width: 42, height: 42)
-                .background(LookTheme.ColorToken.amber.opacity(0.14), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
+                .background(LookTheme.ColorToken.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -130,7 +130,7 @@ private struct SmartAlbumListRow: View {
                     .lineLimit(1)
                 Text(subtitle)
                     .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .lineLimit(2)
             }
 
@@ -142,20 +142,19 @@ private struct SmartAlbumListRow: View {
             } else {
                 Text("Smart")
                     .font(LookTheme.Typography.captionEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.amber)
+                    .foregroundStyle(LookTheme.ColorToken.accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(LookTheme.ColorToken.amber.opacity(0.12), in: Capsule())
+                    .background(LookTheme.ColorToken.accent.opacity(0.12), in: Capsule())
 
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(LookTheme.ColorToken.readableTertiary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .accessibilityHidden(true)
             }
         }
         .padding(LookTheme.Spacing.medium)
-        .lookInsetSurface()
-        .lookFilmRail(color: LookTheme.ColorToken.amber)
+        .lookSurface()
         .accessibilityElement(children: .combine)
     }
 }

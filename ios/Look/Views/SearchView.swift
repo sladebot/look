@@ -90,7 +90,7 @@ struct SearchView: View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             HStack(spacing: LookTheme.Spacing.small) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .accessibilityHidden(true)
 
                 TextField("Filename, tag, camera, or path", text: $query)
@@ -108,7 +108,7 @@ struct SearchView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .imageScale(.medium)
-                            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                            .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Clear search")
@@ -122,18 +122,18 @@ struct SearchView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(trimmedQuery.isEmpty)
-                .foregroundStyle(trimmedQuery.isEmpty ? .secondary : LookTheme.ColorToken.cyan)
+                .foregroundStyle(trimmedQuery.isEmpty ? .secondary : LookTheme.ColorToken.accent)
                 .accessibilityLabel("Submit search")
             }
-            .lookTextInputSurface()
+            .lookTextInput()
             .overlay {
-                RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                    .stroke(isLoading ? LookTheme.ColorToken.cyan.opacity(0.55) : Color.clear, lineWidth: 1)
+                RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous)
+                    .stroke(isLoading ? LookTheme.ColorToken.accent.opacity(0.55) : Color.clear, lineWidth: 1)
             }
 
             Text("Search filenames, tags, camera text, and folder paths.")
                 .font(LookTheme.Typography.secondary)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, LookTheme.Spacing.screen)
@@ -179,13 +179,13 @@ struct SearchView: View {
                     systemImage: "photo.stack",
                     message: "Find photos by filename, tag, camera text, or folder path."
                 )
-                .lookPanel(inset: 0)
+                .lookCard(inset: 0)
                 .frame(minHeight: 260)
 
                 if !recentSearches.isEmpty {
                     VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
                         HStack {
-                            LookTheme.eyebrow("Recent Searches")
+                            LookTheme.sectionHeader("Recent searches")
                             Spacer()
                             Button("Clear") {
                                 recentSearchesStorage = ""
@@ -200,7 +200,7 @@ struct SearchView: View {
                                     Button {
                                         submitSearch(recentQuery, updateField: true)
                                     } label: {
-                                        LookChip(title: recentQuery, systemImage: "clock.arrow.circlepath", tint: LookTheme.ColorToken.graphite)
+                                        LookChip(title: recentQuery, systemImage: "clock.arrow.circlepath", tint: LookTheme.ColorToken.primaryText)
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel("Search for \(recentQuery)")
@@ -208,12 +208,12 @@ struct SearchView: View {
                             }
                         }
                     }
-                    .lookPanel()
+                    .lookCard()
                 }
 
                 if !store.allTags.isEmpty {
                     VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
-                        LookTheme.eyebrow("Browse Tags")
+                        LookTheme.sectionHeader("Browse tags")
 
                         FlowLayout(spacing: LookTheme.Spacing.tight) {
                             ForEach(store.allTags.prefix(18)) { info in
@@ -222,14 +222,14 @@ struct SearchView: View {
                                 } label: {
                                     LookChip(title: info.count.map { "\(info.tag) · \($0)" } ?? info.tag,
                                              systemImage: "tag",
-                                             tint: LookTheme.ColorToken.cyan)
+                                             tint: LookTheme.ColorToken.accent)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Search tag \(info.tag), \(info.count) photos")
                             }
                         }
                     }
-                    .lookPanel()
+                    .lookCard()
                 }
             }
             .padding(LookTheme.Spacing.screen)
@@ -241,10 +241,10 @@ struct SearchView: View {
             VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 3) {
-                        LookTheme.eyebrow("Results")
+                        LookTheme.sectionHeader("Results")
                         Text("\(results.count) photos for \"\(submittedQuery)\"")
                             .font(LookTheme.Typography.secondaryEmphasis)
-                            .foregroundStyle(LookTheme.ColorToken.graphite)
+                            .foregroundStyle(LookTheme.ColorToken.primaryText)
                             .lineLimit(2)
                     }
                     Spacer()
@@ -307,7 +307,7 @@ struct SearchView: View {
             } else {
                 Image(systemName: systemImage)
                     .font(.largeTitle)
-                    .foregroundStyle(LookTheme.ColorToken.readableTertiary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .accessibilityHidden(true)
             }
 
@@ -318,7 +318,7 @@ struct SearchView: View {
             if let message {
                 Text(message)
                     .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }

@@ -30,7 +30,7 @@ struct AddToAlbumSheet: View {
                     } label: {
                         HStack(spacing: LookTheme.Spacing.small) {
                             Image(systemName: "rectangle.stack")
-                                .foregroundStyle(LookTheme.ColorToken.cyan)
+                                .foregroundStyle(LookTheme.ColorToken.accent)
                                 .frame(width: 26)
                             Text(album.name)
                                 .foregroundStyle(.primary)
@@ -42,7 +42,7 @@ struct AddToAlbumSheet: View {
                                     .foregroundStyle(LookTheme.ColorToken.success)
                             } else {
                                 Image(systemName: "plus.circle")
-                                    .foregroundStyle(LookTheme.ColorToken.readableTertiary)
+                                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                             }
                         }
                         .padding(.vertical, 2)

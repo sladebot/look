@@ -109,10 +109,11 @@ struct FullScreenImage: View {
                 if isLoadingPreview {
                     ProgressView()
                         .tint(.white)
-                        .scaleEffect(0.8)
                         .padding(10)
-                        .background(.black.opacity(0.42), in: Capsule())
+                        .background(.thinMaterial, in: Circle())
+                        .environment(\.colorScheme, .dark)
                         .padding(.bottom, 26)
+                        .accessibilityLabel("Loading full quality preview")
                 }
             }
     }
@@ -156,11 +157,15 @@ struct FullScreenImage: View {
 
     private var failureState: some View {
         VStack(spacing: 8) {
-            Image(systemName: "photo.badge.exclamationmark").font(.largeTitle)
-            Text("Failed to load image").font(LookTheme.Typography.secondary)
+            Image(systemName: "photo.badge.exclamationmark")
+                .font(.largeTitle)
+                .accessibilityHidden(true)
+            Text("Failed to load image")
+                .font(LookTheme.Typography.secondary)
         }
-        .foregroundColor(.white)
+        .foregroundStyle(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
     private func loadDisplayImage() async {

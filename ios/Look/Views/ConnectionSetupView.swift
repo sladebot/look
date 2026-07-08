@@ -25,11 +25,13 @@ struct ConnectionSetupView: View {
                 VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
                     header
                     statusBanner
-                    connectionPanel
-                    examplesPanel
-                    helpPanel
+                    connectionCard
+                    examplesCard
+                    helpCard
                 }
                 .padding(LookTheme.Spacing.screen)
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
             }
             .lookScreenBackground()
             .navigationTitle("Connect to Look")
@@ -52,28 +54,21 @@ struct ConnectionSetupView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
             Image(systemName: "point.3.connected.trianglepath.dotted")
-                .font(.system(size: 40, weight: .semibold))
-                .foregroundStyle(LookTheme.ColorToken.cyan)
+                .font(.largeTitle)
+                .imageScale(.large)
+                .foregroundStyle(LookTheme.ColorToken.accent)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
-                LookTheme.eyebrow("Private library")
                 Text("Connect with Tailscale")
                     .font(LookTheme.Typography.display)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Look requires a self-hosted Look server. Use the address this iPhone can reach through Tailscale, then test once to unlock the library.")
-                    .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                Text("Look requires a self-hosted Look server. Use the address this device can reach through Tailscale, then test once to unlock the library.")
+                    .font(LookTheme.Typography.body)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            HStack(spacing: LookTheme.Spacing.tight) {
-                LookChip(title: "MagicDNS", systemImage: "network", tint: LookTheme.ColorToken.cyan)
-                LookChip(title: "100.x IP", systemImage: "lock.shield", tint: LookTheme.ColorToken.graphite)
-                LookChip(title: "API key optional", systemImage: "key", tint: LookTheme.ColorToken.amber)
-            }
-            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, LookTheme.Spacing.small)
     }
@@ -111,12 +106,11 @@ struct ConnectionSetupView: View {
         }
     }
 
-    private var connectionPanel: some View {
+    private var connectionCard: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
-            panelHeader(
+            cardHeader(
                 title: "Server",
-                subtitle: "This is usually the Mac, NAS, or mini PC running Look.",
-                systemImage: "server.rack"
+                subtitle: "This is usually the Mac, NAS, or mini PC running Look."
             )
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
@@ -129,97 +123,111 @@ struct ConnectionSetupView: View {
                     .focused($focusedField, equals: .serverURL)
                     .submitLabel(.next)
                     .onSubmit { focusedField = .apiKey }
-                    .lookTextInputSurface()
+                    .lookTextInput()
             }
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
                 fieldLabel("API key", detail: "Only if API_KEY is set on the server")
-                SecureField("Leave blank for a private Tailscale server without API_KEY", text: $apiKey)
+                SecureField("Leave blank for a private Tailscale server", text: $apiKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textContentType(.password)
                     .focused($focusedField, equals: .apiKey)
                     .submitLabel(.go)
                     .onSubmit { testConnection() }
-                    .lookTextInputSurface()
+                    .lookTextInput()
             }
 
             Button {
                 testConnection()
             } label: {
-                HStack {
+                HStack(spacing: LookTheme.Spacing.small) {
                     if isTesting {
                         ProgressView()
                             .tint(.white)
                     }
                     Text(isTesting ? "Testing connection" : "Test and continue")
-                        .fontWeight(.semibold)
+                        .font(LookTheme.Typography.bodyEmphasis)
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
+            .tint(LookTheme.ColorToken.accentControl)
+            .foregroundStyle(.white)
             .disabled(isTesting || normalizedServerURL.isEmpty)
-            .controlSize(.large)
             .padding(.top, LookTheme.Spacing.tight)
         }
-        .lookPanel()
+        .lookCard()
     }
 
-    private var examplesPanel: some View {
+    private var examplesCard: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
-            panelHeader(
-                title: "Common Tailscale Addresses",
-                subtitle: "Tap an example to fill the server URL, then replace it with your machine's address.",
-                systemImage: "network"
+            cardHeader(
+                title: "Common Tailscale addresses",
+                subtitle: "Tap an example to fill the server URL, then replace it with your machine's address."
             )
 
             VStack(spacing: LookTheme.Spacing.small) {
-                exampleRow("Tailscale IP", value: "http://100.86.254.112:5678", note: "Works even if MagicDNS is disabled.")
-                exampleRow("MagicDNS", value: "http://studio.tailnet-name.ts.net:5678", note: "Friendlier when Tailscale DNS is enabled.")
+                exampleRow("Tailscale IP",
+                           value: "http://100.86.254.112:5678",
+                           note: "Works even if MagicDNS is disabled.")
+                exampleRow("MagicDNS",
+                           value: "http://studio.tailnet-name.ts.net:5678",
+                           note: "Friendlier when Tailscale DNS is enabled.")
             }
         }
-        .lookPanel()
+        .lookCard()
     }
 
-    private var helpPanel: some View {
+    private var helpCard: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
-            Label("Before testing", systemImage: "checklist")
+            Text("Before testing")
                 .font(LookTheme.Typography.headline)
-            Text("Make sure Tailscale is connected on this iPhone and on the Look server. The server should be running on port 5678 and reachable from the same Tailscale network. Look does not scan this iPhone's photo library.")
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
+            Text("Make sure Tailscale is connected on this device and on the Look server. The server should be running on port 5678 and reachable from the same Tailscale network. Look does not scan this device's photo library.")
                 .font(LookTheme.Typography.secondary)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .lookPanel()
+        .lookCard()
     }
 
-    private func panelHeader(title: String, subtitle: String, systemImage: String) -> some View {
-        HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
-            Image(systemName: systemImage)
-                .foregroundStyle(LookTheme.ColorToken.cyan)
-                .frame(width: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(LookTheme.Typography.headline)
-                Text(subtitle)
-                    .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+    private func cardHeader(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(LookTheme.Typography.headline)
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
+            Text(subtitle)
+                .font(LookTheme.Typography.secondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private func fieldLabel(_ title: String, detail: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(LookTheme.Typography.secondaryEmphasis)
-                .foregroundStyle(LookTheme.ColorToken.graphite)
-            Spacer()
-            Text(detail)
-                .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline) {
+                fieldLabelTitle(title)
+                Spacer()
+                fieldLabelDetail(detail)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                fieldLabelTitle(title)
+                fieldLabelDetail(detail)
+            }
         }
+    }
+
+    private func fieldLabelTitle(_ title: String) -> some View {
+        Text(title)
+            .font(LookTheme.Typography.secondaryEmphasis)
+            .foregroundStyle(LookTheme.ColorToken.primaryText)
+    }
+
+    private func fieldLabelDetail(_ detail: String) -> some View {
+        Text(detail)
+            .font(LookTheme.Typography.secondary)
+            .foregroundStyle(LookTheme.ColorToken.secondaryText)
     }
 
     private func exampleRow(_ label: String, value: String, note: String) -> some View {
@@ -228,31 +236,43 @@ struct ConnectionSetupView: View {
             clearStatus()
         } label: {
             HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
-                Image(systemName: "arrow.down.doc")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(LookTheme.ColorToken.cyan)
-                    .frame(width: 22)
-                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(label)
                         .font(LookTheme.Typography.secondaryEmphasis)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(LookTheme.ColorToken.primaryText)
                     Text(value)
                         .font(LookTheme.Typography.mono)
-                        .foregroundStyle(LookTheme.ColorToken.graphite)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
                     Text(note)
-                        .font(LookTheme.Typography.caption)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .font(LookTheme.Typography.secondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
                 Spacer(minLength: LookTheme.Spacing.tight)
+
+                Image(systemName: "arrow.down.left.circle")
+                    .font(LookTheme.Typography.headline)
+                    .foregroundStyle(LookTheme.ColorToken.accent)
+                    .accessibilityHidden(true)
             }
-            .padding(LookTheme.Spacing.small)
-            .background(LookTheme.ColorToken.mist.opacity(0.45), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
+            .padding(LookTheme.Spacing.medium)
+            .frame(minHeight: 44)
+            .background(LookTheme.ColorToken.elevated,
+                        in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                UIPasteboard.general.string = value
+            } label: {
+                Label("Copy address", systemImage: "doc.on.doc")
+            }
+        }
+        .accessibilityLabel("\(label). \(value). \(note)")
+        .accessibilityHint("Fills the server URL field with this example.")
     }
 
     private func testConnection() {

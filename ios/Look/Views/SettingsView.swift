@@ -71,7 +71,7 @@ struct SettingsView: View {
                     .focused($focusedField, equals: .serverURL)
                     .submitLabel(.next)
                     .onSubmit { focusedField = .apiKey }
-                    .lookTextInputSurface()
+                    .lookTextInput()
             }
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
@@ -83,12 +83,12 @@ struct SettingsView: View {
                     .focused($focusedField, equals: .apiKey)
                     .submitLabel(.go)
                     .onSubmit { testConnection() }
-                    .lookTextInputSurface()
+                    .lookTextInput()
             }
 
             Text("Examples: http://100.86.254.112:5678 or http://studio.tailnet-name.ts.net:5678")
                 .font(LookTheme.Typography.secondary)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
@@ -108,7 +108,7 @@ struct SettingsView: View {
             .controlSize(.large)
             .disabled(isTesting || serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-        .lookPanel()
+        .lookCard()
     }
 
     @ViewBuilder
@@ -169,7 +169,7 @@ struct SettingsView: View {
                 settingsRow("Last sync", value: message, systemImage: "clock")
             }
         }
-        .lookPanel()
+        .lookCard()
     }
 
     private var libraryPanel: some View {
@@ -204,10 +204,10 @@ struct SettingsView: View {
             if let cacheMessage {
                 Text(cacheMessage)
                     .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
             }
         }
-        .lookPanel()
+        .lookCard()
     }
 
     private var featuresPanel: some View {
@@ -226,7 +226,7 @@ struct SettingsView: View {
                 serverToggle("Auto-tag camera", key: "auto_tag_camera")
             }
         }
-        .lookPanel()
+        .lookCard()
     }
 
     private var toolsPanel: some View {
@@ -245,7 +245,7 @@ struct SettingsView: View {
                 toolLink("Migrations", systemImage: "cylinder.split.1x2") { MigrationsView() }
             }
         }
-        .lookPanel()
+        .lookCard()
     }
 
     private var aboutPanel: some View {
@@ -259,7 +259,7 @@ struct SettingsView: View {
             settingsRow("App", value: "Look", systemImage: "camera.aperture")
             settingsRow("Version", value: "1.1", systemImage: "number")
         }
-        .lookPanel()
+        .lookCard()
     }
 
     private func testConnection() {
@@ -299,7 +299,7 @@ struct SettingsView: View {
     private func panelHeader(title: String, subtitle: String, systemImage: String) -> some View {
         HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
             Image(systemName: systemImage)
-                .foregroundStyle(LookTheme.ColorToken.cyan)
+                .foregroundStyle(LookTheme.ColorToken.accent)
                 .frame(width: 24)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
@@ -307,7 +307,7 @@ struct SettingsView: View {
                     .font(LookTheme.Typography.headline)
                 Text(subtitle)
                     .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -317,25 +317,25 @@ struct SettingsView: View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .font(LookTheme.Typography.secondaryEmphasis)
-                .foregroundStyle(LookTheme.ColorToken.graphite)
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
             Spacer()
             Text(detail)
                 .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
         }
     }
 
     private func settingsRow(_ title: String, value: String, systemImage: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
             Image(systemName: systemImage)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .frame(width: 22)
                 .accessibilityHidden(true)
             Text(title)
-                .foregroundStyle(LookTheme.ColorToken.graphite)
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
             Spacer(minLength: LookTheme.Spacing.small)
             Text(value)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .multilineTextAlignment(.trailing)
         }
         .font(LookTheme.Typography.secondary)
@@ -351,7 +351,7 @@ struct SettingsView: View {
         } label: {
             HStack(spacing: LookTheme.Spacing.small) {
                 Image(systemName: systemImage)
-                    .foregroundStyle(LookTheme.ColorToken.cyan)
+                    .foregroundStyle(LookTheme.ColorToken.accent)
                     .frame(width: 24)
                     .accessibilityHidden(true)
                 Text(title)
@@ -360,7 +360,7 @@ struct SettingsView: View {
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(LookTheme.ColorToken.readableTertiary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .accessibilityHidden(true)
             }
             .padding(.vertical, 6)

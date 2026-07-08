@@ -103,11 +103,11 @@ private struct TagHistoryRow: View {
                     }
                 }
                 .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
             }
         }
         .padding(LookTheme.Spacing.medium)
-        .lookInsetSurface()
+        .lookSurface()
         .accessibilityElement(children: .combine)
     }
 }

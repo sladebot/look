@@ -26,17 +26,21 @@ struct LookApp: App {
 
     var body: some Scene {
         WindowGroup {
-            #if DEBUG
-            if LookDemoScreenshots.isActive {
-                DemoScreenshotHost()
-            } else {
+            Group {
+                #if DEBUG
+                if LookDemoScreenshots.isActive {
+                    DemoScreenshotHost()
+                } else {
+                    ContentView()
+                        .environmentObject(store)
+                }
+                #else
                 ContentView()
                     .environmentObject(store)
+                #endif
             }
-            #else
-            ContentView()
-                .environmentObject(store)
-            #endif
+            .tint(LookTheme.ColorToken.accent)
+            .preferredColorScheme(.dark)
         }
     }
 }

@@ -1,65 +1,75 @@
 import SwiftUI
 
+/// "Look 2.0" design language.
+///
+/// Dark, photo-first, quiet chrome: photos supply the color, the UI stays
+/// neutral and legible. Every text role maps to a Dynamic Type text style
+/// (.footnote is the absolute floor, and only for auxiliary metadata).
+/// No uppercase tracked labels, no tertiary text color, no fixed-pixel fonts.
 enum LookTheme {
-    /// "Selenium": the cool neutral black of film base and selenium-toned
-    /// silver — the archival process photographers use to make prints
-    /// permanent. One muted selenium-violet identity accent; semantic
-    /// green/red are reserved for status.
+    // MARK: Color
+
     enum ColorToken {
-        static let darkroom = Color(hex: 0x0B0B0D)
-        static let paper = Color(hex: 0x141416)
-        static let surface = Color(hex: 0x1D1D21)
-        static let elevated = Color(hex: 0x26262B)
-        static let graphite = Color(hex: 0xF2F2F5)
-        static let readableSecondary = Color(hex: 0xC7C7CE)
-        static let readableTertiary = Color(hex: 0xA9A9B2)
-        static let mist = Color(hex: 0x37373E)
-        static let line = Color(hex: 0x414149)
-        /// Identity accent for text, icons, chips, eyebrows, selection.
-        static let accent = Color(hex: 0xB7A9E6)
-        /// Deeper violet for filled controls, so white labels keep contrast.
-        static let accentControl = Color(hex: 0x6F5FBE)
-        /// Legacy aliases — older call sites re-point to the single accent.
-        static let cyan = accent
-        static let amber = accent
+        /// Root window background (behind everything).
+        static let backdrop = Color(hex: 0x0A0A0C)
+        /// Screen background.
+        static let canvas = Color(hex: 0x131316)
+        /// Cards, rows, input fields.
+        static let surface = Color(hex: 0x1C1C21)
+        /// Sheets, menus, banners — one step above `surface`.
+        static let elevated = Color(hex: 0x26262C)
+        /// Primary readable text.
+        static let primaryText = Color(hex: 0xF5F5F7)
+        /// Secondary readable text — the darkest gray allowed for meaningful text.
+        static let secondaryText = Color(hex: 0xC9C9D1)
+        /// Hairline separators and decorative strokes only; never text.
+        static let separator = Color(hex: 0x3A3A42)
+        /// Brand accent for icons, text highlights, and selection tint.
+        static let accent = Color(hex: 0xA79BFF)
+        /// Deeper violet for filled controls so white labels keep ~5:1 contrast.
+        static let accentControl = Color(hex: 0x6A5AE0)
         static let success = Color(hex: 0x4CC27E)
-        static let danger = Color(hex: 0xE0655A)
+        static let danger = Color(hex: 0xFF6B5E)
     }
 
-    /// Semantic type scale. Every role maps to a Dynamic Type text style so the
-    /// whole app scales with the user's preferred reading size. `caption` (SwiftUI
-    /// .footnote, 13pt) is the smallest size any readable content may use —
-    /// .caption/.caption2 are reserved for glyph sizing on decorative icons.
+    // MARK: Typography
+
+    /// Semantic type scale. Every role is a Dynamic Type text style so the app
+    /// scales with the user's preferred reading size. `caption` (.footnote) is
+    /// the floor and is reserved for auxiliary metadata (timestamps, counts)
+    /// rendered in `secondaryText` or brighter.
     enum Typography {
-        /// Hero text on the connection/setup screen.
+        /// Hero text (connection/setup screen). .largeTitle.
         static let display = Font.largeTitle.weight(.bold)
-        /// Large on-screen titles (photo filename on the detail sheet).
+        /// Large on-screen titles (photo filename on the detail sheet). .title2.
         static let title = Font.title2.weight(.semibold)
-        /// Section-level titles inside a screen.
+        /// Section-level titles inside a screen. .title3.
         static let sectionTitle = Font.title3.weight(.semibold)
-        /// Panel headers and row titles.
+        /// Panel headers and row titles. .headline.
         static let headline = Font.headline
-        /// Primary content.
+        /// Primary content. .body.
         static let body = Font.body
         static let bodyEmphasis = Font.body.weight(.semibold)
-        /// Supporting copy, descriptions, row subtitles.
+        /// Supporting copy, descriptions, row subtitles. .subheadline.
         static let secondary = Font.subheadline
         static let secondaryEmphasis = Font.subheadline.weight(.semibold)
-        /// Smallest readable size: timestamps, counts, badges.
+        /// Absolute floor: timestamps, counts, badges only. .footnote.
         static let caption = Font.footnote
         static let captionEmphasis = Font.footnote.weight(.semibold)
-        /// Uppercased section eyebrows; always paired with tracking via eyebrow().
-        /// Monospaced — the "edge print" signature, echoing the frame markings
-        /// on film stock.
-        static let overline = Font.system(.footnote, design: .monospaced).weight(.semibold)
-        /// Technical values: paths, URLs, coordinates.
+        /// File paths, URLs, coordinates ONLY — pair with a Copy affordance
+        /// and .lineLimit(2)/.truncationMode(.tail). .footnote floor.
         static let mono = Font.system(.footnote, design: .monospaced)
     }
 
+    // MARK: Metrics
+
     enum Radius {
-        static let panel: CGFloat = 10
-        static let control: CGFloat = 8
-        static let thumbnail: CGFloat = 3
+        /// Cards and panels.
+        static let card: CGFloat = 12
+        /// Buttons, fields, small controls.
+        static let control: CGFloat = 10
+        /// Photo thumbnails.
+        static let thumbnail: CGFloat = 6
     }
 
     enum Spacing {
@@ -71,91 +81,77 @@ enum LookTheme {
         static let screen: CGFloat = 16
     }
 
+    // MARK: Text helpers
+
+    /// Large on-screen title in primary text color.
     static func title(_ text: String) -> some View {
         Text(text)
             .font(Typography.title)
-            .foregroundStyle(ColorToken.graphite)
+            .foregroundStyle(ColorToken.primaryText)
     }
 
-    /// The edge-print signature: monospaced, letter-spaced, uppercase section
-    /// marker in selenium violet — like the frame markings on film stock.
-    static func eyebrow(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(Typography.overline)
-            .tracking(1.2)
-            .foregroundStyle(ColorToken.accent)
+    /// Sentence-case section header — .headline in primary text.
+    static func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(Typography.headline)
+            .foregroundStyle(ColorToken.primaryText)
     }
 }
+
+// MARK: - Screen background
 
 struct LookScreenBackground: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background {
-                LinearGradient(
-                    colors: [LookTheme.ColorToken.paper, LookTheme.ColorToken.darkroom],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            }
+            .background(LookTheme.ColorToken.canvas.ignoresSafeArea())
     }
 }
 
-struct LookPanel: ViewModifier {
+// MARK: - Card / surface
+
+/// Card: content on `surface`, radius 12, no borders or heavy shadows —
+/// depth comes from surface steps, not chrome.
+struct LookCard: ViewModifier {
     var inset: CGFloat = LookTheme.Spacing.medium
 
     func body(content: Content) -> some View {
         content
             .padding(inset)
             .background(LookTheme.ColorToken.surface,
-                        in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                    .stroke(LookTheme.ColorToken.line.opacity(0.55), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 6)
+                        in: RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
     }
 }
 
-struct LookInsetSurface: ViewModifier {
-    var radius: CGFloat = LookTheme.Radius.panel
+/// Bare rounded surface (no padding) for thumbnails-in-rows, inline fills.
+struct LookSurface: ViewModifier {
+    var radius: CGFloat = LookTheme.Radius.card
 
     func body(content: Content) -> some View {
         content
-            .background(LookTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(LookTheme.ColorToken.line.opacity(0.55), lineWidth: 1)
-            }
+            .background(LookTheme.ColorToken.surface,
+                        in: RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 }
 
-struct LookTextInputSurface: ViewModifier {
+/// Text input chrome: .body input text on `surface` with a hairline stroke.
+struct LookTextInput: ViewModifier {
     func body(content: Content) -> some View {
         content
+            .font(LookTheme.Typography.body)
             .padding(.horizontal, LookTheme.Spacing.medium)
             .padding(.vertical, 12)
-            .foregroundStyle(LookTheme.ColorToken.graphite)
-            .tint(LookTheme.ColorToken.cyan)
-            .modifier(LookInsetSurface(radius: LookTheme.Radius.control))
-    }
-}
-
-/// Left accent bar marking a row or image as part of the "filmstrip".
-struct LookFilmRail: ViewModifier {
-    var color: Color = LookTheme.ColorToken.darkroom
-    var isActive = false
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(alignment: .leading) {
-                UnevenRoundedRectangle(topLeadingRadius: LookTheme.Radius.panel,
-                                       bottomLeadingRadius: LookTheme.Radius.panel)
-                    .fill(color.opacity(isActive ? 1 : 0.7))
-                    .frame(width: 3)
+            .foregroundStyle(LookTheme.ColorToken.primaryText)
+            .tint(LookTheme.ColorToken.accent)
+            .background(LookTheme.ColorToken.surface,
+                        in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
+                    .stroke(LookTheme.ColorToken.separator, lineWidth: 1)
             }
     }
 }
+
+// MARK: - Status banner
 
 struct LookStatusBanner: View {
     enum Tone {
@@ -163,9 +159,9 @@ struct LookStatusBanner: View {
 
         var color: Color {
             switch self {
-            case .info: return LookTheme.ColorToken.cyan
+            case .info: return LookTheme.ColorToken.accent
             case .success: return LookTheme.ColorToken.success
-            case .warning: return LookTheme.ColorToken.amber
+            case .warning: return LookTheme.ColorToken.danger
             case .error: return LookTheme.ColorToken.danger
             }
         }
@@ -189,18 +185,21 @@ struct LookStatusBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
             Image(systemName: tone.icon)
+                .font(LookTheme.Typography.headline)
                 .foregroundStyle(tone.color)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(LookTheme.Typography.secondaryEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let message, !message.isEmpty {
                     Text(message)
                         .font(LookTheme.Typography.secondary)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .lineLimit(4)
+                        .truncationMode(.tail)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -209,26 +208,26 @@ struct LookStatusBanner: View {
 
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
+                    .font(LookTheme.Typography.secondaryEmphasis)
                     .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .tint(LookTheme.ColorToken.accent)
+                    .frame(minHeight: 32)
             }
         }
         .padding(LookTheme.Spacing.medium)
-        .background(LookTheme.ColorToken.elevated, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
-        .overlay(alignment: .leading) {
-            UnevenRoundedRectangle(topLeadingRadius: LookTheme.Radius.panel,
-                                   bottomLeadingRadius: LookTheme.Radius.panel)
-                .fill(tone.color)
-                .frame(width: 3)
-        }
+        .background(LookTheme.ColorToken.elevated,
+                    in: RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
 
+// MARK: - Chip
+
+/// Capsule chip on `surface` — .subheadline label, optional icon and tint.
 struct LookChip: View {
     let title: String
     var systemImage: String?
-    var tint: Color = LookTheme.ColorToken.graphite
+    var tint: Color = LookTheme.ColorToken.primaryText
 
     var body: some View {
         Label {
@@ -238,37 +237,19 @@ struct LookChip: View {
                 Image(systemName: systemImage)
             }
         }
-        .font(LookTheme.Typography.captionEmphasis)
+        .font(LookTheme.Typography.secondary)
         .foregroundStyle(tint)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(tint.opacity(0.10), in: Capsule())
-        .overlay {
-            Capsule()
-                .stroke(tint.opacity(0.22), lineWidth: 1)
-        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(LookTheme.ColorToken.surface, in: Capsule())
         .accessibilityElement(children: .combine)
     }
 }
 
-struct LookConnectionPill: View {
-    var title = "Tailscale"
+// MARK: - Nav title
 
-    var body: some View {
-        Label(title, systemImage: "checkmark.circle.fill")
-            .font(LookTheme.Typography.captionEmphasis)
-            .foregroundStyle(LookTheme.ColorToken.success)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(LookTheme.ColorToken.success.opacity(0.11), in: Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(LookTheme.ColorToken.success.opacity(0.22), lineWidth: 1)
-            }
-            .accessibilityElement(children: .combine)
-    }
-}
-
+/// Compact toolbar title: sentence case, no tracking. Subtitle is auxiliary
+/// metadata (counts) so .footnote in `secondaryText` is allowed.
 struct LookNavTitle: View {
     let title: String
     var subtitle: String?
@@ -277,20 +258,24 @@ struct LookNavTitle: View {
         VStack(spacing: 1) {
             Text(title)
                 .font(LookTheme.Typography.headline)
-                .foregroundStyle(LookTheme.ColorToken.graphite)
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
                 .lineLimit(1)
+                .truncationMode(.tail)
 
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(LookTheme.Typography.caption)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
         .multilineTextAlignment(.center)
         .accessibilityElement(children: .combine)
     }
 }
+
+// MARK: - Empty / loading states
 
 struct LookEmptyState: View {
     let title: String
@@ -302,26 +287,31 @@ struct LookEmptyState: View {
     var body: some View {
         VStack(spacing: LookTheme.Spacing.medium) {
             Image(systemName: systemImage)
-                .font(.system(size: 40, weight: .medium))
-                .foregroundStyle(LookTheme.ColorToken.readableTertiary)
+                .font(.largeTitle)
+                .imageScale(.large)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .accessibilityHidden(true)
 
             VStack(spacing: 5) {
                 Text(title)
                     .font(LookTheme.Typography.headline)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                     .multilineTextAlignment(.center)
                 if let message {
                     Text(message)
                         .font(LookTheme.Typography.secondary)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
+                    .font(LookTheme.Typography.bodyEmphasis)
                     .buttonStyle(.borderedProminent)
+                    .tint(LookTheme.ColorToken.accentControl)
+                    .frame(minHeight: 44)
                     .padding(.top, 2)
             }
         }
@@ -338,15 +328,18 @@ struct LookLoadingState: View {
     var body: some View {
         VStack(spacing: LookTheme.Spacing.medium) {
             ProgressView()
+                .tint(LookTheme.ColorToken.accent)
             VStack(spacing: 5) {
                 Text(title)
                     .font(LookTheme.Typography.headline)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
+                    .multilineTextAlignment(.center)
                 if let message {
                     Text(message)
                         .font(LookTheme.Typography.secondary)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -356,25 +349,27 @@ struct LookLoadingState: View {
     }
 }
 
+// MARK: - View extensions
+
 extension View {
+    /// Flat `canvas` screen background.
     func lookScreenBackground() -> some View {
         modifier(LookScreenBackground())
     }
 
-    func lookPanel(inset: CGFloat = LookTheme.Spacing.medium) -> some View {
-        modifier(LookPanel(inset: inset))
+    /// Card: padded content on `surface`, radius 12.
+    func lookCard(inset: CGFloat = LookTheme.Spacing.medium) -> some View {
+        modifier(LookCard(inset: inset))
     }
 
-    func lookInsetSurface(radius: CGFloat = LookTheme.Radius.panel) -> some View {
-        modifier(LookInsetSurface(radius: radius))
+    /// Bare rounded `surface` fill (no padding).
+    func lookSurface(radius: CGFloat = LookTheme.Radius.card) -> some View {
+        modifier(LookSurface(radius: radius))
     }
 
-    func lookTextInputSurface() -> some View {
-        modifier(LookTextInputSurface())
-    }
-
-    func lookFilmRail(color: Color = LookTheme.ColorToken.darkroom, isActive: Bool = false) -> some View {
-        modifier(LookFilmRail(color: color, isActive: isActive))
+    /// Text field chrome: .body input on `surface` with hairline stroke.
+    func lookTextInput() -> some View {
+        modifier(LookTextInput())
     }
 }
 

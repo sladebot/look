@@ -119,7 +119,7 @@ struct DemoScreenshotHost: View {
                 .tag(DemoTab.settings)
         }
         .tint(LookTheme.ColorToken.accentControl)
-        .background(LookTheme.ColorToken.paper.ignoresSafeArea())
+        .background(LookTheme.ColorToken.canvas.ignoresSafeArea())
         .toolbarBackground(.automatic, for: .tabBar)
         .toolbarColorScheme(.dark, for: .tabBar)
         .ignoresSafeArea(.container, edges: .bottom)
@@ -134,7 +134,7 @@ private struct DemoWorkflowFrame<Content: View>: View {
 
     var body: some View {
         ZStack {
-            LookTheme.ColorToken.paper.ignoresSafeArea()
+            LookTheme.ColorToken.canvas.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
@@ -153,22 +153,22 @@ private struct DemoWorkflowFrame<Content: View>: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(LookTheme.Typography.title)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                     .lineLimit(1)
                 Text(subtitle)
                     .font(LookTheme.Typography.caption)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .lineLimit(1)
             }
 
             Spacer()
 
-            LookConnectionPill()
+            LookChip(title: "Tailscale", systemImage: "checkmark.circle.fill", tint: LookTheme.ColorToken.success)
 
             Button {} label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.title2.weight(.semibold))
-                    .foregroundStyle(LookTheme.ColorToken.cyan)
+                    .foregroundStyle(LookTheme.ColorToken.accent)
                     .frame(width: 42, height: 42)
             }
             .buttonStyle(.plain)
@@ -225,7 +225,7 @@ private struct DemoGalleryWorkflow: View {
                 .padding(.top, LookTheme.Spacing.tight)
                 .padding(.bottom, 18)
             }
-            .background(LookTheme.ColorToken.paper)
+            .background(LookTheme.ColorToken.canvas)
         }
     }
 }
@@ -248,19 +248,19 @@ private struct DemoSearchWorkflow: View {
                         .foregroundStyle(.secondary)
                     Text("kyoto temple")
                         .font(.body)
-                        .foregroundStyle(LookTheme.ColorToken.graphite)
+                        .foregroundStyle(LookTheme.ColorToken.primaryText)
                     Spacer()
                     Image(systemName: "arrow.forward.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(LookTheme.ColorToken.cyan)
+                        .foregroundStyle(LookTheme.ColorToken.accent)
                 }
-                .lookTextInputSurface()
+                .lookTextInput()
 
                 VStack(alignment: .leading, spacing: 3) {
-                    LookTheme.eyebrow("Results")
+                    LookTheme.sectionHeader("Results")
                     Text("24 photos for \"kyoto temple\"")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(LookTheme.ColorToken.graphite)
+                        .foregroundStyle(LookTheme.ColorToken.primaryText)
                 }
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 4)], spacing: 4) {
@@ -273,7 +273,7 @@ private struct DemoSearchWorkflow: View {
             .padding(LookTheme.Spacing.screen)
             .padding(.bottom, 18)
         }
-        .background(LookTheme.ColorToken.paper)
+        .background(LookTheme.ColorToken.canvas)
     }
 }
 
@@ -285,15 +285,15 @@ private struct DemoDateStrip: View {
         HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
             Text(title)
                 .font(LookTheme.Typography.secondaryEmphasis)
-                .foregroundStyle(LookTheme.ColorToken.graphite)
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
             Spacer()
             Text("\(count) photos")
                 .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
         }
         .padding(.horizontal, LookTheme.Spacing.screen)
         .padding(.vertical, LookTheme.Spacing.medium)
-        .background(LookTheme.ColorToken.paper)
+        .background(LookTheme.ColorToken.canvas)
     }
 }
 
@@ -303,30 +303,30 @@ private struct DemoSyncStrip: View {
             HStack(spacing: LookTheme.Spacing.small) {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(LookTheme.Typography.captionEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.cyan)
+                    .foregroundStyle(LookTheme.ColorToken.accent)
                 Text("Syncing library")
                     .font(LookTheme.Typography.secondaryEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                 Spacer()
                 Text("60%")
                     .font(LookTheme.Typography.captionEmphasis)
                     .monospacedDigit()
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
             }
 
             Text("Processing 1,122 of 1,856 mock photos")
                 .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
 
             DemoProgressBar(value: 0.60)
         }
         .padding(.horizontal, LookTheme.Spacing.medium)
         .padding(.vertical, LookTheme.Spacing.small)
         .frame(minHeight: 72)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(LookTheme.ColorToken.cyan.opacity(0.28), lineWidth: 1)
+            RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous)
+                .stroke(LookTheme.ColorToken.accent.opacity(0.28), lineWidth: 1)
         }
     }
 }
@@ -338,9 +338,9 @@ private struct DemoProgressBar: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(LookTheme.ColorToken.mist)
+                    .fill(LookTheme.ColorToken.elevated)
                 Capsule()
-                    .fill(LookTheme.ColorToken.cyan)
+                    .fill(LookTheme.ColorToken.accent)
                     .frame(width: max(0, min(geo.size.width, geo.size.width * value)))
             }
         }
@@ -360,7 +360,7 @@ private struct DemoPhotoTile: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
-                .background(LookTheme.ColorToken.darkroom)
+                .background(LookTheme.ColorToken.backdrop)
                 .overlay(alignment: .bottomLeading) {
                     if photo.isFavorite == true && !selectionMode {
                         Image(systemName: "heart.fill")
@@ -381,7 +381,7 @@ private struct DemoPhotoTile: View {
                             .font(.title3.weight(.semibold))
                             .symbolRenderingMode(.palette)
                             .foregroundStyle(isSelected ? .white : .white.opacity(0.9),
-                                             isSelected ? LookTheme.ColorToken.cyan : .black.opacity(0.38))
+                                             isSelected ? LookTheme.ColorToken.accent : .black.opacity(0.38))
                             .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                             .padding(6)
                     }
@@ -389,14 +389,14 @@ private struct DemoPhotoTile: View {
                 .overlay(alignment: .leading) {
                     if isSelected {
                         Rectangle()
-                            .fill(LookTheme.ColorToken.cyan)
+                            .fill(LookTheme.ColorToken.accent)
                             .frame(width: 5)
                     }
                 }
                 .overlay {
                     if isSelected {
                         Rectangle()
-                            .stroke(LookTheme.ColorToken.cyan, lineWidth: 2)
+                            .stroke(LookTheme.ColorToken.accent, lineWidth: 2)
                     }
                 }
         }
@@ -437,7 +437,7 @@ private struct DemoTabBarItem: View {
             Text(title)
                 .font(.caption2.weight(.semibold))
         }
-        .foregroundStyle(selected ? .white : LookTheme.ColorToken.graphite.opacity(0.78))
+        .foregroundStyle(selected ? .white : LookTheme.ColorToken.primaryText.opacity(0.78))
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
         .background {

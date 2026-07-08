@@ -23,11 +23,11 @@ struct AlbumsList: View {
                             systemImage: "rectangle.stack",
                             message: "Create albums to collect hand-picked sets of photos."
                         )
-                        .lookPanel(inset: 0)
+                        .lookCard(inset: 0)
                         .frame(minHeight: 320)
                     } else {
                         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
-                            LookTheme.eyebrow("\(store.albums.count) Albums")
+                            LookTheme.sectionHeader("\(store.albums.count) albums")
                             ForEach(store.albums) { album in
                                 NavigationLink(destination: AlbumDetail(album: album)) {
                                     AlbumListRow(album: album)
@@ -66,9 +66,9 @@ private struct AlbumListRow: View {
         HStack(spacing: LookTheme.Spacing.medium) {
             Image(systemName: "rectangle.stack.fill")
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.graphite)
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
                 .frame(width: 42, height: 42)
-                .background(LookTheme.ColorToken.graphite.opacity(0.12), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
+                .background(LookTheme.ColorToken.primaryText.opacity(0.12), in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -78,7 +78,7 @@ private struct AlbumListRow: View {
                     .lineLimit(1)
                 Text(subtitle)
                     .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .lineLimit(2)
             }
 
@@ -87,20 +87,19 @@ private struct AlbumListRow: View {
             if let countText {
                 Text(countText)
                     .font(LookTheme.Typography.captionEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(LookTheme.ColorToken.graphite.opacity(0.10), in: Capsule())
+                    .background(LookTheme.ColorToken.primaryText.opacity(0.10), in: Capsule())
             }
 
             Image(systemName: "chevron.right")
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.readableTertiary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .accessibilityHidden(true)
         }
         .padding(LookTheme.Spacing.medium)
-        .lookInsetSurface()
-        .lookFilmRail(color: LookTheme.ColorToken.graphite)
+        .lookSurface()
         .accessibilityElement(children: .combine)
     }
 }

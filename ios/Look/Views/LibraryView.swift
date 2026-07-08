@@ -34,7 +34,7 @@ struct LibraryView: View {
                                 title: "Map",
                                 subtitle: "Browse photos with saved locations.",
                                 badge: "Places",
-                                tint: LookTheme.ColorToken.cyan
+                                tint: LookTheme.ColorToken.accent
                             )
                         }
                         .buttonStyle(.plain)
@@ -59,7 +59,7 @@ struct LibraryView: View {
                                             title: album.name,
                                             subtitle: album.description?.nilIfBlank ?? "Manual photo collection.",
                                             badge: photoCountText(album.photoCount),
-                                            tint: LookTheme.ColorToken.graphite
+                                            tint: LookTheme.ColorToken.primaryText
                                         )
                                     }
                                     .buttonStyle(.plain)
@@ -76,7 +76,7 @@ struct LibraryView: View {
                     }
 
                     LibraryPanelSection(
-                        title: "Smart Albums",
+                        title: "Smart albums",
                         trailing: "\(store.smartCollections.count)"
                     ) {
                         if store.smartCollections.isEmpty {
@@ -94,7 +94,7 @@ struct LibraryView: View {
                                             title: collection.name,
                                             subtitle: collection.description?.nilIfBlank ?? "Rule-based collection.",
                                             badge: "Smart",
-                                            tint: LookTheme.ColorToken.amber
+                                            tint: LookTheme.ColorToken.accent
                                         )
                                     }
                                     .buttonStyle(.plain)
@@ -165,20 +165,20 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
-                    LookTheme.eyebrow("Collections")
+                    LookTheme.sectionHeader("Collections")
                     Text("Organize the library")
                         .font(LookTheme.Typography.sectionTitle)
-                        .foregroundStyle(LookTheme.ColorToken.graphite)
+                        .foregroundStyle(LookTheme.ColorToken.primaryText)
                 }
                 Spacer()
             }
 
             HStack(spacing: LookTheme.Spacing.small) {
-                LibraryMetric(title: "Albums", value: "\(store.albums.count)", tint: LookTheme.ColorToken.graphite)
-                LibraryMetric(title: "Smart", value: "\(store.smartCollections.count)", tint: LookTheme.ColorToken.amber)
+                LibraryMetric(title: "Albums", value: "\(store.albums.count)", tint: LookTheme.ColorToken.primaryText)
+                LibraryMetric(title: "Smart", value: "\(store.smartCollections.count)", tint: LookTheme.ColorToken.accent)
             }
         }
-        .lookPanel()
+        .lookCard()
     }
 
     private func photoCountText(_ count: Int?) -> String? {
@@ -227,12 +227,12 @@ private struct LibraryPanelSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             HStack {
-                LookTheme.eyebrow(title)
+                LookTheme.sectionHeader(title)
                 Spacer()
                 if let trailing {
                     Text(trailing)
                         .font(LookTheme.Typography.captionEmphasis)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(LookTheme.ColorToken.surface, in: Capsule())
@@ -269,7 +269,7 @@ private struct LibraryCollectionRow: View {
                     .lineLimit(1)
                 Text(subtitle)
                     .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .lineLimit(2)
             }
 
@@ -286,12 +286,11 @@ private struct LibraryCollectionRow: View {
 
             Image(systemName: "chevron.right")
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.readableTertiary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .accessibilityHidden(true)
         }
         .padding(LookTheme.Spacing.medium)
-        .lookInsetSurface()
-        .lookFilmRail(color: tint)
+        .lookSurface()
         .accessibilityElement(children: .combine)
     }
 }
@@ -308,7 +307,7 @@ private struct LibraryMetric: View {
                 .foregroundStyle(tint)
             Text(title)
                 .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(LookTheme.Spacing.small)
@@ -325,7 +324,7 @@ private struct LibraryEmptyPanel: View {
         HStack(spacing: LookTheme.Spacing.medium) {
             Image(systemName: systemImage)
                 .font(.title3)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .frame(width: 34, height: 34)
                 .accessibilityHidden(true)
 
@@ -334,12 +333,12 @@ private struct LibraryEmptyPanel: View {
                     .font(LookTheme.Typography.secondaryEmphasis)
                 Text(message)
                     .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
             }
             Spacer()
         }
         .padding(LookTheme.Spacing.medium)
-        .lookInsetSurface()
+        .lookSurface()
         .accessibilityElement(children: .combine)
     }
 }
@@ -429,7 +428,7 @@ struct SmartAlbumDetail: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
                         HStack {
-                            LookChip(title: photos.count == 1 ? "1 photo" : "\(photos.count) photos", systemImage: "photo", tint: LookTheme.ColorToken.amber)
+                            LookChip(title: photos.count == 1 ? "1 photo" : "\(photos.count) photos", systemImage: "photo", tint: LookTheme.ColorToken.accent)
                             Spacer()
                         }
                         .padding(.horizontal, LookTheme.Spacing.tight)
@@ -604,7 +603,7 @@ struct CreateSmartAlbumSheet: View {
                 Section {
                     Text("Photos matching this rule are added automatically.")
                         .font(LookTheme.Typography.caption)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 }
                 if let errorMessage {
                     Section {

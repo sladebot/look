@@ -27,6 +27,51 @@ private enum LookTab: String, CaseIterable, Identifiable {
     }
 }
 
+/// Sidebar destinations for regular-width (iPad) layouts.
+private enum LookSidebarItem: String, CaseIterable, Identifiable {
+    case photos
+    case albums
+    case smartAlbums
+    case places
+    case search
+    case settings
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .photos: return "Photos"
+        case .albums: return "Albums"
+        case .smartAlbums: return "Smart albums"
+        case .places: return "Places"
+        case .search: return "Search"
+        case .settings: return "Settings"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .photos: return "photo.on.rectangle.angled"
+        case .albums: return "rectangle.stack"
+        case .smartAlbums: return "sparkles.rectangle.stack"
+        case .places: return "map"
+        case .search: return "magnifyingglass"
+        case .settings: return "gear"
+        }
+    }
+
+    /// The sidebar destination equivalent to a compact-width tab
+    /// (used so LOOK_UI_TAB drives both navigation modes).
+    fileprivate init(tab: LookTab) {
+        switch tab {
+        case .photos: self = .photos
+        case .library: self = .albums
+        case .search: self = .search
+        case .settings: self = .settings
+        }
+    }
+}
+
 #if DEBUG
 /// Screenshot-only navigation driver: lets tooling open any screen of the real
 /// app (live server data, no demo mocks) via launch environment variables,
@@ -57,10 +102,12 @@ enum LookUIScreenshotRoute: String, Identifiable {
 
 struct ContentView: View {
     @EnvironmentObject var store: PhotoStore
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage(ConnectionSetupStorage.hasSuccessfulConnectionKey) private var hasSuccessfulConnection = false
     @State private var initialConnectionCheckCompleted = false
     @State private var didLoadApplicationData = false
     @State private var selectedTab: LookTab = .photos
+    @State private var sidebarSelection: LookSidebarItem? = .photos
     #if DEBUG
     @State private var screenshotSheetRoute: LookUIScreenshotRoute?
     @State private var screenshotCoverRoute: LookUIScreenshotRoute?
@@ -71,6 +118,7 @@ struct ContentView: View {
         if let tab = ProcessInfo.processInfo.environment["LOOK_UI_TAB"]
             .flatMap(LookTab.init(rawValue:)) {
             _selectedTab = State(initialValue: tab)
+            _sidebarSelection = State(initialValue: LookSidebarItem(tab: tab))
         }
         #endif
     }
@@ -90,20 +138,44 @@ struct ContentView: View {
                     await loadApplicationDataIfNeeded()
                 }
             } else {
-                appTabs
+                mainInterface
                     .task {
                         await loadApplicationDataIfNeeded()
                     }
             }
         }
-        .tint(LookTheme.ColorToken.accentControl)
+        .tint(LookTheme.ColorToken.accent)
         .preferredColorScheme(.dark)
         .task {
             await performInitialConnectionCheck()
         }
     }
 
-    private var appTabs: some View {
+    // MARK: - Adaptive navigation
+
+    @ViewBuilder
+    private var mainInterface: some View {
+        Group {
+            if horizontalSizeClass == .regular {
+                splitInterface
+            } else {
+                tabInterface
+            }
+        }
+        .background(LookTheme.ColorToken.backdrop.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        #if DEBUG
+        .task { await activateScreenshotRouteIfNeeded() }
+        .sheet(item: $screenshotSheetRoute) { route in
+            screenshotDestination(route)
+        }
+        .fullScreenCover(item: $screenshotCoverRoute) { route in
+            screenshotDestination(route)
+        }
+        #endif
+    }
+
+    private var tabInterface: some View {
         TabView(selection: $selectedTab) {
             PhotosGrid()
                 .ignoresSafeArea(.container, edges: .bottom)
@@ -125,21 +197,54 @@ struct ContentView: View {
                 .tabItem { Label(LookTab.settings.title, systemImage: LookTab.settings.systemImage) }
                 .tag(LookTab.settings)
         }
-        .tint(LookTheme.ColorToken.accentControl)
-        .background(LookTheme.ColorToken.paper.ignoresSafeArea())
         .toolbarBackground(.automatic, for: .tabBar)
         .toolbarColorScheme(.dark, for: .tabBar)
         .ignoresSafeArea(.container, edges: .bottom)
-        .preferredColorScheme(.dark)
-        #if DEBUG
-        .task { await activateScreenshotRouteIfNeeded() }
-        .sheet(item: $screenshotSheetRoute) { route in
-            screenshotDestination(route)
+    }
+
+    private var splitInterface: some View {
+        NavigationSplitView {
+            List(selection: $sidebarSelection) {
+                Section("Library") {
+                    sidebarRow(.photos)
+                }
+                Section("Collections") {
+                    sidebarRow(.albums)
+                    sidebarRow(.smartAlbums)
+                    sidebarRow(.places)
+                }
+                Section {
+                    sidebarRow(.search)
+                    sidebarRow(.settings)
+                }
+            }
+            .listStyle(.sidebar)
+            .navigationTitle("Look")
+        } detail: {
+            sidebarDestination(sidebarSelection ?? .photos)
         }
-        .fullScreenCover(item: $screenshotCoverRoute) { route in
-            screenshotDestination(route)
+    }
+
+    private func sidebarRow(_ item: LookSidebarItem) -> some View {
+        Label(item.title, systemImage: item.systemImage)
+            .font(LookTheme.Typography.body)
+            .tag(item)
+    }
+
+    @ViewBuilder
+    private func sidebarDestination(_ item: LookSidebarItem) -> some View {
+        switch item {
+        case .photos:
+            PhotosGrid()
+        case .albums, .smartAlbums:
+            LibraryView()
+        case .places:
+            NavigationStack { MapBrowseView() }
+        case .search:
+            SearchView()
+        case .settings:
+            SettingsView()
         }
-        #endif
     }
 
     #if DEBUG
@@ -247,11 +352,13 @@ private struct ConnectionCheckingView: View {
 
             LookStatusBanner(
                 title: "Private-network first",
-                message: "If this device is away from your Tailscale network, Look will ask you to reconnect before showing library tabs.",
+                message: "If this device is away from your Tailscale network, Look will ask you to reconnect before showing your library.",
                 tone: .info
             )
             .padding(.horizontal, LookTheme.Spacing.screen)
+            .frame(maxWidth: 640)
         }
+        .frame(maxWidth: .infinity)
         .lookScreenBackground()
     }
 }

@@ -38,7 +38,7 @@ struct AlbumDetail: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
                         HStack {
-                            LookChip(title: photos.count == 1 ? "1 photo" : "\(photos.count) photos", systemImage: "photo", tint: LookTheme.ColorToken.graphite)
+                            LookChip(title: photos.count == 1 ? "1 photo" : "\(photos.count) photos", systemImage: "photo", tint: LookTheme.ColorToken.primaryText)
                             Spacer()
                         }
                         .padding(.horizontal, LookTheme.Spacing.tight)

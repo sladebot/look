@@ -11,43 +11,28 @@ struct PhotoCard: View {
         CachedThumbnail(url: APIClient.shared.thumbnailURL(for: photo.id, size: 256), contentMode: .fill)
             .aspectRatio(1, contentMode: .fill)
             .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.thumbnail, style: .continuous))
-            .background(LookTheme.ColorToken.darkroom)
+            .background(LookTheme.ColorToken.backdrop)
             .overlay(alignment: .bottomLeading) {
                 if photo.isFavorite == true && !selectionMode {
-                    Image(systemName: "heart.fill")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(6)
-                        .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
+                    LookFavoriteBadge()
+                        .padding(5)
                 }
             }
             .overlay {
                 if isSelected {
-                    Color.black.opacity(0.16)
+                    Color.black.opacity(0.18)
                 }
             }
             .overlay(alignment: .topTrailing) {
                 if selectionMode {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.title3.weight(.semibold))
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(isSelected ? .white : .white.opacity(0.9),
-                                         isSelected ? LookTheme.ColorToken.cyan : .black.opacity(0.38))
+                    LookSelectionBadge(isSelected: isSelected)
                         .padding(6)
-                        .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-                }
-            }
-            .overlay(alignment: .leading) {
-                if isSelected {
-                    Rectangle()
-                        .fill(LookTheme.ColorToken.cyan)
-                        .frame(width: 5)
                 }
             }
             .overlay {
                 if isSelected {
                     RoundedRectangle(cornerRadius: LookTheme.Radius.thumbnail, style: .continuous)
-                        .stroke(LookTheme.ColorToken.cyan, lineWidth: 2)
+                        .stroke(LookTheme.ColorToken.accent, lineWidth: 3)
                 }
             }
             .accessibilityElement(children: .ignore)
@@ -61,6 +46,57 @@ struct PhotoCard: View {
         if photo.isFavorite == true { parts.append("favorite") }
         if isSelected { parts.append("selected") }
         return parts.joined(separator: ", ")
+    }
+}
+
+// MARK: - Thumbnail badges
+
+/// Opaque selection indicator that stays legible on any photo.
+///
+/// Selected: filled `accentControl` circle with a white checkmark and a thin
+/// white edge. Unselected: a white ring sandwiched inside a dark ring so it
+/// reads on both light and dark photos. Never translucent white-on-dim chrome.
+/// The badge itself is decorative — the whole cell is the (≥44pt) tap target.
+struct LookSelectionBadge: View {
+    let isSelected: Bool
+    var diameter: CGFloat = 26
+
+    var body: some View {
+        ZStack {
+            if isSelected {
+                Circle()
+                    .fill(LookTheme.ColorToken.accentControl)
+                Circle()
+                    .strokeBorder(.white, lineWidth: 1.5)
+                Image(systemName: "checkmark")
+                    .font(.subheadline.weight(.bold))
+                    .imageScale(.small)
+                    .foregroundStyle(.white)
+            } else {
+                Circle()
+                    .strokeBorder(.black.opacity(0.7), lineWidth: 5)
+                Circle()
+                    .inset(by: 1.5)
+                    .stroke(.white, lineWidth: 2)
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Favorite heart on a small material scrim so it survives light photos.
+struct LookFavoriteBadge: View {
+    var body: some View {
+        Image(systemName: "heart.fill")
+            .font(.footnote.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(5)
+            .background(.thinMaterial, in: Circle())
+            .environment(\.colorScheme, .dark)
+            .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+            .accessibilityHidden(true)
     }
 }
 
@@ -179,7 +215,7 @@ struct CachedThumbnail: View {
                     .transition(.opacity)
             } else if failed {
                 Color(.systemGray5)
-                    .overlay(Image(systemName: "photo.badge.exclamationmark").foregroundStyle(LookTheme.ColorToken.readableSecondary))
+                    .overlay(Image(systemName: "photo.badge.exclamationmark").foregroundStyle(LookTheme.ColorToken.secondaryText))
             } else {
                 Color(.systemGray6)
                     .overlay(ProgressView().tint(.secondary))

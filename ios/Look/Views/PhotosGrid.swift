@@ -78,6 +78,9 @@ struct PhotosGrid: View {
     @State private var showCreateAlbum = false
     @State private var filter = PhotoGridFilter.all
     @State private var sort = PhotoGridSort.newest
+    @State private var selectionShare: SelectionShareItem?
+    @State private var isPreparingSelectionShare = false
+    @State private var isFavoritingSelection = false
     @Namespace private var viewerZoomNamespace
     /// Grid density, adjusted by pinching: 0 = dense, 1 = default, 2 = large.
     @AppStorage("photos_grid_zoom_step") private var gridZoomStep = 1
@@ -183,6 +186,9 @@ struct PhotosGrid: View {
             .sheet(isPresented: $showCreateAlbum) {
                 CreateAlbumSheet()
             }
+            .sheet(item: $selectionShare) { item in
+                ShareSheet(items: item.urls)
+            }
             #if DEBUG
             .task(id: store.photos.count) { applyScreenshotSelectionIfNeeded() }
             #endif
@@ -243,11 +249,11 @@ struct PhotosGrid: View {
                 }
                 .padding(.top, LookTheme.Spacing.tight)
                 .padding(.bottom, 108)
-                .background(LookTheme.ColorToken.paper)
+                .background(LookTheme.ColorToken.canvas)
             }
             .scrollIndicators(.hidden)
             .contentMargins(.bottom, 0, for: .scrollContent)
-            .background(LookTheme.ColorToken.paper)
+            .background(LookTheme.ColorToken.canvas)
             .refreshable { await store.syncNow() }
             .simultaneousGesture(
                 MagnificationGesture()
@@ -269,11 +275,21 @@ struct PhotosGrid: View {
             )
             .ignoresSafeArea(.container, edges: .bottom)
         }
-        .background(LookTheme.ColorToken.paper.ignoresSafeArea())
+        .background(LookTheme.ColorToken.canvas.ignoresSafeArea())
     }
 
+    /// Row height derives from the available width so cells stay in a sane
+    /// size band at any container width (iPad full screen, Split View, Slide
+    /// Over), instead of hardcoding a column count. Regular widths target
+    /// ~180pt cells (HIG-comfortable); compact widths keep the denser phone
+    /// layout. Pinch density scales the result in both regimes.
     private func targetRowHeight(containerWidth: CGFloat, contentWidth: CGFloat) -> CGFloat {
-        return max(88, contentWidth / (containerWidth > 600 ? 4.8 : 3.35) * gridZoomFactor)
+        if containerWidth >= 700 {
+            let columns = max(3, (contentWidth / 180).rounded())
+            let base = (contentWidth - (columns - 1) * spacing) / columns
+            return max(120, base * gridZoomFactor)
+        }
+        return max(88, contentWidth / 3.35 * gridZoomFactor)
     }
 
     @ViewBuilder
@@ -334,15 +350,12 @@ struct PhotosGrid: View {
             maxPixel: rowHeight * 3
         )
         .frame(width: item.width, height: rowHeight)
-        .background(LookTheme.ColorToken.darkroom)
+        .background(LookTheme.ColorToken.backdrop)
         .clipped()
         .overlay(alignment: .bottomLeading) {
             if photo.isFavorite == true && !selectionMode {
-                Image(systemName: "heart.fill")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.45), radius: 4, y: 1)
-                    .padding(6)
+                LookFavoriteBadge()
+                    .padding(5)
             }
         }
         .overlay {
@@ -352,26 +365,14 @@ struct PhotosGrid: View {
         }
         .overlay(alignment: .topTrailing) {
             if selectionMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3.weight(.semibold))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(isSelected ? .white : .white.opacity(0.9),
-                                     isSelected ? LookTheme.ColorToken.cyan : .black.opacity(0.38))
-                    .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                LookSelectionBadge(isSelected: isSelected)
                     .padding(6)
-            }
-        }
-        .overlay(alignment: .leading) {
-            if isSelected {
-                Rectangle()
-                    .fill(LookTheme.ColorToken.cyan)
-                    .frame(width: 5)
             }
         }
         .overlay {
             if isSelected {
                 Rectangle()
-                    .stroke(LookTheme.ColorToken.cyan, lineWidth: 2)
+                    .strokeBorder(LookTheme.ColorToken.accent, lineWidth: 3)
             }
         }
         .contentShape(Rectangle())
@@ -474,38 +475,38 @@ struct PhotosGrid: View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             HStack(spacing: LookTheme.Spacing.small) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(LookTheme.Typography.captionEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.cyan)
-                    .frame(width: 16)
+                    .font(LookTheme.Typography.secondaryEmphasis)
+                    .foregroundStyle(LookTheme.ColorToken.accent)
+                    .accessibilityHidden(true)
 
                 Text("Syncing library")
                     .font(LookTheme.Typography.secondaryEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
 
                 if let fraction = store.syncProgressFraction {
                     Text(fraction, format: .percent.precision(.fractionLength(0)))
-                        .font(LookTheme.Typography.captionEmphasis)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .font(LookTheme.Typography.secondaryEmphasis)
                         .monospacedDigit()
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .fixedSize()
                         .frame(minWidth: 44, alignment: .trailing)
                 } else {
                     Text("Working")
-                        .font(LookTheme.Typography.captionEmphasis)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .font(LookTheme.Typography.secondaryEmphasis)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .fixedSize()
                         .frame(minWidth: 54, alignment: .trailing)
                 }
             }
 
             Text(store.syncProgressMessage ?? "Importing and updating thumbnails")
-                .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .font(LookTheme.Typography.secondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .lineLimit(1)
-                .truncationMode(.middle)
+                .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if let fraction = store.syncProgressFraction {
@@ -517,11 +518,8 @@ struct PhotosGrid: View {
         .padding(.horizontal, LookTheme.Spacing.medium)
         .padding(.vertical, LookTheme.Spacing.small)
         .frame(minHeight: 72, alignment: .center)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(LookTheme.ColorToken.cyan.opacity(0.28), lineWidth: 1)
-        }
+        .background(LookTheme.ColorToken.elevated,
+                    in: RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 
@@ -533,9 +531,10 @@ struct PhotosGrid: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Library needs attention")
                         .font(LookTheme.Typography.secondaryEmphasis)
+                        .foregroundStyle(LookTheme.ColorToken.primaryText)
                     Text(message)
                         .font(LookTheme.Typography.secondary)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .lineLimit(3)
                 }
                 Spacer(minLength: 0)
@@ -543,7 +542,9 @@ struct PhotosGrid: View {
                     store.errorMessage = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .font(LookTheme.Typography.headline)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Dismiss error")
@@ -571,45 +572,23 @@ struct PhotosGrid: View {
             .font(LookTheme.Typography.secondary)
         }
         .padding(LookTheme.Spacing.medium)
-        .background(LookTheme.ColorToken.danger.opacity(0.10), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+        .background(LookTheme.ColorToken.elevated,
+                    in: RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(LookTheme.ColorToken.danger.opacity(0.26), lineWidth: 1)
+            RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous)
+                .stroke(LookTheme.ColorToken.danger.opacity(0.4), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
     }
 
     private func syncWarningStrip(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: LookTheme.Spacing.small) {
-            Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
-                .foregroundStyle(LookTheme.ColorToken.amber)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Sync completed with issues")
-                    .font(LookTheme.Typography.secondaryEmphasis)
-                Text(message)
-                    .font(LookTheme.Typography.secondary)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 0)
-            Button {
-                Task { await store.syncNow() }
-            } label: {
-                Label("Retry", systemImage: "arrow.clockwise")
-                    .labelStyle(.iconOnly)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(store.isSyncing)
-            .accessibilityLabel("Retry sync")
-        }
-        .padding(LookTheme.Spacing.medium)
-        .background(LookTheme.ColorToken.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(LookTheme.ColorToken.amber.opacity(0.32), lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
+        LookStatusBanner(
+            title: "Sync completed with issues",
+            message: message,
+            tone: .warning,
+            actionTitle: "Retry",
+            action: store.isSyncing ? nil : { Task { await store.syncNow() } }
+        )
     }
 
     /// Visible reminder that the grid is filtered, with a one-tap way out —
@@ -618,66 +597,140 @@ struct PhotosGrid: View {
         HStack(spacing: LookTheme.Spacing.small) {
             LookChip(title: "\(filter.title) only",
                      systemImage: filter.systemImage,
-                     tint: LookTheme.ColorToken.cyan)
+                     tint: LookTheme.ColorToken.accent)
             Text(visiblePhotos.count == 1 ? "1 photo" : "\(visiblePhotos.count) photos")
-                .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .font(LookTheme.Typography.secondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
             Spacer()
             Button("Show All") {
                 withAnimation { filter = .all }
             }
-            .font(LookTheme.Typography.captionEmphasis)
+            .font(LookTheme.Typography.secondaryEmphasis)
             .buttonStyle(.bordered)
-            .controlSize(.small)
+            .tint(LookTheme.ColorToken.accent)
+            .frame(minHeight: 44)
         }
         .accessibilityElement(children: .combine)
     }
 
+    /// Bottom selection bar: count in .headline plus fully labeled actions.
+    /// ViewThatFits drops to a vertical stack when Dynamic Type or narrow
+    /// widths would clip the horizontal row.
     private var selectionActionBar: some View {
-        HStack(spacing: LookTheme.Spacing.small) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(selectedPhotoIds.count) selected")
-                    .font(LookTheme.Typography.secondaryEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
-                Text("\(visiblePhotos.count) visible")
-                    .font(LookTheme.Typography.caption)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
-            }
-            .lineLimit(1)
+        VStack(spacing: LookTheme.Spacing.small) {
+            HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
+                Text(selectionSummary)
+                    .font(LookTheme.Typography.headline)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-            Spacer(minLength: LookTheme.Spacing.tight)
+                Spacer(minLength: LookTheme.Spacing.tight)
 
-            Button {
-                toggleVisibleSelection()
-            } label: {
-                Label(allVisiblePhotosSelected ? "Clear" : "Select All",
-                      systemImage: allVisiblePhotosSelected ? "xmark.circle" : "checkmark.circle")
+                Button(allVisiblePhotosSelected ? "Deselect All" : "Select All") {
+                    toggleVisibleSelection()
+                }
+                .font(LookTheme.Typography.secondaryEmphasis)
+                .tint(LookTheme.ColorToken.accent)
+                .disabled(visiblePhotos.isEmpty)
+                .frame(minHeight: 44)
             }
-            .buttonStyle(.bordered)
-            .disabled(visiblePhotos.isEmpty)
-            .controlSize(.small)
 
-            Button {
-                showAddToAlbum = true
-            } label: {
-                Label("Add", systemImage: "rectangle.stack.badge.plus")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: LookTheme.Spacing.small) {
+                    selectionActionButtons
+                }
+                VStack(spacing: LookTheme.Spacing.small) {
+                    selectionActionButtons
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .tint(LookTheme.ColorToken.accentControl)
-            .disabled(selectedPhotoIds.isEmpty)
-            .controlSize(.small)
         }
-        .padding(.horizontal, LookTheme.Spacing.medium)
-        .padding(.vertical, LookTheme.Spacing.small)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous))
+        .padding(LookTheme.Spacing.medium)
+        .background(.regularMaterial,
+                    in: RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
+        .environment(\.colorScheme, .dark)
         .overlay {
-            RoundedRectangle(cornerRadius: LookTheme.Radius.panel, style: .continuous)
-                .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
+            RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous)
+                .stroke(LookTheme.ColorToken.separator, lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
+        .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
         .padding(.horizontal, LookTheme.Spacing.screen)
         .padding(.bottom, LookTheme.Spacing.tight)
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var selectionActionButtons: some View {
+        Button {
+            showAddToAlbum = true
+        } label: {
+            Label("Add to Album", systemImage: "rectangle.stack.badge.plus")
+                .font(LookTheme.Typography.secondaryEmphasis)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, minHeight: 30)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(LookTheme.ColorToken.accentControl)
+        .disabled(selectedPhotoIds.isEmpty)
+
+        Button {
+            favoriteSelectedPhotos()
+        } label: {
+            Label("Favorite", systemImage: "heart")
+                .font(LookTheme.Typography.secondaryEmphasis)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, minHeight: 30)
+        }
+        .buttonStyle(.bordered)
+        .tint(LookTheme.ColorToken.accent)
+        .disabled(selectedPhotoIds.isEmpty || isFavoritingSelection)
+        .accessibilityLabel("Mark selected photos as favorites")
+
+        Button {
+            shareSelectedPhotos()
+        } label: {
+            Label(isPreparingSelectionShare ? "Preparing…" : "Share",
+                  systemImage: "square.and.arrow.up")
+                .font(LookTheme.Typography.secondaryEmphasis)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, minHeight: 30)
+        }
+        .buttonStyle(.bordered)
+        .tint(LookTheme.ColorToken.accent)
+        .disabled(selectedPhotoIds.isEmpty || isPreparingSelectionShare)
+        .accessibilityLabel(isPreparingSelectionShare ? "Preparing photos to share" : "Share selected photos")
+    }
+
+    private func favoriteSelectedPhotos() {
+        let ids = selectedPhotoIds
+        guard !ids.isEmpty, !isFavoritingSelection else { return }
+        isFavoritingSelection = true
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task {
+            for id in ids {
+                _ = await store.setFavorite(id, to: true)
+            }
+            isFavoritingSelection = false
+        }
+    }
+
+    private func shareSelectedPhotos() {
+        let photosToShare = selectedPhotos
+        guard !photosToShare.isEmpty, !isPreparingSelectionShare else { return }
+        isPreparingSelectionShare = true
+        Task {
+            defer { isPreparingSelectionShare = false }
+            var urls: [URL] = []
+            for photo in photosToShare {
+                guard let data = try? await APIClient.shared.downloadJPEGData(photo.id) else { continue }
+                let name = (photo.filename as NSString).deletingPathExtension + ".jpg"
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+                try? data.write(to: url)
+                urls.append(url)
+            }
+            guard !urls.isEmpty else { return }
+            selectionShare = SelectionShareItem(urls: urls)
+        }
     }
 
     private var selectionSummary: String {
@@ -716,11 +769,15 @@ struct PhotosGrid: View {
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
-            if selectionMode {
-                Button(allVisiblePhotosSelected ? "Clear" : "All") {
-                    toggleVisibleSelection()
+            if !selectionMode {
+                Button("Select") {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    selectionMode = true
                 }
+                .font(LookTheme.Typography.secondaryEmphasis)
+                .tint(LookTheme.ColorToken.accent)
                 .disabled(visiblePhotos.isEmpty)
+                .accessibilityHint("Enters selection mode")
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
@@ -748,18 +805,20 @@ struct PhotosGrid: View {
                 }
                 .disabled(store.isSyncing)
             } label: {
-                    Image(systemName: "ellipsis")
+                    Image(systemName: "ellipsis.circle")
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .foregroundStyle(LookTheme.ColorToken.accent)
+                        .frame(width: 44, height: 44)
                         .overlay(alignment: .topTrailing) {
                             if store.isSyncing {
                                 Circle()
-                                    .fill(LookTheme.ColorToken.cyan)
+                                    .fill(LookTheme.ColorToken.accent)
                                     .frame(width: 7, height: 7)
-                                    .offset(x: 3, y: -3)
+                                    .offset(x: -6, y: 6)
                             }
                         }
                 }
+                .accessibilityLabel("More options")
             }
         }
     }
@@ -830,17 +889,18 @@ private struct PhotoDateStrip: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
             Text(title)
-                .font(LookTheme.Typography.secondaryEmphasis)
-                .foregroundStyle(LookTheme.ColorToken.graphite)
+                .font(LookTheme.Typography.headline)
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
             Spacer()
             Text(count == 1 ? "1 photo" : "\(count.formatted()) photos")
-                .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .font(LookTheme.Typography.secondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
         }
         .padding(.horizontal, LookTheme.Spacing.screen)
         .padding(.vertical, LookTheme.Spacing.small)
         .frame(maxWidth: .infinity)
         .background(.thinMaterial)
+        .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(count) photos")
         .accessibilityAddTraits(.isHeader)
@@ -858,16 +918,16 @@ private struct StableSyncProgressBar: View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(LookTheme.ColorToken.mist)
+                    .fill(LookTheme.ColorToken.separator)
 
                 if let value {
                     Capsule()
-                        .fill(LookTheme.ColorToken.cyan)
+                        .fill(LookTheme.ColorToken.accent)
                         .frame(width: max(6, proxy.size.width * clampedValue))
                         .animation(nil, value: value)
                 } else {
                     Capsule()
-                        .fill(LookTheme.ColorToken.cyan.opacity(0.75))
+                        .fill(LookTheme.ColorToken.accent.opacity(0.75))
                         .frame(width: max(36, proxy.size.width * 0.28))
                         .offset(x: proxy.size.width * 0.16)
                 }
@@ -879,6 +939,13 @@ private struct StableSyncProgressBar: View {
 }
 
 // MARK: - Filter / sort
+
+/// Wraps prepared temp-file URLs so the multi-photo share sheet can be
+/// presented via `.sheet(item:)`.
+private struct SelectionShareItem: Identifiable {
+    let id = UUID()
+    let urls: [URL]
+}
 
 private enum PhotoGridFilter: String, CaseIterable, Identifiable {
     case all, favorites, raw, jpeg
@@ -1032,14 +1099,18 @@ struct NativePhotoViewer: View {
                 withAnimation(.easeInOut(duration: 0.18)) { showNext() }
             }
             .padding(.top, chromeHidden ? 0 : 42)
-            .padding(.bottom, chromeHidden ? 0 : 104)
+            .padding(.bottom, chromeHidden ? 0 : 158)
             .animation(.easeInOut(duration: 0.2), value: chromeHidden)
             .ignoresSafeArea()
 
             VStack {
                 if !chromeHidden { topBar.transition(.move(edge: .top).combined(with: .opacity)) }
                 Spacer()
-                if !chromeHidden { filmstrip.transition(.move(edge: .bottom).combined(with: .opacity)) }
+                if !chromeHidden { bottomChrome.transition(.move(edge: .bottom).combined(with: .opacity)) }
+            }
+
+            if isPreparingShare {
+                preparingShareOverlay
             }
         }
         .statusBarHidden(chromeHidden)
@@ -1107,82 +1178,136 @@ struct NativePhotoViewer: View {
                     Image(systemName: "xmark")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 42, height: 42)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .overlay {
-                            Circle()
-                                .stroke(.white.opacity(0.16), lineWidth: 1)
-                        }
+                        .frame(width: 44, height: 44)
+                        .background(.thinMaterial, in: Circle())
+                        .environment(\.colorScheme, .dark)
                 }
                 .accessibilityLabel("Close viewer")
 
                 Spacer()
-
-                HStack(spacing: 10) {
-                    Button { toggleFavorite() } label: {
-                        Image(systemName: isCurrentFavorite ? "heart.fill" : "heart")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(isCurrentFavorite ? Color.pink : .white)
-                            .frame(width: 42, height: 42)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .overlay {
-                                Circle()
-                                    .stroke(.white.opacity(0.16), lineWidth: 1)
-                            }
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                    .accessibilityLabel(isCurrentFavorite ? "Remove from favorites" : "Add to favorites")
-
-                    Menu {
-                        Button { showAddToAlbum = true } label: {
-                            Label("Add to Album", systemImage: "rectangle.stack.badge.plus")
-                        }
-                        Button { shareCurrentPhoto() } label: {
-                            Label(isPreparingShare ? "Preparing…" : "Share Photo",
-                                  systemImage: "square.and.arrow.up")
-                        }
-                        .disabled(isPreparingShare)
-                        Button { showInfo = true } label: {
-                            Label("Info & Tags", systemImage: "info.circle")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 42, height: 42)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .overlay {
-                                Circle()
-                                    .stroke(.white.opacity(0.16), lineWidth: 1)
-                            }
-                    }
-                    .accessibilityLabel("Photo actions")
-                }
             }
 
             VStack(spacing: 2) {
                 Text(currentPhoto.filename)
-                    .font(LookTheme.Typography.secondaryEmphasis)
-                    .foregroundColor(.white)
+                    .font(LookTheme.Typography.headline)
+                    .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text("\(currentIndex + 1) of \(photos.count)")
-                    .font(LookTheme.Typography.caption)
-                    .foregroundColor(.white.opacity(0.9))
+                    .font(LookTheme.Typography.secondary)
+                    .foregroundStyle(.white)
             }
-            .padding(.horizontal, 104)
+            .padding(.horizontal, 60)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 18)
         .background {
             LinearGradient(
-                colors: [.black.opacity(0.62), .black.opacity(0.28), .clear],
+                colors: [.black.opacity(0.7), .black.opacity(0.62), .clear],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .ignoresSafeArea(edges: .top)
         }
+    }
+
+    /// Filmstrip plus a labeled action bar, stacked over a shared bottom
+    /// gradient. Actions are always-visible 44pt labeled buttons on material —
+    /// no menu digging for favorite/share/album/info.
+    private var bottomChrome: some View {
+        VStack(spacing: LookTheme.Spacing.small) {
+            filmstrip
+            bottomActionBar
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
+        .background {
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.45), .black.opacity(0.75)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private var bottomActionBar: some View {
+        HStack(spacing: LookTheme.Spacing.tight) {
+            viewerActionButton(
+                title: "Favorite",
+                systemImage: isCurrentFavorite ? "heart.fill" : "heart",
+                iconTint: isCurrentFavorite ? Color.pink : .white,
+                accessibility: isCurrentFavorite ? "Remove from favorites" : "Add to favorites"
+            ) { toggleFavorite() }
+
+            viewerActionButton(
+                title: "Share",
+                systemImage: "square.and.arrow.up",
+                accessibility: "Share photo",
+                disabled: isPreparingShare
+            ) { shareCurrentPhoto() }
+
+            viewerActionButton(
+                title: "Album",
+                systemImage: "rectangle.stack.badge.plus",
+                accessibility: "Add to album"
+            ) { showAddToAlbum = true }
+
+            viewerActionButton(
+                title: "Info",
+                systemImage: "info.circle",
+                accessibility: "Info and tags"
+            ) { showInfo = true }
+        }
+        .padding(.horizontal, LookTheme.Spacing.small)
+        .padding(.vertical, LookTheme.Spacing.tight)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .environment(\.colorScheme, .dark)
+    }
+
+    private func viewerActionButton(title: String,
+                                    systemImage: String,
+                                    iconTint: Color = .white,
+                                    accessibility: String,
+                                    disabled: Bool = false,
+                                    action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: systemImage)
+                    .font(LookTheme.Typography.headline)
+                    .foregroundStyle(iconTint)
+                    .contentTransition(.symbolEffect(.replace))
+                Text(title)
+                    .font(LookTheme.Typography.secondary)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
+        .accessibilityLabel(accessibility)
+    }
+
+    /// Material scrim while the share JPEG downloads — replaces the old
+    /// caption-sized menu label state.
+    private var preparingShareOverlay: some View {
+        VStack(spacing: LookTheme.Spacing.small) {
+            ProgressView()
+                .tint(.white)
+            Text("Preparing photo to share…")
+                .font(LookTheme.Typography.secondary)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+        }
+        .padding(LookTheme.Spacing.large)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
+        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .combine)
     }
 
     private var filmstrip: some View {
@@ -1209,21 +1334,8 @@ struct NativePhotoViewer: View {
                 .padding(.vertical, 12)
             }
             .frame(height: 84)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(.white.opacity(0.12), lineWidth: 1)
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 10)
-            .background {
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.42), .black.opacity(0.72)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea(edges: .bottom)
-            }
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .environment(\.colorScheme, .dark)
             .onChange(of: currentId) { _, id in
                 withAnimation { proxy.scrollTo(id, anchor: .center) }
             }

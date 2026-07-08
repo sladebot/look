@@ -79,7 +79,7 @@ struct MapBrowseView: View {
                 LookChip(
                     title: "\(geotagged.count) geotagged photo\(geotagged.count == 1 ? "" : "s")",
                     systemImage: "mappin.and.ellipse",
-                    tint: LookTheme.ColorToken.graphite
+                    tint: LookTheme.ColorToken.primaryText
                 )
                     .padding(.bottom, 8)
             }
@@ -185,7 +185,7 @@ private struct PhotoMapCallout: View {
                     .font(LookTheme.Typography.captionEmphasis)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .frame(maxWidth: 110)

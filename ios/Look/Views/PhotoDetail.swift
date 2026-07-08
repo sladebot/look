@@ -122,18 +122,18 @@ struct PhotoDetail: View {
     private var titleSection: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             HStack(alignment: .center, spacing: LookTheme.Spacing.small) {
-                LookTheme.eyebrow(isRawOriginal ? "RAW ORIGINAL" : "ARCHIVE PHOTO")
+                LookTheme.sectionHeader(isRawOriginal ? "RAW original" : "Archive photo")
                 Spacer(minLength: LookTheme.Spacing.small)
                 if let fileKind = PhotoDetailMetadataFormatter.fileKind(filename: photo.filename,
                                                                         mimeType: photo.mimeType) {
-                    LookChip(title: fileKind, systemImage: "doc", tint: LookTheme.ColorToken.cyan)
+                    LookChip(title: fileKind, systemImage: "doc", tint: LookTheme.ColorToken.accent)
                 }
             }
 
             HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
                 Text(photo.filename)
                     .font(LookTheme.Typography.title)
-                    .foregroundStyle(LookTheme.ColorToken.graphite)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                     .lineLimit(3)
                     .textSelection(.enabled)
                     .accessibilityLabel("Filename, \(photo.filename)")
@@ -145,7 +145,7 @@ struct PhotoDetail: View {
                 } label: {
                     Image(systemName: isFavorite ? "heart.fill" : "heart")
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(isFavorite ? Color.pink : LookTheme.ColorToken.readableSecondary)
+                        .foregroundStyle(isFavorite ? Color.pink : LookTheme.ColorToken.secondaryText)
                         .frame(width: 38, height: 38)
                         .background(LookTheme.ColorToken.surface, in: Circle())
                         .contentTransition(.symbolEffect(.replace))
@@ -156,7 +156,7 @@ struct PhotoDetail: View {
             if let date = PhotoDetailMetadataFormatter.displayDate(from: photo.createdAt) {
                 Label(date, systemImage: "calendar")
                     .font(.subheadline)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .accessibilityLabel("Created \(date)")
             }
 
@@ -169,7 +169,7 @@ struct PhotoDetail: View {
                     LookChip(title: camera, systemImage: "camera")
                 }
                 if photo.hasLocation {
-                    LookChip(title: "Location", systemImage: "location", tint: LookTheme.ColorToken.amber)
+                    LookChip(title: "Location", systemImage: "location", tint: LookTheme.ColorToken.accent)
                 }
             }
         }
@@ -217,7 +217,7 @@ struct PhotoDetail: View {
     }
 
     private var metadataSection: some View {
-        PhotoDetailPanel(header: "Archive Record") {
+        PhotoDetailPanel(header: "Archive record") {
             VStack(spacing: 0) {
                 if let w = photo.width, let h = photo.height {
                     PhotoDetailInfoRow(systemImage: "viewfinder",
@@ -262,7 +262,7 @@ struct PhotoDetail: View {
                     .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
-                            .stroke(LookTheme.ColorToken.mist, lineWidth: 1)
+                            .stroke(LookTheme.ColorToken.elevated, lineWidth: 1)
                     }
                     .allowsHitTesting(false)
                     .accessibilityLabel("Map showing photo location")
@@ -335,13 +335,13 @@ struct PhotoDetail: View {
                                     .disabled(tagAction != nil)
                                     .accessibilityLabel("Remove \(tag)")
                                 }
-                                .foregroundStyle(LookTheme.ColorToken.graphite)
+                                .foregroundStyle(LookTheme.ColorToken.primaryText)
                                 .padding(.horizontal, 11)
                                 .padding(.vertical, 7)
-                                .background(LookTheme.ColorToken.cyan.opacity(0.11), in: Capsule())
+                                .background(LookTheme.ColorToken.accent.opacity(0.11), in: Capsule())
                                 .overlay {
                                     Capsule()
-                                        .stroke(LookTheme.ColorToken.cyan.opacity(0.22), lineWidth: 1)
+                                        .stroke(LookTheme.ColorToken.accent.opacity(0.22), lineWidth: 1)
                                 }
                                 .accessibilityElement(children: .combine)
                             }
@@ -362,13 +362,13 @@ struct PhotoDetail: View {
                                 } label: {
                                     Label(tag, systemImage: "plus.circle")
                                         .font(.callout.weight(.medium))
-                                        .foregroundStyle(LookTheme.ColorToken.graphite)
+                                        .foregroundStyle(LookTheme.ColorToken.primaryText)
                                         .padding(.horizontal, 11)
                                         .padding(.vertical, 7)
-                                        .background(LookTheme.ColorToken.amber.opacity(0.12), in: Capsule())
+                                        .background(LookTheme.ColorToken.accent.opacity(0.12), in: Capsule())
                                         .overlay {
                                             Capsule()
-                                                .stroke(LookTheme.ColorToken.amber.opacity(0.24), lineWidth: 1)
+                                                .stroke(LookTheme.ColorToken.accent.opacity(0.24), lineWidth: 1)
                                         }
                                 }
                                 .buttonStyle(.plain)
@@ -386,7 +386,7 @@ struct PhotoDetail: View {
                         ProgressView()
                     }
                     .font(.footnote)
-                    .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .accessibilityLabel(isLoadingTags ? "Loading tags" : "Loading suggestions")
                 }
             }
@@ -399,7 +399,7 @@ struct PhotoDetail: View {
 
     private var newTagField: some View {
         TextField("Add tag", text: $newTag)
-            .lookTextInputSurface()
+            .lookTextInput()
             .submitLabel(.done)
             .onSubmit { submitNewTag() }
             .accessibilityLabel("New tag")
@@ -591,7 +591,7 @@ private struct PhotoDetailImage: View {
 
             ZStack {
                 Rectangle()
-                    .fill(LookTheme.ColorToken.darkroom)
+                    .fill(LookTheme.ColorToken.backdrop)
 
                 #if DEBUG
                 if LookDemoScreenshots.isActive {
@@ -613,8 +613,7 @@ private struct PhotoDetailImage: View {
             PhotoDetailSprocketRail()
         }
         .frame(maxWidth: .infinity)
-        .background(LookTheme.ColorToken.darkroom)
-        .lookFilmRail(color: LookTheme.ColorToken.darkroom, isActive: true)
+        .background(LookTheme.ColorToken.backdrop)
         .accessibilityLabel(accessibilityLabel)
     }
 
@@ -655,13 +654,13 @@ private struct PhotoDetailSprocketRail: View {
         LazyVGrid(columns: columns, spacing: 0) {
             ForEach(0..<14, id: \.self) { _ in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(LookTheme.ColorToken.paper.opacity(0.22))
+                    .fill(LookTheme.ColorToken.canvas.opacity(0.22))
                     .frame(height: 5)
             }
         }
         .padding(.horizontal, LookTheme.Spacing.medium)
         .padding(.vertical, LookTheme.Spacing.tight)
-        .background(LookTheme.ColorToken.darkroom)
+        .background(LookTheme.ColorToken.backdrop)
         .accessibilityHidden(true)
     }
 }
@@ -678,7 +677,7 @@ private struct PhotoDetailPanel<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
             if let header {
-                LookTheme.eyebrow(header)
+                LookTheme.sectionHeader(header)
                     .accessibilityAddTraits(.isHeader)
             }
 
@@ -686,7 +685,7 @@ private struct PhotoDetailPanel<Content: View>: View {
                 content
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .lookPanel(inset: LookTheme.Spacing.medium)
+            .lookCard(inset: LookTheme.Spacing.medium)
         }
     }
 }
@@ -703,11 +702,11 @@ private struct PhotoDetailActionRow: View {
             HStack(spacing: LookTheme.Spacing.small) {
                 ZStack {
                     RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
-                        .fill(LookTheme.ColorToken.cyan.opacity(0.12))
+                        .fill(LookTheme.ColorToken.accent.opacity(0.12))
 
                     Image(systemName: systemImage)
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(LookTheme.ColorToken.cyan)
+                        .foregroundStyle(LookTheme.ColorToken.accent)
                         .accessibilityHidden(true)
                 }
                 .frame(width: 36, height: 36)
@@ -715,10 +714,10 @@ private struct PhotoDetailActionRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(LookTheme.Typography.bodyEmphasis)
-                        .foregroundStyle(LookTheme.ColorToken.graphite)
+                        .foregroundStyle(LookTheme.ColorToken.primaryText)
                     Text(detail)
                         .font(LookTheme.Typography.secondary)
-                        .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .lineLimit(2)
                 }
 
@@ -729,7 +728,7 @@ private struct PhotoDetailActionRow: View {
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(LookTheme.ColorToken.readableTertiary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
                         .accessibilityHidden(true)
                 }
             }
@@ -776,12 +775,12 @@ private struct PhotoDetailInfoRow: View {
             Image(systemName: systemImage)
                 .font(.body)
                 .frame(width: 24)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .accessibilityHidden(true)
 
             Text(title)
                 .font(LookTheme.Typography.secondaryEmphasis)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .frame(width: fixedWidth ? 92 : nil, alignment: .leading)
         }
     }
@@ -789,7 +788,7 @@ private struct PhotoDetailInfoRow: View {
     private var valueLabel: some View {
         Text(value)
             .font(.body)
-            .foregroundStyle(LookTheme.ColorToken.graphite)
+            .foregroundStyle(LookTheme.ColorToken.primaryText)
             .multilineTextAlignment(.leading)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -800,7 +799,7 @@ private struct PhotoDetailSeparator: View {
     var body: some View {
         Divider()
             .padding(.leading, 40)
-            .overlay(LookTheme.ColorToken.mist)
+            .overlay(LookTheme.ColorToken.elevated)
     }
 }
 
@@ -811,10 +810,10 @@ private struct PhotoDetailEmptyState: View {
     var body: some View {
         Label(text, systemImage: systemImage)
             .font(.callout)
-            .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+            .foregroundStyle(LookTheme.ColorToken.secondaryText)
             .padding(LookTheme.Spacing.small)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(LookTheme.ColorToken.mist.opacity(0.45),
+            .background(LookTheme.ColorToken.elevated.opacity(0.45),
                         in: RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
             .accessibilityLabel(text)
     }
@@ -828,14 +827,14 @@ private struct PhotoDetailSectionLabel: View {
         HStack(spacing: LookTheme.Spacing.tight) {
             Text(title)
                 .font(LookTheme.Typography.secondaryEmphasis)
-                .foregroundStyle(LookTheme.ColorToken.graphite)
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
 
             Text(count.formatted())
                 .font(LookTheme.Typography.captionEmphasis)
-                .foregroundStyle(LookTheme.ColorToken.readableSecondary)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(LookTheme.ColorToken.mist, in: Capsule())
+                .background(LookTheme.ColorToken.elevated, in: Capsule())
                 .accessibilityLabel("\(count) \(title.lowercased())")
         }
         .accessibilityElement(children: .combine)
