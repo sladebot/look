@@ -165,24 +165,26 @@ function InfoPanel({ photo, mode, onSetRating, onSetFlag, albums }) {
         <div className="meta-h">File</div>
         <div className="meta-row"><span className="k">Album</span><span className="v">{album?.name || photo.albumName}</span></div>
         <div className="meta-row"><span className="k">Dimensions</span><span className="v">{photo.pixelW} × {photo.pixelH}</span></div>
-        <div className="meta-row"><span className="k">JPEG preview</span><span className="v">{photo.jpegSizeMB} MB</span></div>
-        {photo.raw && <div className="meta-row"><span className="k">Original</span><span className="v">{photo.rawFilename} · {photo.rawSizeMB} MB</span></div>}
+        <div className="meta-row"><span className="k">Size</span><span className="v">{photo.sizeMB} MB</span></div>
+        {photo.raw && <div className="meta-row"><span className="k">Original</span><span className="v">{photo.rawFilename}</span></div>}
       </div>
 
       <div className="meta-block">
         <a className="dl-btn" href={`/api/download/jpeg/${photo.id}`}>
           <Icon d={icons.download} size={13} />
           Download JPG
-          <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>
-            {photo.jpegSizeMB} MB
-          </span>
+          {!photo.raw && (
+            <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>
+              {photo.sizeMB} MB
+            </span>
+          )}
         </a>
         {photo.raw && (
           <a className="dl-btn secondary-download" href={`/api/download/raw/${photo.id}`} style={{ marginTop: 8 }}>
             <Icon d={icons.download} size={13} />
             Download RAW
             <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>
-              {photo.rawSizeMB} MB
+              {photo.sizeMB} MB
             </span>
           </a>
         )}

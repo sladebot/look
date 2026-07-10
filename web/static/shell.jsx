@@ -346,7 +346,7 @@ function StatusBar({ status, photoCount, mode }) {
       </span>
       {mode === 'pro' && (
         <span className="status-item">
-          <Icon d={icons.hardDrive} size={11} /> {status.libraryTB.toFixed(2)} TB · {photoCount.toLocaleString()} photos indexed
+          <Icon d={icons.hardDrive} size={11} /> {Look.formatBytes(status.libraryBytes)} · {photoCount.toLocaleString()} photos indexed
         </span>
       )}
       {showProgress ? (

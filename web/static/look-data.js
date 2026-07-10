@@ -16,10 +16,23 @@ function parseExif(raw) {
   try { return JSON.parse(raw); } catch (e) { return {}; }
 }
 
+// Accepts ISO-8601 ("2024-02-14T14:30:00", "2024-02-14 14:30:00") and
+// EXIF-style ("2024:02:14 14:30:00") datetime strings.
+function parsePhotoDate(raw) {
+  if (!raw) return new Date();
+  let s = String(raw).trim();
+  const exifMatch = s.match(/^(\d{4}):(\d{2}):(\d{2})(.*)$/);
+  if (exifMatch) {
+    s = `${exifMatch[1]}-${exifMatch[2]}-${exifMatch[3]}${exifMatch[4]}`;
+  }
+  s = s.replace(' ', 'T');
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? new Date() : d;
+}
+
 function mapPhoto(p, albumIdForPhoto) {
   const exif = parseExif(p.exif);
-  const dateRaw = p.created_at || p.indexed_at;
-  const date = dateRaw ? new Date(dateRaw.replace(' ', 'T')) : new Date();
+  const date = parsePhotoDate(p.created_at || p.indexed_at);
 
   const w = p.width || 3;
   const h = p.height || 2;
@@ -54,8 +67,7 @@ function mapPhoto(p, albumIdForPhoto) {
     rating: 0,
     flag: null,
     raw: isRaw,
-    rawSizeMB: fileSizeMB,
-    jpegSizeMB: isRaw ? +(fileSizeMB * 0.12).toFixed(1) : fileSizeMB,
+    sizeMB: fileSizeMB,
     mime_type: p.mime_type,
     album: albumIdForPhoto || null,
     albumName: '',           // filled in by caller after album lookup
@@ -139,12 +151,18 @@ async function initLibrary() {
 
   const albumMap = await buildAlbumPhotoMap(albumData.albums);
   const albumById = Object.fromEntries(albumData.albums.map(a => [a.id, a]));
+  const photoMeta = loadPhotoMeta();
 
   const photos = rawPhotos.map(p => {
     const albumId = albumMap[p.id] || null;
     const photo = mapPhoto(p, albumId);
     if (albumId && albumById[albumId]) {
       photo.albumName = albumById[albumId].name;
+    }
+    const meta = photoMeta[p.id];
+    if (meta) {
+      photo.rating = Number(meta.rating) || 0;
+      photo.flag = meta.flag || null;
     }
     return photo;
   });
@@ -157,6 +175,43 @@ async function initLibrary() {
   });
 
   return { photos, albums: albumData.albums, albumTree: albumData.tree };
+}
+
+// ── Client-side photo meta (ratings / pick flags) ────────────────────────────
+// The backend has no storage for ratings or pick/reject flags, so they are
+// persisted in localStorage as { [photoId]: { rating, flag } }.
+
+const PHOTO_META_STORAGE_KEY = 'look_photo_meta';
+
+function loadPhotoMeta() {
+  try {
+    const raw = window.localStorage?.getItem(PHOTO_META_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function savePhotoMeta(meta) {
+  try {
+    window.localStorage?.setItem(PHOTO_META_STORAGE_KEY, JSON.stringify(meta || {}));
+  } catch (e) {
+    // storage unavailable — non-fatal
+  }
+}
+
+// ── Formatting helpers ───────────────────────────────────────────────────────
+
+function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!isFinite(n) || n <= 0) return '0 MB';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  const str = (v >= 100 || i === 0) ? String(Math.round(v)) : v.toFixed(1).replace(/\.0$/, '');
+  return `${str} ${units[i]}`;
 }
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
@@ -271,14 +326,25 @@ async function apiAddPhotoToAlbum(albumId, photoId) {
   return apiFetch(`/api/albums/${albumId}/photos/${photoId}`, { method: 'POST' });
 }
 
+async function apiSetFavorite(photoId, value) {
+  return apiFetch(
+    `/api/photos/${encodeURIComponent(photoId)}/favorite?value=${value ? 'true' : 'false'}`,
+    { method: 'POST' },
+  );
+}
+
 // ── Export ────────────────────────────────────────────────────────────────────
 
 Object.assign(Look, {
   initLibrary,
   mapPhoto,
+  loadPhotoMeta,
+  savePhotoMeta,
+  formatBytes,
   dateLabel,
   monthLabel,
   timeLabel,
+  apiSetFavorite,
   apiImport,
   apiHealth,
   apiAddWatchDir,

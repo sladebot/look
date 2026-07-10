@@ -19,6 +19,27 @@ const TWEAKS_DEFAULTS = /*EDITMODE-BEGIN*/{
 const AUTO_SYNC_INTERVAL_MS = 30000;
 const STATUS_POLL_INTERVAL_MS = 1500;
 
+// Tweaks persistence (localStorage) — hydrated at startup, written on change.
+const TWEAKS_STORAGE_KEY = 'look_tweaks';
+
+function loadStoredTweaks() {
+  try {
+    const raw = window.localStorage?.getItem(TWEAKS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveStoredTweaks(tweaks) {
+  try {
+    window.localStorage?.setItem(TWEAKS_STORAGE_KEY, JSON.stringify(tweaks));
+  } catch (e) {
+    // storage unavailable — non-fatal
+  }
+}
+
 // SWATCH_COLORS is defined in look-data.js (shared global scope)
 
 // ── Loading screen ────────────────────────────────────────────────────────────
@@ -54,7 +75,7 @@ function App() {
   const [loadError, setLoadError] = aaUseState(null);
 
   // UI state
-  const [tweaks, setTweaks] = aaUseState(TWEAKS_DEFAULTS);
+  const [tweaks, setTweaks] = aaUseState(() => ({ ...TWEAKS_DEFAULTS, ...loadStoredTweaks() }));
   const [mode, setMode] = aaUseState('pro');
   const [selected, setSelected] = aaUseState('all');
   const [search, setSearch] = aaUseState('');
@@ -74,7 +95,7 @@ function App() {
   const [status, setStatus] = aaUseState({
     previewsDone: 0,
     previewsTotal: 1,
-    libraryTB: 0,
+    libraryBytes: 0,
     processing: null,
   });
 
@@ -86,11 +107,12 @@ function App() {
     setAlbumTree(lib.albumTree);
 
     const done = lib.photos.filter(p => p._api?.has_thumbnail).length;
+    const libraryBytes = lib.photos.reduce((sum, p) => sum + (Number(p._api?.file_size) || 0), 0);
     setStatus(prev => ({
       ...prev,
       previewsDone: done,
       previewsTotal: lib.photos.length,
-      libraryTB: 0,
+      libraryBytes,
     }));
     return lib;
   }, []);
@@ -175,6 +197,7 @@ function App() {
   const setTweak = aaUseCallback((k, v) => {
     setTweaks(prev => {
       const next = typeof k === 'object' ? { ...prev, ...k } : { ...prev, [k]: v };
+      saveStoredTweaks(next);
       window.parent.postMessage({ type: '__edit_mode_set_keys', edits: typeof k === 'object' ? k : { [k]: v } }, '*');
       return next;
     });
@@ -250,9 +273,41 @@ function App() {
   }, [selected, albums]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
-  const setRating = (id, v) => setPhotos(ps => ps.map(p => p.id === id ? { ...p, rating: v } : p));
-  const setFlag   = (id, f) => setPhotos(ps => ps.map(p => p.id === id ? { ...p, flag: f }   : p));
-  const toggleFav = (id)    => setPhotos(ps => ps.map(p => p.id === id ? { ...p, favorite: !p.favorite } : p));
+
+  // Ratings and pick/reject flags have no backend storage — write-through to
+  // localStorage ('look_photo_meta') so they survive reloads.
+  const updatePhotoMeta = (id, patch) => {
+    const meta = Look.loadPhotoMeta();
+    const next = { ...(meta[id] || { rating: 0, flag: null }), ...patch };
+    if (!next.rating && !next.flag) {
+      delete meta[id];
+    } else {
+      meta[id] = next;
+    }
+    Look.savePhotoMeta(meta);
+  };
+
+  const setRating = (id, v) => {
+    setPhotos(ps => ps.map(p => p.id === id ? { ...p, rating: v } : p));
+    updatePhotoMeta(id, { rating: v });
+  };
+  const setFlag = (id, f) => {
+    setPhotos(ps => ps.map(p => p.id === id ? { ...p, flag: f } : p));
+    updatePhotoMeta(id, { flag: f });
+  };
+
+  // Favorites are backend-persisted: optimistic update, rollback on failure.
+  const toggleFav = (id) => {
+    const photo = photos.find(p => p.id === id);
+    if (!photo) return;
+    const nextValue = !photo.favorite;
+    setPhotos(ps => ps.map(p => p.id === id ? { ...p, favorite: nextValue } : p));
+    Look.apiSetFavorite(id, nextValue).catch(err => {
+      setPhotos(ps => ps.map(p => p.id === id ? { ...p, favorite: !nextValue } : p));
+      setSyncMessage(`Favorite update failed: ${err?.message || String(err)}`);
+      console.error('Favorite update failed', err);
+    });
+  };
 
   const handleDropOnAlbum = async (albumId, e) => {
     const id = e.dataTransfer.getData('text/photo-id');
