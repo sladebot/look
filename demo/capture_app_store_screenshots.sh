@@ -33,7 +33,7 @@ SCENARIOS=(
   "multiselect:04_long_press_multiselect.png:LOOK_UI_SELECT_COUNT=4"
   "detail:05_photo_detail_tags.png:LOOK_UI_ROUTE=detail"
   "library:06_library_albums.png:LOOK_UI_TAB=library"
-  "search:07_search_library.png:LOOK_UI_TAB=search LOOK_UI_SEARCH_QUERY=night"
+  "search:07_search_library.png:LOOK_UI_TAB=search LOOK_UI_SEARCH_QUERY=travel"
   "settings:08_settings_tailnet.png:LOOK_UI_TAB=settings"
 )
 
