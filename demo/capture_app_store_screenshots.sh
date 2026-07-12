@@ -4,13 +4,13 @@
 # The app is driven to each screen with DEBUG-only launch environment variables
 # (see LookUIScreenshotRoute in ContentView.swift), pointed at a live Look
 # server seeded with generated landscape photography
-# (demo/generate_screenshot_library.py).
+# (demo/generate_place_photos.py).
 #
 # Prerequisites: a running seeded server, e.g.
 #   OUT=/tmp/look-screenshot-library
 #   PORT=8765 PHOTO_DIR=$OUT DB_PATH=/tmp/look-screens.db \
 #     ./.conda/bin/python -m uvicorn api.server:app --host 127.0.0.1 --port 8765 &
-#   ./.conda/bin/python demo/generate_screenshot_library.py $OUT \
+#   ./.conda/bin/python demo/generate_place_photos.py $OUT \
 #     --seed http://127.0.0.1:8765 /tmp/look-screens.db
 set -euo pipefail
 

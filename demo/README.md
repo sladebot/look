@@ -13,7 +13,7 @@ OUT=/tmp/look-screenshot-library
 rm -f /tmp/look-screens.db*
 PORT=8765 PHOTO_DIR=$OUT DB_PATH=/tmp/look-screens.db \
   ./.conda/bin/python -m uvicorn api.server:app --host 127.0.0.1 --port 8765 &
-./.conda/bin/python demo/generate_screenshot_library.py $OUT \
+./.conda/bin/python demo/generate_place_photos.py $OUT \
   --seed http://127.0.0.1:8765 /tmp/look-screens.db
 
 # 2. Capture both devices
