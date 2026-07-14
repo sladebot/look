@@ -159,12 +159,10 @@ struct PhotosGrid: View {
                     gallery(secs)
                 }
             }
-            .navigationTitle(selectionMode ? selectionSummary : "Photos")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
+            // The photos are the page: no navigation bar. A large in-scroll
+            // header carries the title, count, and the two quiet controls.
+            .toolbar(.hidden, for: .navigationBar)
             .lookScreenBackground()
-            .toolbarBackground(.automatic, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .tabBar)
             .safeAreaInset(edge: .bottom) {
                 if selectionMode {
@@ -221,6 +219,10 @@ struct PhotosGrid: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: LookTheme.Spacing.tight,
                            pinnedViews: .sectionHeaders) {
+                    pageHeader
+                        .padding(.horizontal, LookTheme.Spacing.screen)
+                        .padding(.top, LookTheme.Spacing.small)
+
                     statusBanner
 
                     if filter != .all {
@@ -230,9 +232,9 @@ struct PhotosGrid: View {
                     }
 
                     if store.isSyncing {
-                        syncStatusStrip
+                        syncInlineStatus
                             .padding(.horizontal, LookTheme.Spacing.screen)
-                            .padding(.top, LookTheme.Spacing.small)
+                            .padding(.top, LookTheme.Spacing.tight)
                     }
 
                     ForEach(secs) { section in
@@ -404,7 +406,7 @@ struct PhotosGrid: View {
                 message: store.isSyncing ? "Sync is still running." : "Preparing the contact sheet."
             )
             if store.isSyncing {
-                syncStatusStrip
+                syncInlineStatus
                     .padding(.horizontal, LookTheme.Spacing.screen)
             }
         }
@@ -452,7 +454,7 @@ struct PhotosGrid: View {
                     .padding(.horizontal, LookTheme.Spacing.screen)
             }
             if store.isSyncing {
-                syncStatusStrip
+                syncInlineStatus
                     .padding(.horizontal, LookTheme.Spacing.screen)
                     .padding(.bottom, LookTheme.Spacing.screen)
             }
@@ -471,58 +473,6 @@ struct PhotosGrid: View {
                 .padding(.horizontal, LookTheme.Spacing.screen)
                 .padding(.bottom, LookTheme.Spacing.small)
         }
-    }
-
-    private var syncStatusStrip: some View {
-        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
-            HStack(spacing: LookTheme.Spacing.small) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(LookTheme.Typography.secondaryEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.accent)
-                    .accessibilityHidden(true)
-
-                Text("Syncing library")
-                    .font(LookTheme.Typography.secondaryEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.primaryText)
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
-
-                if let fraction = store.syncProgressFraction {
-                    Text(fraction, format: .percent.precision(.fractionLength(0)))
-                        .font(LookTheme.Typography.secondaryEmphasis)
-                        .monospacedDigit()
-                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
-                        .fixedSize()
-                        .frame(minWidth: 44, alignment: .trailing)
-                } else {
-                    Text("Working")
-                        .font(LookTheme.Typography.secondaryEmphasis)
-                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
-                        .fixedSize()
-                        .frame(minWidth: 54, alignment: .trailing)
-                }
-            }
-
-            Text(store.syncProgressMessage ?? "Importing and updating thumbnails")
-                .font(LookTheme.Typography.secondary)
-                .foregroundStyle(LookTheme.ColorToken.secondaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if let fraction = store.syncProgressFraction {
-                StableSyncProgressBar(value: fraction)
-            } else {
-                StableSyncProgressBar(value: nil)
-            }
-        }
-        .padding(.horizontal, LookTheme.Spacing.medium)
-        .padding(.vertical, LookTheme.Spacing.small)
-        .frame(minHeight: 72, alignment: .center)
-        .background(LookTheme.ColorToken.elevated,
-                    in: RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
-        .accessibilityElement(children: .combine)
     }
 
     private func errorStatusStrip(_ message: String) -> some View {
@@ -766,36 +716,41 @@ struct PhotosGrid: View {
 
     // MARK: Toolbar
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            LookNavTitle(
-                title: selectionMode ? selectionSummary : "Photos",
-                subtitle: navigationSubtitle
-            )
-        }
-        ToolbarItem(placement: .topBarLeading) {
+    /// Large in-scroll header: the only chrome the page carries.
+    /// Browse: title + count with quiet Select / menu. Selection: summary + Cancel.
+    private var pageHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selectionMode ? selectionSummary : "Photos")
+                    .font(LookTheme.Typography.display)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
+                    .contentTransition(.numericText())
+                Text(navigationSubtitle)
+                    .font(LookTheme.Typography.caption)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+
+            Spacer(minLength: LookTheme.Spacing.small)
+
             if selectionMode {
                 Button("Cancel") {
                     selectionMode = false
                     selectedPhotoIds.removeAll()
                 }
-            }
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            if !selectionMode {
+                .font(LookTheme.Typography.secondaryEmphasis)
+                .foregroundStyle(LookTheme.ColorToken.accent)
+            } else {
                 Button("Select") {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     selectionMode = true
                 }
                 .font(LookTheme.Typography.secondaryEmphasis)
-                .tint(LookTheme.ColorToken.accent)
+                .foregroundStyle(LookTheme.ColorToken.accent)
                 .disabled(visiblePhotos.isEmpty)
                 .accessibilityHint("Enters selection mode")
-            }
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            if !selectionMode {
+
                 Menu {
                     Picker("Filter", selection: $filter) {
                         ForEach(PhotoGridFilter.allCases) { option in
@@ -813,28 +768,53 @@ struct PhotosGrid: View {
                     }
                     Button {
                         Task { await store.syncNow() }
+                    } label: {
+                        Label(store.isSyncing ? "Syncing" : "Sync and Import",
+                              systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .disabled(store.isSyncing)
                 } label: {
-                    Label(store.isSyncing ? "Syncing" : "Sync and Import",
-                          systemImage: "arrow.triangle.2.circlepath")
-                }
-                .disabled(store.isSyncing)
-            } label: {
                     Image(systemName: "ellipsis.circle")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(LookTheme.ColorToken.accent)
-                        .frame(width: 44, height: 44)
+                        .font(.title3)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                        .frame(width: 40, height: 40, alignment: .trailing)
                         .overlay(alignment: .topTrailing) {
                             if store.isSyncing {
                                 Circle()
                                     .fill(LookTheme.ColorToken.accent)
                                     .frame(width: 7, height: 7)
-                                    .offset(x: -6, y: 6)
                             }
                         }
                 }
                 .accessibilityLabel("More options")
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: selectionMode)
+    }
+
+    /// One quiet line replaces the old 72pt sync card.
+    private var syncInlineStatus: some View {
+        HStack(spacing: LookTheme.Spacing.small) {
+            ProgressView()
+                .controlSize(.small)
+                .tint(LookTheme.ColorToken.accent)
+            Text(syncInlineText)
+                .font(LookTheme.Typography.caption)
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                .monospacedDigit()
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var syncInlineText: String {
+        if let fraction = store.syncProgressFraction {
+            let percent = Int((fraction * 100).rounded())
+            return "Syncing · \(percent)%"
+        }
+        return store.syncProgressMessage ?? "Syncing library"
     }
 
     private func toggleSelection(_ photo: Photo) {
@@ -875,9 +855,11 @@ private struct PhotoDateStrip: View {
     let count: Int
 
     var body: some View {
-        HStack(spacing: LookTheme.Spacing.small) {
+        HStack {
+            // One small marker; the count lives in the accessibility label —
+            // it's reference data, not something to read on every scroll.
             Text(title)
-                .font(LookTheme.Typography.secondaryEmphasis)
+                .font(LookTheme.Typography.captionEmphasis)
                 .foregroundStyle(LookTheme.ColorToken.primaryText)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
@@ -885,14 +867,6 @@ private struct PhotoDateStrip: View {
                 .environment(\.colorScheme, .dark)
 
             Spacer(minLength: 0)
-
-            Text(count == 1 ? "1 photo" : "\(count.formatted()) photos")
-                .font(LookTheme.Typography.caption)
-                .foregroundStyle(LookTheme.ColorToken.secondaryText)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.thinMaterial, in: Capsule())
-                .environment(\.colorScheme, .dark)
         }
         .padding(.horizontal, LookTheme.Spacing.screen)
         .padding(.vertical, LookTheme.Spacing.tight)
@@ -900,37 +874,6 @@ private struct PhotoDateStrip: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(count) photos")
         .accessibilityAddTraits(.isHeader)
-    }
-}
-
-private struct StableSyncProgressBar: View {
-    let value: Double?
-
-    private var clampedValue: Double {
-        min(max(value ?? 0, 0), 1)
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(LookTheme.ColorToken.separator)
-
-                if let value {
-                    Capsule()
-                        .fill(LookTheme.ColorToken.accent)
-                        .frame(width: max(6, proxy.size.width * clampedValue))
-                        .animation(nil, value: value)
-                } else {
-                    Capsule()
-                        .fill(LookTheme.ColorToken.accent.opacity(0.75))
-                        .frame(width: max(36, proxy.size.width * 0.28))
-                        .offset(x: proxy.size.width * 0.16)
-                }
-            }
-        }
-        .frame(height: 5)
-        .accessibilityHidden(true)
     }
 }
 
@@ -1007,7 +950,7 @@ private let dayKeyFormatter: DateFormatter = {
 
 private let displayDayFormatter: DateFormatter = {
     let f = DateFormatter()
-    f.dateFormat = "EEEE, MMM d"
+    f.dateFormat = "EEE, MMM d"
     return f
 }()
 
@@ -1110,7 +1053,24 @@ struct NativePhotoViewer: View {
             }
         }
         .statusBarHidden(chromeHidden)
-        .sheet(isPresented: $showInfo) { PhotoDetail(photo: currentPhoto) }
+        #if DEBUG
+        .task {
+            // Screenshot tooling: LOOK_UI_VIEWER_INFO=1 opens the info panel.
+            if ProcessInfo.processInfo.environment["LOOK_UI_VIEWER_INFO"] == "1" {
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                showInfo = true
+            }
+        }
+        #endif
+        .sheet(isPresented: $showInfo) {
+            // Pull-up info panel: half-height by default so the photo stays
+            // visible and swipeable behind it; expands to full when needed.
+            PhotoDetail(photo: currentPhoto, embedsInViewer: true)
+                .id(currentPhoto.id)
+                .presentationDetents([.medium, .large])
+                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $showAddToAlbum) { AddToAlbumSheet(photo: currentPhoto) }
         .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
         .task(id: currentId) {
