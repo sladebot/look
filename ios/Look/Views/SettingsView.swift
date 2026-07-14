@@ -24,12 +24,12 @@ struct SettingsView: View {
                 .padding(LookTheme.Spacing.screen)
             }
             .lookScreenBackground()
-            .navigationTitle("Settings")
+            .navigationTitle("Server")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     LookNavTitle(
-                        title: "Settings",
+                        title: "Server",
                         subtitle: store.serverConnected ? "Connected over Tailscale" : "Server connection"
                     )
                 }

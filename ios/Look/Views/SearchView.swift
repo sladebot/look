@@ -43,12 +43,12 @@ struct SearchView: View {
                 content
             }
             .lookScreenBackground()
-            .navigationTitle("Search")
+            .navigationTitle("Find")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     LookNavTitle(
-                        title: "Search",
+                        title: "Find",
                         subtitle: submittedQuery.isEmpty ? "Filename, tag, camera, or path" : "\(results.count) results"
                     )
                 }
@@ -143,6 +143,48 @@ struct SearchView: View {
         .padding(.bottom, LookTheme.Spacing.medium)
     }
 
+    /// Places entry: the map moved here from Library so discovery lives on one tab.
+    private var placesCard: some View {
+        NavigationLink {
+            MapBrowseView()
+        } label: {
+            HStack(spacing: LookTheme.Spacing.medium) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
+                        .fill(LookTheme.ColorToken.accent.opacity(0.16))
+                    Image(systemName: "map.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(LookTheme.ColorToken.accent)
+                }
+                .frame(width: 44, height: 44)
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Places")
+                        .font(LookTheme.Typography.bodyEmphasis)
+                        .foregroundStyle(LookTheme.ColorToken.primaryText)
+                    Text(geotaggedCount == 1
+                         ? "1 photo with a saved location"
+                         : "\(geotaggedCount) photos with saved locations")
+                        .font(LookTheme.Typography.secondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                }
+
+                Spacer(minLength: LookTheme.Spacing.tight)
+
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                    .accessibilityHidden(true)
+            }
+            .padding(LookTheme.Spacing.medium)
+            .lookSurface()
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Places, \(geotaggedCount) photos with saved locations")
+    }
+
     @ViewBuilder
     private var content: some View {
         if isLoading {
@@ -173,9 +215,15 @@ struct SearchView: View {
         }
     }
 
+    private var geotaggedCount: Int {
+        store.photos.filter { $0.hasLocation }.count
+    }
+
     private var emptySearchView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
+                placesCard
+
                 if recentSearches.isEmpty && store.allTags.isEmpty {
                     LookEmptyState(
                         title: "Search your photo library",
