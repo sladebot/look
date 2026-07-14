@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Combined "Library" tab: manual albums, smart albums, and a map entry.
-/// This is also where Smart Albums are finally surfaced in the UI.
+/// "Collections" tab: manual albums and smart albums. (Places moved to Find.)
 struct LibraryView: View {
     @EnvironmentObject var store: PhotoStore
     @State private var showCreateAlbum = false
@@ -21,21 +20,6 @@ struct LibraryView: View {
                             actionTitle: "Retry",
                             action: { Task { await reloadLibrary() } }
                         )
-                    }
-
-                    LibraryPanelSection(title: "Browse") {
-                        NavigationLink {
-                            MapBrowseView()
-                        } label: {
-                            LibraryCollectionRow(
-                                icon: "map.fill",
-                                title: "Map",
-                                subtitle: "Browse photos with saved locations.",
-                                badge: "Places",
-                                tint: LookTheme.ColorToken.accent
-                            )
-                        }
-                        .buttonStyle(.plain)
                     }
 
                     LibraryPanelSection(
@@ -112,12 +96,12 @@ struct LibraryView: View {
                 .padding(LookTheme.Spacing.screen)
             }
             .lookScreenBackground()
-            .navigationTitle("Library")
+            .navigationTitle("Collections")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     LookNavTitle(
-                        title: "Library",
+                        title: "Collections",
                         subtitle: "\(store.albums.count) albums • \(store.smartCollections.count) smart"
                     )
                 }

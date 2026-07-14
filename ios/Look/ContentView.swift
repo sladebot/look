@@ -8,12 +8,14 @@ private enum LookTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    // Raw values stay photos|library|search|settings — screenshot tooling
+    // (LOOK_UI_TAB) and stored state depend on them; only display names moved.
     var title: String {
         switch self {
         case .photos: return "Photos"
-        case .library: return "Library"
-        case .search: return "Search"
-        case .settings: return "Settings"
+        case .library: return "Collections"
+        case .search: return "Find"
+        case .settings: return "Server"
         }
     }
 
@@ -22,7 +24,7 @@ private enum LookTab: String, CaseIterable, Identifiable {
         case .photos: return "photo.on.rectangle.angled"
         case .library: return "rectangle.stack"
         case .search: return "magnifyingglass"
-        case .settings: return "gear"
+        case .settings: return "server.rack"
         }
     }
 }
@@ -44,8 +46,8 @@ private enum LookSidebarItem: String, CaseIterable, Identifiable {
         case .albums: return "Albums"
         case .smartAlbums: return "Smart albums"
         case .places: return "Places"
-        case .search: return "Search"
-        case .settings: return "Settings"
+        case .search: return "Find"
+        case .settings: return "Server"
         }
     }
 
@@ -56,7 +58,7 @@ private enum LookSidebarItem: String, CaseIterable, Identifiable {
         case .smartAlbums: return "sparkles.rectangle.stack"
         case .places: return "map"
         case .search: return "magnifyingglass"
-        case .settings: return "gear"
+        case .settings: return "server.rack"
         }
     }
 

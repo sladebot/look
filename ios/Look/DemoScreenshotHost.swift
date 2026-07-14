@@ -105,17 +105,17 @@ struct DemoScreenshotHost: View {
 
             LibraryView()
                 .ignoresSafeArea(.container, edges: .bottom)
-                .tabItem { Label("Library", systemImage: "rectangle.stack") }
+                .tabItem { Label("Collections", systemImage: "rectangle.stack") }
                 .tag(DemoTab.library)
 
             SearchView(initialQuery: "kyoto temple", initialResults: Array(DemoData.photos.prefix(18)))
                 .ignoresSafeArea(.container, edges: .bottom)
-                .tabItem { Label("Search", systemImage: "magnifyingglass") }
+                .tabItem { Label("Find", systemImage: "magnifyingglass") }
                 .tag(DemoTab.search)
 
             SettingsView()
                 .ignoresSafeArea(.container, edges: .bottom)
-                .tabItem { Label("Settings", systemImage: "gear") }
+                .tabItem { Label("Server", systemImage: "server.rack") }
                 .tag(DemoTab.settings)
         }
         .tint(LookTheme.ColorToken.accentControl)
