@@ -33,7 +33,7 @@ struct AddToAlbumSheet: View {
                                 .foregroundStyle(LookTheme.ColorToken.accent)
                                 .frame(width: 26)
                             Text(album.name)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(LookTheme.ColorToken.primaryText)
                             Spacer()
                             if busyAlbumId == album.id {
                                 ProgressView()
@@ -67,14 +67,18 @@ struct AddToAlbumSheet: View {
     private func add(to album: Album) async {
         busyAlbumId = album.id
         defer { busyAlbumId = nil }
+        var added = 0
         do {
             for photo in photos {
                 _ = try await APIClient.shared.addPhotoToAlbum(albumId: album.id, photoId: photo.id)
+                added += 1
             }
             addedAlbumIds.insert(album.id)
-            await store.loadAlbums()
         } catch {
-            store.errorMessage = error.localizedDescription
+            store.errorMessage = added > 0
+                ? "Added \(added) of \(photos.count) photos, then: \(error.localizedDescription)"
+                : error.localizedDescription
         }
+        await store.loadAlbums()
     }
 }

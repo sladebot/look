@@ -6,6 +6,7 @@ struct LibraryView: View {
     @State private var showCreateAlbum = false
     @State private var showCreateSmart = false
     @State private var pendingDeletion: LibraryDeletion?
+    @State private var albumBeingEdited: Album?
     @State private var actionMessage: String?
 
     var body: some View {
@@ -47,6 +48,11 @@ struct LibraryView: View {
                                     }
                                     .buttonStyle(.plain)
                                     .contextMenu {
+                                        Button {
+                                            albumBeingEdited = album
+                                        } label: {
+                                            Label("Rename Album", systemImage: "pencil")
+                                        }
                                         Button(role: .destructive) {
                                             pendingDeletion = .albums([album])
                                         } label: {
@@ -130,6 +136,11 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showCreateSmart) {
                 CreateSmartAlbumSheet()
+            }
+            .sheet(item: $albumBeingEdited) { album in
+                EditAlbumSheet(album: album) { _ in
+                    await store.loadAlbums()
+                }
             }
             .alert(item: $pendingDeletion) { deletion in
                 Alert(
@@ -236,7 +247,7 @@ private struct LibraryCollectionRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(LookTheme.Typography.bodyEmphasis)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                     .lineLimit(1)
                 Text(subtitle)
                     .font(LookTheme.Typography.secondary)
@@ -451,6 +462,76 @@ struct SmartAlbumDetail: View {
 }
 
 // MARK: - Create sheets
+
+/// Rename an album (and optionally its description) via PUT /api/albums/{id}.
+struct EditAlbumSheet: View {
+    let album: Album
+    let currentName: String
+    let onSaved: (String) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var descriptionText: String
+    @State private var saving = false
+    @State private var errorMessage: String?
+
+    init(album: Album, currentName: String? = nil, onSaved: @escaping (String) async -> Void) {
+        self.album = album
+        self.currentName = currentName ?? album.name
+        self.onSaved = onSaved
+        _name = State(initialValue: currentName ?? album.name)
+        _descriptionText = State(initialValue: album.description ?? "")
+    }
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Album") {
+                    TextField("Name", text: $name)
+                    TextField("Description (optional)", text: $descriptionText)
+                }
+                if let errorMessage {
+                    Section {
+                        LookStatusBanner(title: "Could not save album", message: errorMessage, tone: .error)
+                    }
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .navigationTitle("Rename Album")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Saving…" : "Save") {
+                        Task { await save() }
+                    }
+                    .disabled(trimmedName.isEmpty || saving)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        errorMessage = nil
+        defer { saving = false }
+        do {
+            _ = try await APIClient.shared.updateAlbum(
+                album.id,
+                name: trimmedName,
+                description: descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            await onSaved(trimmedName)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
 
 struct CreateAlbumSheet: View {
     @EnvironmentObject var store: PhotoStore
