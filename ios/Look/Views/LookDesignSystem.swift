@@ -249,6 +249,72 @@ struct LookChip: View {
     }
 }
 
+// MARK: - Undo toast
+
+/// Transient bottom toast confirming an action, with an optional Undo.
+/// Screens hold a `LookToast?` and overlay `LookToastView`; the view
+/// auto-dismisses after 4 seconds unless Undo is tapped.
+struct LookToast: Identifiable, Equatable {
+    let id = UUID()
+    let message: String
+    var undoTitle: String? = "Undo"
+    var undo: (() -> Void)?
+
+    static func == (lhs: LookToast, rhs: LookToast) -> Bool { lhs.id == rhs.id }
+}
+
+struct LookToastView: View {
+    let toast: LookToast
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: LookTheme.Spacing.small) {
+            Text(toast.message)
+                .font(LookTheme.Typography.secondary)
+                .foregroundStyle(LookTheme.ColorToken.primaryText)
+                .lineLimit(2)
+
+            Spacer(minLength: LookTheme.Spacing.tight)
+
+            if let undoTitle = toast.undoTitle, let undo = toast.undo {
+                Button(undoTitle) {
+                    undo()
+                    dismiss()
+                }
+                .font(LookTheme.Typography.secondaryEmphasis)
+                .foregroundStyle(LookTheme.ColorToken.accent)
+            }
+        }
+        .padding(.horizontal, LookTheme.Spacing.medium)
+        .padding(.vertical, 12)
+        .background(LookTheme.ColorToken.elevated,
+                    in: RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
+        .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+        .padding(.horizontal, LookTheme.Spacing.screen)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .task(id: toast.id) {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            dismiss()
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+extension View {
+    /// Overlays a `LookToast` above the given bottom padding, animated.
+    func lookToast(_ toast: Binding<LookToast?>, bottomPadding: CGFloat = 0) -> some View {
+        overlay(alignment: .bottom) {
+            if let value = toast.wrappedValue {
+                LookToastView(toast: value) {
+                    if toast.wrappedValue == value { toast.wrappedValue = nil }
+                }
+                .padding(.bottom, bottomPadding)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: toast.wrappedValue)
+    }
+}
+
 // MARK: - Nav title
 
 /// Compact toolbar title: sentence case, no tracking. Subtitle is auxiliary

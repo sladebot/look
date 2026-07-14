@@ -214,10 +214,10 @@ struct CachedThumbnail: View {
                     .clipped()
                     .transition(.opacity)
             } else if failed {
-                Color(.systemGray5)
+                LookTheme.ColorToken.elevated
                     .overlay(Image(systemName: "photo.badge.exclamationmark").foregroundStyle(LookTheme.ColorToken.secondaryText))
             } else {
-                Color(.systemGray6)
+                LookTheme.ColorToken.surface
                     .overlay(ProgressView().tint(.secondary))
                     .task(id: url) { await load() }
             }

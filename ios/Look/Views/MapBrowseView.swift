@@ -170,13 +170,13 @@ private struct PhotoMapCallout: View {
                     .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
-                            .stroke(Color(.systemBackground), lineWidth: 2)
+                            .stroke(LookTheme.ColorToken.canvas, lineWidth: 2)
                     }
                     .overlay(alignment: .bottomTrailing) {
                         Image(systemName: "mappin.circle.fill")
                             .font(.headline)
                             .foregroundStyle(.white, LookTheme.ColorToken.danger)
-                            .background(Circle().fill(Color(.systemBackground)))
+                            .background(Circle().fill(LookTheme.ColorToken.canvas))
                             .offset(x: 5, y: 5)
                     }
                     .shadow(color: .black.opacity(0.24), radius: 5, y: 3)

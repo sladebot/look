@@ -14,6 +14,9 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
+                    if store.isSyncing {
+                        activityCard
+                    }
                     connectionPanel
                     syncPanel
                     libraryPanel
@@ -49,6 +52,41 @@ struct SettingsView: View {
                 await store.loadServerSettings()
             }
         }
+    }
+
+    /// Live server activity, surfaced at the top so background work is
+    /// visible without digging into Tools.
+    private var activityCard: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+            HStack(spacing: LookTheme.Spacing.small) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(LookTheme.Typography.captionEmphasis)
+                    .foregroundStyle(LookTheme.ColorToken.accent)
+                Text("Syncing library")
+                    .font(LookTheme.Typography.secondaryEmphasis)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
+                Spacer()
+                if let fraction = store.syncProgressFraction {
+                    Text(fraction, format: .percent.precision(.fractionLength(0)))
+                        .font(LookTheme.Typography.captionEmphasis)
+                        .monospacedDigit()
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                }
+            }
+
+            if let message = store.syncProgressMessage {
+                Text(message)
+                    .font(LookTheme.Typography.caption)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            ProgressView(value: store.syncProgressFraction ?? 0)
+                .tint(LookTheme.ColorToken.accent)
+        }
+        .lookCard()
+        .accessibilityElement(children: .combine)
     }
 
     private var connectionPanel: some View {
@@ -356,7 +394,7 @@ struct SettingsView: View {
                     .accessibilityHidden(true)
                 Text(title)
                     .font(LookTheme.Typography.body)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))

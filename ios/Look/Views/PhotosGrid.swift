@@ -79,6 +79,7 @@ struct PhotosGrid: View {
     @State private var filter = PhotoGridFilter.all
     @State private var sort = PhotoGridSort.newest
     @State private var selectionShare: SelectionShareItem?
+    @State private var toast: LookToast?
     @State private var isPreparingSelectionShare = false
     @State private var isFavoritingSelection = false
     @Namespace private var viewerZoomNamespace
@@ -189,6 +190,7 @@ struct PhotosGrid: View {
             .sheet(item: $selectionShare) { item in
                 ShareSheet(items: item.urls)
             }
+            .lookToast($toast, bottomPadding: selectionMode ? 92 : 96)
             #if DEBUG
             .task(id: store.photos.count) { applyScreenshotSelectionIfNeeded() }
             #endif
@@ -704,6 +706,8 @@ struct PhotosGrid: View {
     private func favoriteSelectedPhotos() {
         let ids = selectedPhotoIds
         guard !ids.isEmpty, !isFavoritingSelection else { return }
+        // Only photos that weren't already favorites get reverted by Undo.
+        let newlyFavorited = selectedPhotos.filter { $0.isFavorite != true }.map(\.id)
         isFavoritingSelection = true
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         Task {
@@ -711,6 +715,16 @@ struct PhotosGrid: View {
                 _ = await store.setFavorite(id, to: true)
             }
             isFavoritingSelection = false
+            toast = LookToast(
+                message: ids.count == 1 ? "Added to favorites" : "Added \(ids.count) to favorites",
+                undo: newlyFavorited.isEmpty ? nil : {
+                    Task {
+                        for id in newlyFavorited {
+                            _ = await store.setFavorite(id, to: false)
+                        }
+                    }
+                }
+            )
         }
     }
 
@@ -924,7 +938,7 @@ private struct StableSyncProgressBar: View {
 
 /// Wraps prepared temp-file URLs so the multi-photo share sheet can be
 /// presented via `.sheet(item:)`.
-private struct SelectionShareItem: Identifiable {
+struct SelectionShareItem: Identifiable {
     let id = UUID()
     let urls: [URL]
 }
