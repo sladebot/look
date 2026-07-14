@@ -3,6 +3,9 @@ import MapKit
 
 struct PhotoDetail: View {
     let photo: Photo
+    /// When embedded as the viewer's pull-up info panel the photo is already
+    /// on screen behind the sheet, so the hero image section is omitted.
+    var embedsInViewer = false
     @EnvironmentObject var store: PhotoStore
     @State private var photoTags: [String] = []
     @State private var suggestions: [String] = []
@@ -28,7 +31,9 @@ struct PhotoDetail: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
-                    imageSection
+                    if !embedsInViewer {
+                        imageSection
+                    }
                     VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
                         titleSection
                         quickActionsRow
@@ -37,11 +42,12 @@ struct PhotoDetail: View {
                         tagsSection
                     }
                     .padding(.horizontal, LookTheme.Spacing.screen)
+                    .padding(.top, embedsInViewer ? LookTheme.Spacing.small : 0)
                     .padding(.bottom, 28)
                 }
             }
             .lookScreenBackground()
-            .navigationTitle("Photo")
+            .navigationTitle(embedsInViewer ? "Info" : "Photo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
