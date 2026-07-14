@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Look Support — self-hosted photo library for iPhone and iPad</title>
+<meta name="description" content="Support, setup help, and contact for Look, the self-hosted photo library app for iPhone and iPad." />
+<style>
+  :root {
+    --backdrop: #0a0a0c;
+    --canvas: #131316;
+    --surface: #1c1c21;
+    --elevated: #26262c;
+    --text: #f5f5f7;
+    --text-2: #c9c9d1;
+    --separator: #3a3a42;
+    --accent: #a79bff;
+    --accent-control: #6a5ae0;
+    --danger: #ff6b5e;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--text-2);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 20px 80px; }
+
+  header.site {
+    padding: 56px 0 36px;
+    border-bottom: 1px solid var(--separator);
+    margin-bottom: 40px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .brand-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--accent); }
+  .brand-name { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+  .brand-tag { font-size: 13px; color: var(--text-2); border: 1px solid var(--separator); border-radius: 999px; padding: 2px 10px; }
+  h1 { font-size: 34px; line-height: 1.2; letter-spacing: -0.02em; color: var(--text); margin: 0 0 12px; }
+  .lede { font-size: 18px; margin: 0; max-width: 56ch; }
+
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0 0; }
+  nav.toc a {
+    font-size: 14px; text-decoration: none; color: var(--text);
+    background: var(--surface); border: 1px solid var(--separator);
+    padding: 6px 14px; border-radius: 999px;
+  }
+  nav.toc a:hover { border-color: var(--accent); }
+
+  h2 { font-size: 22px; color: var(--text); letter-spacing: -0.01em; margin: 48px 0 8px; }
+  h2 + p.sub { margin-top: 0; }
+  section > p { max-width: 62ch; }
+  a { color: var(--accent); }
+  code {
+    font-family: var(--mono); font-size: 0.86em;
+    background: var(--surface); border: 1px solid var(--separator);
+    padding: 1px 6px; border-radius: 6px; color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  ol.steps { padding-left: 22px; margin: 12px 0 0; }
+  ol.steps li { margin-bottom: 8px; }
+
+  details {
+    background: var(--surface);
+    border: 1px solid var(--separator);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  details summary {
+    cursor: pointer;
+    padding: 14px 18px;
+    font-weight: 600;
+    color: var(--text);
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: "+"; color: var(--accent); font-size: 18px; flex-shrink: 0; }
+  details[open] summary::after { content: "–"; }
+  details .a { padding: 0 18px 16px; }
+  details .a p { margin: 0 0 10px; }
+  details .a ul, details .a ol { margin: 0 0 10px; padding-left: 20px; }
+  details .a li { margin-bottom: 6px; }
+
+  form {
+    background: var(--surface);
+    border: 1px solid var(--separator);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 16px;
+  }
+  .field { margin-bottom: 16px; }
+  label { display: block; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  label .opt { font-weight: 400; color: var(--text-2); }
+  input, select, textarea {
+    width: 100%;
+    font: inherit;
+    color: var(--text);
+    background: var(--canvas);
+    border: 1px solid var(--separator);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  textarea { min-height: 130px; resize: vertical; }
+  button {
+    font: inherit; font-weight: 600;
+    color: #fff; background: var(--accent-control);
+    border: none; border-radius: 10px;
+    padding: 11px 22px; cursor: pointer;
+  }
+  button:hover { filter: brightness(1.1); }
+  .form-note { font-size: 13px; margin-top: 12px; }
+  .honey { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+  footer {
+    margin-top: 64px; padding-top: 24px;
+    border-top: 1px solid var(--separator);
+    font-size: 14px;
+  }
+  @media (max-width: 480px) {
+    h1 { font-size: 28px; }
+    header.site { padding-top: 40px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="site">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span class="brand-name">Look</span>
+      <span class="brand-tag">Support</span>
+    </div>
+    <h1>Help with Look</h1>
+    <p class="lede">Look is a self-hosted photo library app for iPhone and iPad. It connects to a Look server you run on your own private network, usually through Tailscale — your photos never leave your hardware.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#setup">Setup</a>
+      <a href="#faq">Questions &amp; answers</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#contact">Contact support</a>
+    </nav>
+  </header>
+
+  <section id="setup">
+    <h2>Setting up</h2>
+    <p>You need three things: a running <a href="https://github.com/sladebot/look">Look server</a>, an iPhone or iPad on the same Tailnet or trusted private network, and the server's URL — for example <code>http://machine.tailnet-name.ts.net:5678</code> or <code>http://100.x.y.z:5678</code>.</p>
+    <ol class="steps">
+      <li>Start the Look server on your host machine.</li>
+      <li>Confirm the server is reachable from another device on your Tailnet.</li>
+      <li>Open Look on your iPhone or iPad and enter the server URL.</li>
+      <li>If your server sets <code>API_KEY</code>, enter the same key in Look.</li>
+      <li>Tap <strong>Test connection</strong>.</li>
+    </ol>
+  </section>
+
+  <section id="faq">
+    <h2>Questions &amp; answers</h2>
+
+    <details>
+      <summary>Look can't connect to my server</summary>
+      <div class="a">
+        <p>Work through this checklist — it resolves nearly every connection problem:</p>
+        <ul>
+          <li>Confirm Tailscale is running on both the server machine and your iPhone or iPad.</li>
+          <li>Confirm both devices are signed into the same Tailnet.</li>
+          <li>Open the server URL in Safari on the same device. If Safari can't reach it, the problem is the network, not Look.</li>
+          <li>Confirm the Look server is bound to a reachable interface (<code>HOST=0.0.0.0</code>).</li>
+          <li>Confirm port <code>5678</code> is allowed by the host machine's firewall.</li>
+          <li>If your server uses an API key, confirm the key in Look matches the server's <code>API_KEY</code> exactly.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Do I need an API key?</summary>
+      <div class="a">
+        <p>Only if your server sets the <code>API_KEY</code> environment variable. If it does, enter the same value in Look's connection settings. If your server doesn't set one, leave the field empty.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Photos or thumbnails aren't loading</summary>
+      <div class="a">
+        <p>Thumbnails are generated by the server on demand, so a large library takes a little while to warm up on first browse. RAW files are converted to JPEG previews in the background — check the server screen in Look to see conversion progress.</p>
+        <p>If nothing loads at all, run the connection checklist above.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>What file formats does Look support?</summary>
+      <div class="a">
+        <p>JPEG, PNG, HEIC, and RAW formats including ARW (Sony), CR2 (Canon), and NEF (Nikon). RAW files get automatically generated JPEG previews for fast browsing, and you can download either the preview or the original.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Are my photos uploaded to the cloud?</summary>
+      <div class="a">
+        <p>No. Look has no cloud component. The app talks directly to the server you run, over your own network. Photos only leave your server when you explicitly save one to your device's Photos library.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>How do favorites, albums, and tags work across devices?</summary>
+      <div class="a">
+        <p>They're stored on your Look server, not on the device — so any device connected to the same server sees the same favorites, albums, and tags.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Where do I get the Look server?</summary>
+      <div class="a">
+        <p>The server is open source: <a href="https://github.com/sladebot/look">github.com/sladebot/look</a>. The README covers installation, configuration, and how to point it at your photo folders.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>How do I report a bug or request a feature?</summary>
+      <div class="a">
+        <p>Use the <a href="#contact">contact form below</a>, or open an issue on <a href="https://github.com/sladebot/look/issues">GitHub</a>. Either way, including your device model, iOS version, and what you were doing when the problem happened makes fixes much faster.</p>
+      </div>
+    </details>
+  </section>
+
+  <section id="privacy">
+    <h2>Privacy</h2>
+    <p>Look has no accounts and collects no analytics. Your photos stay on your self-hosted server. Messages sent through the form below are used only to reply to you.</p>
+  </section>
+
+  <section id="contact">
+    <h2>Contact support</h2>
+    <p class="sub">Send a question, bug report, or feature request — we reply to every message, usually within 2 business days. You can also email <a href="mailto:souranil@gmail.com">souranil@gmail.com</a> directly.</p>
+
+    <form action="https://formsubmit.co/souranil@gmail.com" method="POST">
+      <input type="hidden" name="_subject" value="Look support request" />
+      <input type="hidden" name="_template" value="table" />
+      <input type="hidden" name="_captcha" value="false" />
+      <input type="hidden" name="_next" value="https://sladebot.github.io/look/thanks.html" />
+      <input type="text" name="_honey" class="honey" tabindex="-1" autocomplete="off" aria-hidden="true" />
+
+      <div class="field">
+        <label for="f-email">Your email address</label>
+        <input id="f-email" type="email" name="email" required autocomplete="email" placeholder="you@example.com" />
+      </div>
+
+      <div class="field">
+        <label for="f-topic">What do you need help with?</label>
+        <select id="f-topic" name="topic" required>
+          <option value="" selected disabled>Choose a topic…</option>
+          <option>Connecting to my server</option>
+          <option>Photos not loading</option>
+          <option>Albums, tags, or favorites</option>
+          <option>Feature request</option>
+          <option>Something else</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="f-message">Describe the problem or request</label>
+        <textarea id="f-message" name="message" required placeholder="What happened, and what did you expect instead?"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="f-device">Device and iOS version <span class="opt">(optional)</span></label>
+        <input id="f-device" type="text" name="device" placeholder="e.g. iPhone 15 Pro, iOS 18.2" />
+      </div>
+
+      <button type="submit">Send message</button>
+      <p class="form-note">Your message goes straight to the developer's inbox. No account needed.</p>
+    </form>
+  </section>
+
+  <footer>
+    Look is developed by Souranil Sen · <a href="mailto:souranil@gmail.com">souranil@gmail.com</a> · <a href="https://github.com/sladebot/look">GitHub</a>
+  </footer>
+
+</div>
+</body>
+</html>
