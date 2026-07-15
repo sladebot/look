@@ -209,6 +209,24 @@ struct FavoriteResponse: Codable {
     }
 }
 
+/// One calendar month of the archive: used by the home page's month browser.
+struct MonthBucket: Codable, Identifiable {
+    let month: String        // "YYYY-MM"
+    let count: Int
+    let coverPhotoId: String?
+
+    var id: String { month }
+
+    enum CodingKeys: String, CodingKey {
+        case month, count
+        case coverPhotoId = "cover_photo_id"
+    }
+}
+
+struct MonthsResponse: Codable {
+    let months: [MonthBucket]
+}
+
 struct AllTagsResponse: Codable {
     let tags: [TagInfo]
 }

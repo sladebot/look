@@ -559,6 +559,23 @@ async def nearby_photos(
     return {"photos": photos, "total": len(photos), "center": {"lat": lat, "lon": lon}, "radius_km": radius_km}
 
 
+@app.get("/api/photos/months")
+async def photo_months():
+    """Calendar-month buckets for archive navigation: [{month, count, cover_photo_id}]."""
+    return {"months": db.get_month_buckets()}
+
+
+@app.get("/api/photos/on-this-day")
+async def photos_on_this_day(
+    month: int = Query(..., ge=1, le=12),
+    day: int = Query(..., ge=1, le=31),
+    exclude_year: int = Query(None, description="Skip this year (usually the current one)"),
+):
+    """Photos taken on the given calendar day across all years."""
+    photos = db.get_on_this_day(month, day, exclude_year=exclude_year)
+    return {"photos": photos, "total": len(photos)}
+
+
 @app.get("/api/photos/{photo_id}")
 async def get_photo(photo_id: str):
     photo = db.get_photo(photo_id)

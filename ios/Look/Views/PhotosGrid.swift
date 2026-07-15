@@ -97,9 +97,19 @@ struct PhotosGrid: View {
         store.photos.filter { selectedPhotoIds.contains($0.id) }
     }
 
-    init(initialSelectedPhotoIds: Set<String> = []) {
+    /// Root usage (the Photos tab of old) owns its NavigationStack and hides
+    /// the navigation bar behind the in-scroll header. Pushed usage ("All
+    /// photos" / quick sets from Home) renders inside the parent stack with a
+    /// regular navigation bar.
+    let isRootPage: Bool
+
+    init(initialSelectedPhotoIds: Set<String> = [],
+         isRootPage: Bool = true,
+         initialFilter: PhotoGridFilter = .all) {
+        self.isRootPage = isRootPage
         _selectionMode = State(initialValue: !initialSelectedPhotoIds.isEmpty)
         _selectedPhotoIds = State(initialValue: initialSelectedPhotoIds)
+        _filter = State(initialValue: initialFilter)
     }
 
     private var selectedVisibleCount: Int {
@@ -147,7 +157,7 @@ struct PhotosGrid: View {
         // @Published churn), then thread the result through the subviews.
         let secs = sections
 
-        return NavigationStack {
+        let core = Group {
             Group {
                 if store.isLoading && store.photos.isEmpty {
                     loadingState
@@ -159,9 +169,27 @@ struct PhotosGrid: View {
                     gallery(secs)
                 }
             }
-            // The photos are the page: no navigation bar. A large in-scroll
-            // header carries the title, count, and the two quiet controls.
-            .toolbar(.hidden, for: .navigationBar)
+            // Root: the photos are the page — no navigation bar; the in-scroll
+            // header is the only chrome. Pushed: a regular inline-title bar.
+            .toolbar(isRootPage ? .hidden : .visible, for: .navigationBar)
+            .navigationTitle(isRootPage ? "" : pushedTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if !isRootPage && !selectionMode {
+                        Button("Select") {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            selectionMode = true
+                        }
+                        .disabled(visiblePhotos.isEmpty)
+                    } else if !isRootPage && selectionMode {
+                        Button("Cancel") {
+                            selectionMode = false
+                            selectedPhotoIds.removeAll()
+                        }
+                    }
+                }
+            }
             .lookScreenBackground()
             .toolbarColorScheme(.dark, for: .tabBar)
             .safeAreaInset(edge: .bottom) {
@@ -193,7 +221,19 @@ struct PhotosGrid: View {
             .task(id: store.photos.count) { applyScreenshotSelectionIfNeeded() }
             #endif
         }
+
+        return Group {
+            if isRootPage {
+                NavigationStack { core }
+            } else {
+                core
+            }
+        }
         .ignoresSafeArea(.container, edges: .bottom)
+    }
+
+    private var pushedTitle: String {
+        filter == .all ? "All photos" : filter.title
     }
 
     #if DEBUG
@@ -219,9 +259,11 @@ struct PhotosGrid: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: LookTheme.Spacing.tight,
                            pinnedViews: .sectionHeaders) {
-                    pageHeader
-                        .padding(.horizontal, LookTheme.Spacing.screen)
-                        .padding(.top, LookTheme.Spacing.small)
+                    if isRootPage {
+                        pageHeader
+                            .padding(.horizontal, LookTheme.Spacing.screen)
+                            .padding(.top, LookTheme.Spacing.small)
+                    }
 
                     statusBanner
 
@@ -886,7 +928,7 @@ struct SelectionShareItem: Identifiable {
     let urls: [URL]
 }
 
-private enum PhotoGridFilter: String, CaseIterable, Identifiable {
+enum PhotoGridFilter: String, CaseIterable, Identifiable {
     case all, favorites, raw, jpeg
     var id: String { rawValue }
     var title: String {

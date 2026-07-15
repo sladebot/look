@@ -82,6 +82,7 @@ private enum LookSidebarItem: String, CaseIterable, Identifiable {
 ///   LOOK_UI_ROUTE  one of the cases below
 enum LookUIScreenshotRoute: String, Identifiable {
     case viewer, detail, addToAlbum, tagHistory, map, albumDetail, smartAlbum
+    case allPhotos
     case dedup, tasks, watchlist, tagCleanup, migrations, createAlbum, createSmartAlbum
 
     var id: String { rawValue }
@@ -179,7 +180,7 @@ struct ContentView: View {
 
     private var tabInterface: some View {
         TabView(selection: $selectedTab) {
-            PhotosGrid()
+            HomeView()
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem { Label(LookTab.photos.title, systemImage: LookTab.photos.systemImage) }
                 .tag(LookTab.photos)
@@ -237,7 +238,7 @@ struct ContentView: View {
     private func sidebarDestination(_ item: LookSidebarItem) -> some View {
         switch item {
         case .photos:
-            PhotosGrid()
+            HomeView()
         case .albums, .smartAlbums:
             LibraryView()
         case .places:
@@ -290,6 +291,8 @@ struct ContentView: View {
             if let first = store.photos.first {
                 TagHistoryView(photoId: first.id)
             }
+        case .allPhotos:
+            NavigationStack { PhotosGrid(isRootPage: false) }
         case .map:
             NavigationStack { MapBrowseView() }
         case .albumDetail:
