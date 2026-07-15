@@ -99,13 +99,24 @@ class APIClient {
     // MARK: - Photos
 
     func photos(limit: Int = 50, offset: Int = 0, album: String? = nil, tag: String? = nil,
-                camera: String? = nil, query: String? = nil) async throws -> PhotoListResponse {
+                camera: String? = nil, query: String? = nil,
+                startDate: String? = nil, endDate: String? = nil) async throws -> PhotoListResponse {
         var params = "limit=\(limit)&offset=\(offset)"
         if let a = album { params += "&album=\(encode(a))" }
         if let t = tag { params += "&tag=\(encode(t))" }
         if let c = camera { params += "&camera=\(encode(c))" }
         if let q = query { params += "&q=\(encode(q))" }
+        if let s = startDate { params += "&start_date=\(encode(s))" }
+        if let e = endDate { params += "&end_date=\(encode(e))" }
         return try await get("/api/photos?\(params)")
+    }
+
+    func photoMonths() async throws -> MonthsResponse { try await get("/api/photos/months") }
+
+    func photosOnThisDay(month: Int, day: Int, excludeYear: Int? = nil) async throws -> PhotoListResponse {
+        var params = "month=\(month)&day=\(day)"
+        if let y = excludeYear { params += "&exclude_year=\(y)" }
+        return try await get("/api/photos/on-this-day?\(params)")
     }
 
     func photoDetail(_ id: String) async throws -> Photo { try await get("/api/photos/\(id)") }

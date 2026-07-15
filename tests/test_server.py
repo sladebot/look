@@ -494,3 +494,55 @@ def test_albums_include_cover_photo_id():
             client.close()
     finally:
         api.server.db = old_db
+
+
+# ── Archive navigation endpoints ──────────────────────────────────────────────
+
+def test_month_buckets_and_on_this_day():
+    """GET /api/photos/months groups by calendar month with newest cover;
+    GET /api/photos/on-this-day matches month/day across years."""
+    db_path = str(Path(tempfile.mkdtemp()) / "test_months.db")
+
+    import api.server
+    from api.server import PhotoDatabase as PD
+
+    db = PD(db_path)
+    for pid, created in [
+        ("jun1", "2026-06-05T08:00:00"),
+        ("jun2", "2026-06-08T09:00:00"),
+        ("may1", "2026-05-14T10:00:00"),
+        ("old1", "2024-06-08T12:00:00"),
+        ("nodate", None),
+    ]:
+        db.store_photo({
+            'id': pid, 'filename': f'{pid}.jpg', 'filepath': f'/tmp/{pid}.jpg',
+            'width': 100, 'height': 100, 'mime_type': 'image/jpeg',
+            'indexed_at': '2026-01-01', 'created_at': created,
+        })
+
+    old_db = api.server.db
+    api.server.db = db
+    try:
+        transport = ASGITransport(app=app)
+        client = httpx.Client(transport=transport, base_url="http://test")
+        try:
+            resp = client.get("/api/photos/months")
+            assert resp.status_code == 200
+            months = resp.json()["months"]
+            assert [m["month"] for m in months] == ["2026-06", "2026-05", "2024-06"]
+            june = months[0]
+            assert june["count"] == 2
+            assert june["cover_photo_id"] == "jun2"  # newest in the month
+
+            resp = client.get("/api/photos/on-this-day", params={"month": 6, "day": 8})
+            assert resp.status_code == 200
+            ids = [p["id"] for p in resp.json()["photos"]]
+            assert ids == ["jun2", "old1"]
+
+            resp = client.get("/api/photos/on-this-day",
+                              params={"month": 6, "day": 8, "exclude_year": 2026})
+            assert [p["id"] for p in resp.json()["photos"]] == ["old1"]
+        finally:
+            client.close()
+    finally:
+        api.server.db = old_db

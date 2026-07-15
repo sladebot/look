@@ -264,6 +264,42 @@ class PhotoDatabase:
         with self._connect() as conn:
             return conn.execute("SELECT COUNT(*) as cnt FROM photos").fetchone()['cnt']
 
+    def get_month_buckets(self) -> list:
+        """Photos grouped by calendar month, newest first.
+
+        Returns [{month: 'YYYY-MM', count, cover_photo_id}] where the cover is
+        the newest photo in that month. Photos without a created_at are skipped
+        (they have no calendar home).
+        """
+        with self._connect() as conn:
+            rows = conn.execute("""
+                SELECT substr(created_at, 1, 7) AS month,
+                       COUNT(*) AS count,
+                       (SELECT p2.id FROM photos p2
+                         WHERE substr(p2.created_at, 1, 7) = substr(p.created_at, 1, 7)
+                         ORDER BY p2.created_at DESC LIMIT 1) AS cover_photo_id
+                  FROM photos p
+                 WHERE created_at IS NOT NULL AND length(created_at) >= 7
+                 GROUP BY month
+                 ORDER BY month DESC
+            """).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_on_this_day(self, month: int, day: int, exclude_year: int = None) -> list:
+        """Photos taken on the given month/day across years, newest first."""
+        with self._connect() as conn:
+            query = """
+                SELECT * FROM photos
+                 WHERE substr(created_at, 6, 2) = ? AND substr(created_at, 9, 2) = ?
+            """
+            params = [f"{month:02d}", f"{day:02d}"]
+            if exclude_year is not None:
+                query += " AND substr(created_at, 1, 4) != ?"
+                params.append(str(exclude_year))
+            query += " ORDER BY created_at DESC"
+            rows = conn.execute(query, params).fetchall()
+            return [dict(r) for r in rows]
+
     def get_albums(self) -> list:
         with self._connect() as conn:
             rows = conn.execute("""
