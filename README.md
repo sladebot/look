@@ -13,6 +13,10 @@ The project has two parts:
 Look is designed for private libraries you control. It is not a hosted cloud
 photo product.
 
+Look is free to use, with no subscription or payment required. The self-hosted
+backend is open source and available in the
+[sladebot/look GitHub repository](https://github.com/sladebot/look).
+
 > **Requires a self-hosted Look server.** The iOS app is a client for browsing
 > your own Look server over Tailscale or another trusted private network. It
 > does not scan your iPhone photo library and does not provide cloud photo
@@ -190,9 +194,10 @@ Release security notes:
 
 App Store support docs:
 
-- [App Store metadata](docs/app-store/app-store-metadata.md)
-- [Privacy policy](docs/app-store/privacy-policy.md)
-- [Support page](docs/app-store/support.md)
+- [App Store metadata](https://github.com/sladebot/look/blob/main/docs/app-store/app-store-metadata.md)
+- [Privacy policy](https://github.com/sladebot/look/blob/main/docs/app-store/privacy-policy.md)
+- [Support page](https://able-radish-3cf.notion.site/Look-Support-38b2f3f20eff801da73fe2017ed629cd)
+- [Request support](https://github.com/sladebot/look/issues/new)
 
 ## Development
 

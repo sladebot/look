@@ -441,7 +441,13 @@ class PhotoDatabase:
                         WHEN excluded.has_thumbnail = 1 OR photos.has_thumbnail = 1 THEN 1
                         ELSE 0
                     END,
-                    is_favorite = excluded.is_favorite,
+                    -- Favorites are user-owned service state. A scanner
+                    -- re-index must never clear them merely because its input
+                    -- record omits is_favorite (and therefore defaults to 0).
+                    is_favorite = CASE
+                        WHEN photos.is_favorite = 1 OR excluded.is_favorite = 1 THEN 1
+                        ELSE 0
+                    END,
                     color_tag = excluded.color_tag,
                     is_source_jpeg = excluded.is_source_jpeg,
                     exif = excluded.exif,

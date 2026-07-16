@@ -440,6 +440,20 @@ def test_set_photo_favorite_toggles_flag():
             assert resp.json() == {"photo_id": "fav1", "is_favorite": True}
             assert db.get_photo("fav1")["is_favorite"] == 1
 
+            # Re-indexing the same file must retain user-owned favorite state,
+            # even though scanner records do not carry is_favorite.
+            db.store_photo({
+                'id': 'fav1', 'filename': 'sunset.jpg', 'filepath': '/tmp/sunset.jpg',
+                'width': 120, 'height': 120, 'mime_type': 'image/jpeg',
+                'indexed_at': '2024-01-02',
+            })
+            assert db.get_photo("fav1")["is_favorite"] == 1
+
+            # A new database object simulates a service restart: the favorite
+            # must still be read from SQLite rather than client memory.
+            reopened_db = PD(db_path)
+            assert reopened_db.get_photo("fav1")["is_favorite"] == 1
+
             resp = client.post("/api/photos/fav1/favorite", params={"value": "false"})
             assert resp.status_code == 200
             assert resp.json()["is_favorite"] is False

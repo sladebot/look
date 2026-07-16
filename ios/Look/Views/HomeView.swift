@@ -507,14 +507,49 @@ struct MonthDetailView: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            let response = try await APIClient.shared.photos(
-                limit: 500,
-                startDate: "\(bucket.month)-01",
-                endDate: "\(bucket.month)-31T23:59:59"
-            )
-            photos = response.photos
+            let range = try monthDateRange()
+            var loaded: [Photo] = []
+            var offset = 0
+            let pageSize = 200
+
+            while true {
+                let response = try await APIClient.shared.photos(
+                    limit: pageSize,
+                    offset: offset,
+                    startDate: range.start,
+                    endDate: range.end
+                )
+                loaded.append(contentsOf: response.photos)
+                offset += response.photos.count
+                if offset >= response.total || response.photos.isEmpty { break }
+            }
+            photos = loaded
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func monthDateRange() throws -> (start: String, end: String) {
+        guard let startDate = Self.inFormatter.date(from: bucket.month),
+              let nextMonth = Calendar(identifier: .gregorian).date(byAdding: .month, value: 1, to: startDate),
+              let endDate = Calendar(identifier: .gregorian).date(byAdding: .second, value: -1, to: nextMonth) else {
+            throw MonthLoadError.invalidMonth(bucket.month)
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return (formatter.string(from: startDate), formatter.string(from: endDate))
+    }
+}
+
+private enum MonthLoadError: LocalizedError {
+    case invalidMonth(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidMonth(let value): return "The month \(value) could not be read."
         }
     }
 }
