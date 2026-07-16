@@ -24,6 +24,7 @@ See docs/release/review-funnel-access.md for full setup, testing, and the
 Tailscale Funnel commands.
 """
 import hmac
+import ipaddress
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -62,6 +63,20 @@ _HOP_BY_HOP = {
 _DROP_FROM_REQUEST = _HOP_BY_HOP | {
     "host", "content-length", "authorization", "x-api-key",
 }
+
+
+def _is_loopback_request(request: Request) -> bool:
+    """Return true only for a direct loopback client.
+
+    Uvicorn resolves trusted ``X-Forwarded-For`` headers before FastAPI builds
+    ``request.client``. Funnel traffic therefore retains its remote client IP,
+    while a browser opened directly on this Mac remains 127.0.0.1 or ::1.
+    """
+    host = request.client.host if request.client else ""
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def _authorized(request: Request) -> bool:
@@ -109,8 +124,8 @@ def _unauthorized() -> JSONResponse:
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
 )
 async def proxy(path: str, request: Request):
-    # 1. Enforce the review credential (Bearer token or X-API-Key).
-    if not _authorized(request):
+    # 1. Local browsers are trusted; all remote clients require a credential.
+    if not _is_loopback_request(request) and not _authorized(request):
         return _unauthorized()
 
     # 2. Rebuild the target URL byte-for-byte (path + query preserved as-is).

@@ -9,6 +9,7 @@ and which headers are stripped before forwarding. End-to-end streaming fidelity
 backend; see docs/release/review-funnel-access.md.
 """
 import os
+from types import SimpleNamespace
 
 import httpx
 from httpx import ASGITransport
@@ -25,12 +26,13 @@ REVIEW_KEY = review_proxy.REVIEW_API_KEY
 class _FakeRequest:
     """Minimal stand-in exposing the .headers.get() the proxy relies on."""
 
-    def __init__(self, headers: dict):
+    def __init__(self, headers: dict, host: str = "203.0.113.10"):
         self.headers = headers
+        self.client = SimpleNamespace(host=host)
 
 
 def _client() -> httpx.Client:
-    transport = ASGITransport(app=review_proxy.app)
+    transport = ASGITransport(app=review_proxy.app, client=("203.0.113.10", 12345))
     return httpx.Client(transport=transport, base_url="http://proxy")
 
 
@@ -71,6 +73,15 @@ def test_non_ascii_credential_is_rejected_not_crash():
     must turn that into a rejection, never a 500."""
     req = _FakeRequest({"authorization": "Bearer café"})
     assert review_proxy._authorized(req) is False
+
+
+def test_loopback_request_is_recognized():
+    assert review_proxy._is_loopback_request(_FakeRequest({}, "127.0.0.1")) is True
+    assert review_proxy._is_loopback_request(_FakeRequest({}, "::1")) is True
+
+
+def test_remote_request_is_not_loopback():
+    assert review_proxy._is_loopback_request(_FakeRequest({}, "100.64.0.10")) is False
 
 
 # ── 401 contract (via the app) ────────────────────────────────────────────────

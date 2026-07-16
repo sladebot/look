@@ -1,5 +1,6 @@
 """Local Photo Library Server — Main FastAPI application with web frontend."""
 import os
+import ipaddress
 import hashlib
 import shutil
 import time
@@ -224,6 +225,12 @@ def _require_api_key(request: Request):
     _ensure_runtime()
     if not config.api_key:
         return  # no auth configured → pass-through
+    client_host = request.client.host if request.client else ""
+    try:
+        if ipaddress.ip_address(client_host).is_loopback:
+            return
+    except ValueError:
+        pass
     provided = request.headers.get('X-API-Key', '')
     if provided != config.api_key:
         raise HTTPException(status_code=401, detail='Invalid or missing API key')
