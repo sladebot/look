@@ -35,3 +35,6 @@ xcuserdata/
 *.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
 ios/build/
+
+# Runtime logs
+nohup.out
