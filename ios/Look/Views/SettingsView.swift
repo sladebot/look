@@ -14,26 +14,24 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
-                    if store.isSyncing {
-                        activityCard
-                    }
-                    connectionPanel
+                    settingsOverview
                     syncPanel
                     libraryPanel
-                    featuresPanel
+                    connectionPanel
                     toolsPanel
+                    featuresPanel
                     aboutPanel
                 }
                 .padding(LookTheme.Spacing.screen)
             }
             .lookScreenBackground()
-            .navigationTitle("Server")
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     LookNavTitle(
-                        title: "Server",
-                        subtitle: store.serverConnected ? "Connected over Tailscale" : "Server connection"
+                        title: "Settings",
+                        subtitle: store.serverConnected ? "Private library connected" : "Connection needs attention"
                     )
                 }
             }
@@ -52,6 +50,27 @@ struct SettingsView: View {
                 await store.loadServerSettings()
             }
         }
+    }
+
+    private var settingsOverview: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+            HStack(spacing: LookTheme.Spacing.small) {
+                Image(systemName: store.serverConnected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(store.serverConnected ? LookTheme.ColorToken.accent : .orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.serverConnected ? "Your archive is available" : "Look is offline")
+                        .font(LookTheme.Typography.headline)
+                    Text(store.serverConnected
+                         ? "\(store.totalPhotos.formatted()) photos remain on your private server."
+                         : "Reconnect to your private server to browse and sync.")
+                        .font(LookTheme.Typography.secondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                }
+                Spacer()
+            }
+            if store.isSyncing { activityCard }
+        }
+        .lookCard()
     }
 
     /// Live server activity, surfaced at the top so background work is
@@ -196,7 +215,7 @@ struct SettingsView: View {
             } label: {
                 HStack {
                     if store.isSyncing { ProgressView().scaleEffect(0.8) }
-                    Text(store.isSyncing ? "Syncing" : "Sync and import now")
+                    Text(store.isSyncing ? "Scanning server" : "Scan server now")
                 }
                 .frame(maxWidth: .infinity)
             }

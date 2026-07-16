@@ -70,6 +70,7 @@ enum PhotoLayout {
 
 struct PhotosGrid: View {
     @EnvironmentObject var store: PhotoStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var selectedPhoto: Photo?
     @State private var selectionMode = false
@@ -198,8 +199,8 @@ struct PhotosGrid: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(.easeInOut(duration: 0.18), value: selectionMode)
-            .animation(.easeInOut(duration: 0.18), value: selectedPhotoIds.count)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selectionMode)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selectedPhotoIds.count)
             .fullScreenCover(item: $selectedPhoto) { photo in
                 NativePhotoViewer(photos: visiblePhotos, initialPhoto: photo)
                     .modifier(LookZoomTransition(id: photo.id, namespace: viewerZoomNamespace))
@@ -402,6 +403,19 @@ struct PhotosGrid: View {
             if photo.isFavorite == true && !selectionMode {
                 LookFavoriteBadge()
                     .padding(5)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if !selectionMode {
+                Text(photo.fileExtension.uppercased())
+                    .font(.system(.caption2, design: .monospaced).weight(.bold))
+                    .tracking(0.7)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 3)
+                    .background(LookTheme.ColorToken.backdrop.opacity(0.82))
+                    .padding(5)
+                    .accessibilityHidden(true)
             }
         }
         .overlay {
@@ -831,6 +845,13 @@ struct PhotosGrid: View {
                 .accessibilityLabel("More options")
             }
         }
+        .overlay(alignment: .topLeading) {
+            Rectangle()
+                .fill(LookTheme.ColorToken.warning)
+                .frame(width: 30, height: 3)
+                .offset(y: -8)
+                .accessibilityHidden(true)
+        }
         .animation(.easeInOut(duration: 0.18), value: selectionMode)
     }
 
@@ -897,22 +918,29 @@ private struct PhotoDateStrip: View {
     let count: Int
 
     var body: some View {
-        HStack {
-            // One small marker; the count lives in the accessibility label —
-            // it's reference data, not something to read on every scroll.
+        HStack(spacing: LookTheme.Spacing.small) {
+            Text("●")
+                .font(.system(size: 7))
+                .foregroundStyle(LookTheme.ColorToken.warning)
+                .accessibilityHidden(true)
             Text(title)
                 .font(LookTheme.Typography.captionEmphasis)
                 .foregroundStyle(LookTheme.ColorToken.primaryText)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(.thinMaterial, in: Capsule())
-                .environment(\.colorScheme, .dark)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: LookTheme.Spacing.small)
+
+            Text(String(format: "%02d EXP", count))
+                .font(.system(.caption2, design: .monospaced).weight(.medium))
+                .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, LookTheme.Spacing.screen)
         .padding(.vertical, LookTheme.Spacing.tight)
         .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(LookTheme.ColorToken.separator).frame(height: 0.5)
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(count) photos")
         .accessibilityAddTraits(.isHeader)
@@ -1260,7 +1288,7 @@ struct NativePhotoViewer: View {
         }
         .padding(.horizontal, LookTheme.Spacing.small)
         .padding(.vertical, LookTheme.Spacing.tight)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         .environment(\.colorScheme, .dark)
     }
 
@@ -1319,7 +1347,7 @@ struct NativePhotoViewer: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(photo.id == currentId ? .white : .clear, lineWidth: 2)
+                                    .stroke(photo.id == currentId ? LookTheme.ColorToken.accent : .clear, lineWidth: 3)
                             }
                             .shadow(color: .black.opacity(photo.id == currentId ? 0.34 : 0), radius: 8, y: 4)
                             .id(photo.id)
@@ -1332,7 +1360,7 @@ struct NativePhotoViewer: View {
                 .padding(.vertical, 12)
             }
             .frame(height: 84)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .environment(\.colorScheme, .dark)
             .onChange(of: currentId) { _, id in
                 withAnimation { proxy.scrollTo(id, anchor: .center) }

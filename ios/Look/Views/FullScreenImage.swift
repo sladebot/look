@@ -29,6 +29,7 @@ struct FullScreenImage: View {
     @State private var uiImage: UIImage?
     @State private var loadFailed = false
     @State private var isLoadingPreview = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let dismissThreshold: CGFloat = 110
     private let navigationThreshold: CGFloat = 72
@@ -47,7 +48,7 @@ struct FullScreenImage: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
         }
-        .background(Color.black)
+        .background(LookTheme.ColorToken.backdrop)
         .task(id: "\(photo.id)|\(isActive)") {
             guard isActive else { return }
             await loadDisplayImage()
@@ -72,7 +73,7 @@ struct FullScreenImage: View {
                         .onEnded { _ in
                             lastScale = 1.0
                             if scale < 1.0 {
-                                withAnimation { scale = 1.0; offset = .zero }
+                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { scale = 1.0; offset = .zero }
                             }
                         },
                     DragGesture()
@@ -96,7 +97,7 @@ struct FullScreenImage: View {
                 )
             )
             .onTapGesture(count: 2) {
-                withAnimation {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                     if scale > 1.0 {
                         scale = 1.0; offset = .zero; lastOffset = .zero
                     } else {
@@ -135,12 +136,12 @@ struct FullScreenImage: View {
 
         if abs(dx) > abs(dy), abs(dx) > navigationThreshold {
             if dx < 0, canGoNext {
-                withAnimation(.easeOut(duration: 0.18)) { dragOffset = .zero }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { dragOffset = .zero }
                 onNext()
                 return
             }
             if dx > 0, canGoPrevious {
-                withAnimation(.easeOut(duration: 0.18)) { dragOffset = .zero }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { dragOffset = .zero }
                 onPrevious()
                 return
             }
@@ -152,7 +153,7 @@ struct FullScreenImage: View {
             }
         }
 
-        withAnimation(.spring(response: 0.3)) { dragOffset = .zero }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3)) { dragOffset = .zero }
     }
 
     private var failureState: some View {

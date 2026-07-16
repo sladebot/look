@@ -12,19 +12,19 @@ private enum LookTab: String, CaseIterable, Identifiable {
     // (LOOK_UI_TAB) and stored state depend on them; only display names moved.
     var title: String {
         switch self {
-        case .photos: return "Photos"
+        case .photos: return "Library"
         case .library: return "Collections"
-        case .search: return "Find"
-        case .settings: return "Server"
+        case .search: return "Explore"
+        case .settings: return "Settings"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .photos: return "photo.on.rectangle.angled"
+        case .photos: return "photo.stack"
         case .library: return "rectangle.stack"
-        case .search: return "magnifyingglass"
-        case .settings: return "server.rack"
+        case .search: return "safari"
+        case .settings: return "gearshape"
         }
     }
 }
@@ -42,23 +42,23 @@ private enum LookSidebarItem: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .photos: return "Photos"
+        case .photos: return "Library"
         case .albums: return "Albums"
         case .smartAlbums: return "Smart albums"
         case .places: return "Places"
-        case .search: return "Find"
-        case .settings: return "Server"
+        case .search: return "Search"
+        case .settings: return "Settings"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .photos: return "photo.on.rectangle.angled"
+        case .photos: return "photo.stack"
         case .albums: return "rectangle.stack"
         case .smartAlbums: return "sparkles.rectangle.stack"
         case .places: return "map"
         case .search: return "magnifyingglass"
-        case .settings: return "server.rack"
+        case .settings: return "gearshape"
         }
     }
 
@@ -211,13 +211,15 @@ struct ContentView: View {
                 Section("Library") {
                     sidebarRow(.photos)
                 }
+                Section("Explore") {
+                    sidebarRow(.search)
+                    sidebarRow(.places)
+                }
                 Section("Collections") {
                     sidebarRow(.albums)
                     sidebarRow(.smartAlbums)
-                    sidebarRow(.places)
                 }
                 Section {
-                    sidebarRow(.search)
                     sidebarRow(.settings)
                 }
             }

@@ -17,6 +17,9 @@ struct ConnectionSetupView: View {
     @State private var isTesting = false
     @State private var statusMessage: String?
     @State private var errorMessage: String?
+    @State private var connectionVerified = false
+    @State private var showAPIKey = false
+    @State private var showHelp = false
     @FocusState private var focusedField: Field?
 
     var body: some View {
@@ -26,15 +29,14 @@ struct ConnectionSetupView: View {
                     header
                     statusBanner
                     connectionCard
-                    examplesCard
-                    helpCard
+                    helpDisclosure
                 }
                 .padding(LookTheme.Spacing.screen)
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity)
             }
             .lookScreenBackground()
-            .navigationTitle("Connect to Look")
+            .navigationTitle("Welcome to Look")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 APIClient.shared.migrateLegacyAPIKeyIfNeeded()
@@ -53,18 +55,18 @@ struct ConnectionSetupView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
-            Image(systemName: "point.3.connected.trianglepath.dotted")
+            Image(systemName: "photo.stack")
                 .font(.largeTitle)
                 .imageScale(.large)
                 .foregroundStyle(LookTheme.ColorToken.accent)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.tight) {
-                Text("Connect with Tailscale")
+                Text("Your photos, on your server")
                     .font(LookTheme.Typography.display)
                     .foregroundStyle(LookTheme.ColorToken.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Look requires a self-hosted Look server. Use the address this device can reach through Tailscale, then test once to unlock the library.")
+                Text("Browse your private photo archive without moving it to a cloud service. Enter the address of the computer running Look.")
                     .font(LookTheme.Typography.body)
                     .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -77,17 +79,15 @@ struct ConnectionSetupView: View {
     private var statusBanner: some View {
         if isTesting {
             LookStatusBanner(
-                title: "Checking the private route",
-                message: "Testing \(normalizedServerURL) from this device.",
+                title: "Connecting…",
+                message: "Checking your Look server securely from this device.",
                 tone: .info
             )
-        } else if let statusMessage {
+        } else if connectionVerified, let statusMessage {
             LookStatusBanner(
-                title: "Ready to browse",
+                title: "Your library is ready",
                 message: statusMessage,
-                tone: .success,
-                actionTitle: "Clear",
-                action: clearStatus
+                tone: .success
             )
         } else if let displayErrorMessage {
             LookStatusBanner(
@@ -97,21 +97,13 @@ struct ConnectionSetupView: View {
                 actionTitle: "Clear",
                 action: clearStatus
             )
-        } else {
-            LookStatusBanner(
-                title: "Use a private-network address",
-                message: "Use the private Tailscale HTTP or HTTPS address for your self-hosted Look server, including the port.",
-                tone: .info
-            )
         }
     }
 
     private var connectionCard: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
-            cardHeader(
-                title: "Server",
-                subtitle: "This is usually the Mac, NAS, or mini PC running Look."
-            )
+            cardHeader(title: "Connect to your library",
+                       subtitle: "This is usually a Mac, NAS, or home server reachable through Tailscale.")
 
             VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
                 fieldLabel("Server URL", detail: "Required")
@@ -121,32 +113,41 @@ struct ConnectionSetupView: View {
                     .autocorrectionDisabled()
                     .textContentType(.URL)
                     .focused($focusedField, equals: .serverURL)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = .apiKey }
+                    .submitLabel(showAPIKey ? .next : .go)
+                    .onSubmit {
+                        if showAPIKey { focusedField = .apiKey }
+                        else { testConnection() }
+                    }
                     .lookTextInput()
             }
 
-            VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
-                fieldLabel("API key", detail: "Only if API_KEY is set on the server")
-                SecureField("Leave blank for a private Tailscale server", text: $apiKey)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .textContentType(.password)
-                    .focused($focusedField, equals: .apiKey)
-                    .submitLabel(.go)
-                    .onSubmit { testConnection() }
-                    .lookTextInput()
-            }
-
-            Button {
-                testConnection()
+            DisclosureGroup(isExpanded: $showAPIKey) {
+                VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+                    SecureField("API key", text: $apiKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textContentType(.password)
+                        .focused($focusedField, equals: .apiKey)
+                        .submitLabel(.go)
+                        .onSubmit { testConnection() }
+                        .lookTextInput()
+                    Text("Only required when API_KEY is enabled on your Look server. It is stored in Keychain.")
+                        .font(LookTheme.Typography.secondary)
+                        .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                }
+                .padding(.top, LookTheme.Spacing.small)
             } label: {
+                Label("My server uses an API key", systemImage: "key")
+                    .font(LookTheme.Typography.secondaryEmphasis)
+            }
+
+            Button { connectionVerified ? openLibrary() : testConnection() } label: {
                 HStack(spacing: LookTheme.Spacing.small) {
                     if isTesting {
                         ProgressView()
                             .tint(.white)
                     }
-                    Text(isTesting ? "Testing connection" : "Test and continue")
+                    Text(isTesting ? "Connecting" : connectionVerified ? "Open Library" : "Connect")
                         .font(LookTheme.Typography.bodyEmphasis)
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -158,36 +159,26 @@ struct ConnectionSetupView: View {
             .padding(.top, LookTheme.Spacing.tight)
         }
         .lookCard()
+        .onChange(of: serverURL) { _, _ in resetVerifiedConnection() }
+        .onChange(of: apiKey) { _, _ in resetVerifiedConnection() }
     }
 
-    private var examplesCard: some View {
-        VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
-            cardHeader(
-                title: "Common Tailscale addresses",
-                subtitle: "Tap an example to fill the server URL, then replace it with your machine's address."
-            )
-
-            VStack(spacing: LookTheme.Spacing.small) {
-                exampleRow("Tailscale IP",
-                           value: "http://100.86.254.112:5678",
-                           note: "Works even if MagicDNS is disabled.")
-                exampleRow("MagicDNS",
-                           value: "http://studio.tailnet-name.ts.net:5678",
-                           note: "Friendlier when Tailscale DNS is enabled.")
+    private var helpDisclosure: some View {
+        DisclosureGroup(isExpanded: $showHelp) {
+            VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
+                Text("Make sure Tailscale is connected on this device and on the Look server. Look normally runs on port 5678.")
+                    .font(LookTheme.Typography.secondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                exampleRow("Tailscale IP", value: "http://100.86.254.112:5678", note: "Works without MagicDNS.")
+                exampleRow("MagicDNS", value: "http://studio.tailnet-name.ts.net:5678", note: "Use your server’s tailnet name.")
+                Text("Look reads the archive on your server. It does not scan or upload this device’s photo library.")
+                    .font(LookTheme.Typography.secondary)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
             }
-        }
-        .lookCard()
-    }
-
-    private var helpCard: some View {
-        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
-            Text("Before testing")
-                .font(LookTheme.Typography.headline)
-                .foregroundStyle(LookTheme.ColorToken.primaryText)
-            Text("Make sure Tailscale is connected on this device and on the Look server. The server should be running on port 5678 and reachable from the same Tailscale network. Look does not scan this device's photo library.")
-                .font(LookTheme.Typography.secondary)
-                .foregroundStyle(LookTheme.ColorToken.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, LookTheme.Spacing.medium)
+        } label: {
+            Label("Need help connecting?", systemImage: "questionmark.circle")
+                .font(LookTheme.Typography.secondaryEmphasis)
         }
         .lookCard()
     }
@@ -277,6 +268,7 @@ struct ConnectionSetupView: View {
 
     private func testConnection() {
         clearStatus()
+        connectionVerified = false
         let trimmedURL = normalizedServerURL
         guard !trimmedURL.isEmpty else {
             errorMessage = "Enter a server URL."
@@ -304,10 +296,9 @@ struct ConnectionSetupView: View {
                     )
                 }
 
-                hasSuccessfulConnection = true
-                statusMessage = "Connected to \(trimmedURL)"
+                connectionVerified = true
+                statusMessage = "Connected to your private Look server."
                 store.errorMessage = nil
-                await onConnectionEstablished()
             } catch {
                 hasSuccessfulConnection = false
                 store.serverConnected = false
@@ -316,10 +307,23 @@ struct ConnectionSetupView: View {
         }
     }
 
+    private func openLibrary() {
+        guard connectionVerified else { return }
+        hasSuccessfulConnection = true
+        Task { await onConnectionEstablished() }
+    }
+
     private func clearStatus() {
         statusMessage = nil
         errorMessage = nil
         store.errorMessage = nil
+    }
+
+    private func resetVerifiedConnection() {
+        guard connectionVerified else { return }
+        connectionVerified = false
+        statusMessage = nil
+        hasSuccessfulConnection = false
     }
 
     private enum Field {

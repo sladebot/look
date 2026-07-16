@@ -18,6 +18,19 @@ struct PhotoCard: View {
                         .padding(5)
                 }
             }
+            .overlay(alignment: .topLeading) {
+                if !selectionMode {
+                    Text(fileExtension.uppercased())
+                        .font(.system(.caption2, design: .monospaced).weight(.bold))
+                        .tracking(0.8)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 3)
+                        .background(LookTheme.ColorToken.backdrop.opacity(0.82))
+                        .padding(5)
+                        .accessibilityHidden(true)
+                }
+            }
             .overlay {
                 if isSelected {
                     Color.black.opacity(0.18)
@@ -31,7 +44,7 @@ struct PhotoCard: View {
             }
             .overlay {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: LookTheme.Radius.thumbnail, style: .continuous)
+                    Rectangle()
                         .stroke(LookTheme.ColorToken.accent, lineWidth: 3)
                 }
             }
@@ -46,6 +59,10 @@ struct PhotoCard: View {
         if photo.isFavorite == true { parts.append("favorite") }
         if isSelected { parts.append("selected") }
         return parts.joined(separator: ", ")
+    }
+
+    private var fileExtension: String {
+        URL(fileURLWithPath: photo.filename).pathExtension.lowercased()
     }
 }
 
@@ -64,18 +81,18 @@ struct LookSelectionBadge: View {
     var body: some View {
         ZStack {
             if isSelected {
-                Circle()
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .fill(LookTheme.ColorToken.accentControl)
-                Circle()
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .strokeBorder(.white, lineWidth: 1.5)
                 Image(systemName: "checkmark")
                     .font(.subheadline.weight(.bold))
                     .imageScale(.small)
                     .foregroundStyle(.white)
             } else {
-                Circle()
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .strokeBorder(.black.opacity(0.7), lineWidth: 5)
-                Circle()
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .inset(by: 1.5)
                     .stroke(.white, lineWidth: 2)
             }

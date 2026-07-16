@@ -43,13 +43,13 @@ struct SearchView: View {
                 content
             }
             .lookScreenBackground()
-            .navigationTitle("Find")
+            .navigationTitle("Explore")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     LookNavTitle(
-                        title: "Find",
-                        subtitle: submittedQuery.isEmpty ? "Filename, tag, camera, or path" : "\(results.count) results"
+                        title: "Explore",
+                        subtitle: submittedQuery.isEmpty ? "Search your archive or browse places" : "\(results.count) results"
                     )
                 }
             }
@@ -276,7 +276,7 @@ struct SearchView: View {
                                              tint: LookTheme.ColorToken.accent)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("Search tag \(info.tag), \(info.count) photos")
+                                .accessibilityLabel("Search tag \(info.tag), \(info.count ?? 0) photos")
                             }
                         }
                     }

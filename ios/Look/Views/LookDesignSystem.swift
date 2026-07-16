@@ -1,38 +1,31 @@
 import SwiftUI
+import UIKit
 
-/// "Look 2.0" design language.
-///
-/// Dark, photo-first, quiet chrome: photos supply the color, the UI stays
-/// neutral and legible. Every text role maps to a Dynamic Type text style
-/// (.footnote is the absolute floor, and only for auxiliary metadata).
-/// No uppercase tracked labels, no tertiary text color, no fixed-pixel fonts.
+/// Look Archive: an adaptive, photo-first digital contact sheet. Paper and ink
+/// keep the library calm; cobalt is reserved for interaction and selection,
+/// while signal orange marks archival/index information.
 enum LookTheme {
     // MARK: Color
 
     enum ColorToken {
-        /// Root window background (behind everything).
-        static let backdrop = Color(hex: 0x0A0A0C)
-        /// Screen background.
-        static let canvas = Color(hex: 0x131316)
-        /// Cards, rows, input fields.
-        static let surface = Color(hex: 0x1C1C21)
-        /// Sheets, menus, banners — one step above `surface`.
-        static let elevated = Color(hex: 0x26262C)
-        /// Primary readable text.
-        static let primaryText = Color(hex: 0xF5F5F7)
-        /// Secondary readable text — the darkest gray allowed for meaningful text.
-        static let secondaryText = Color(hex: 0xC9C9D1)
-        /// Hairline separators and decorative strokes only; never text.
-        static let separator = Color(hex: 0x3A3A42)
-        /// Brand accent for icons, text highlights, and selection tint.
-        static let accent = Color(hex: 0xA79BFF)
-        /// Deeper violet for filled controls so white labels keep ~5:1 contrast.
-        static let accentControl = Color(hex: 0x6A5AE0)
-        static let success = Color(hex: 0x4CC27E)
-        /// Warning amber — legible on `elevated`, distinct from `danger` so
-        /// cautions don't read as errors.
-        static let warning = Color(hex: 0xE5B84E)
-        static let danger = Color(hex: 0xFF6B5E)
+        static let backdrop = adaptive(light: 0x171815, dark: 0x090A08)
+        static let canvas = adaptive(light: 0xF3F1EA, dark: 0x171815)
+        static let surface = adaptive(light: 0xFBFAF6, dark: 0x20211E)
+        static let elevated = adaptive(light: 0xE6E2D8, dark: 0x2A2B27)
+        static let primaryText = adaptive(light: 0x171815, dark: 0xF3F1EA)
+        static let secondaryText = adaptive(light: 0x555850, dark: 0xC4C2BA)
+        static let separator = adaptive(light: 0xC8C3B7, dark: 0x43443E)
+        static let accent = adaptive(light: 0x3157D5, dark: 0x7895FF)
+        static let accentControl = adaptive(light: 0x3157D5, dark: 0x4268E6)
+        static let success = adaptive(light: 0x66735C, dark: 0x94A58A)
+        static let warning = adaptive(light: 0xC95127, dark: 0xF08A5E)
+        static let danger = adaptive(light: 0xB54835, dark: 0xFF806E)
+
+        private static func adaptive(light: UInt, dark: UInt) -> Color {
+            Color(uiColor: UIColor { traits in
+                UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light)
+            })
+        }
     }
 
     // MARK: Typography
@@ -43,11 +36,11 @@ enum LookTheme {
     /// rendered in `secondaryText` or brighter.
     enum Typography {
         /// Hero text (connection/setup screen). .largeTitle.
-        static let display = Font.largeTitle.weight(.bold)
+        static let display = Font.system(.largeTitle, design: .rounded).weight(.bold)
         /// Large on-screen titles (photo filename on the detail sheet). .title2.
-        static let title = Font.title2.weight(.semibold)
+        static let title = Font.system(.title2, design: .rounded).weight(.semibold)
         /// Section-level titles inside a screen. .title3.
-        static let sectionTitle = Font.title3.weight(.semibold)
+        static let sectionTitle = Font.system(.title3, design: .rounded).weight(.semibold)
         /// Panel headers and row titles. .headline.
         static let headline = Font.headline
         /// Primary content. .body.
@@ -68,11 +61,11 @@ enum LookTheme {
 
     enum Radius {
         /// Cards and panels.
-        static let card: CGFloat = 12
+        static let card: CGFloat = 6
         /// Buttons, fields, small controls.
-        static let control: CGFloat = 10
+        static let control: CGFloat = 8
         /// Photo thumbnails.
-        static let thumbnail: CGFloat = 6
+        static let thumbnail: CGFloat = 2
     }
 
     enum Spacing {
@@ -479,5 +472,14 @@ private extension Color {
         let green = Double((hex >> 8) & 0xff) / 255
         let blue = Double(hex & 0xff) / 255
         self.init(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+    }
+}
+
+private extension UIColor {
+    convenience init(hex: UInt, alpha: CGFloat = 1) {
+        self.init(red: CGFloat((hex >> 16) & 0xff) / 255,
+                  green: CGFloat((hex >> 8) & 0xff) / 255,
+                  blue: CGFloat(hex & 0xff) / 255,
+                  alpha: alpha)
     }
 }

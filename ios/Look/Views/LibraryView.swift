@@ -23,9 +23,10 @@ struct LibraryView: View {
                         )
                     }
 
-                    LibraryPanelSection(
+                    LibraryCollectionSection(
                         title: "Albums",
-                        trailing: "\(store.albums.count)"
+                        subtitle: "Hand-picked sets from your archive",
+                        count: store.albums.count
                     ) {
                         if store.albums.isEmpty {
                             LibraryEmptyPanel(
@@ -34,16 +35,15 @@ struct LibraryView: View {
                                 systemImage: "rectangle.stack"
                             )
                         } else {
-                            VStack(spacing: LookTheme.Spacing.small) {
+                            LazyVGrid(columns: collectionColumns, spacing: LookTheme.Spacing.medium) {
                                 ForEach(store.albums) { album in
                                     NavigationLink(destination: AlbumDetail(album: album)) {
-                                        LibraryCollectionRow(
-                                            icon: "rectangle.stack.fill",
+                                        LibraryCollectionCard(
                                             title: album.name,
-                                            subtitle: album.description?.nilIfBlank ?? "Manual photo collection.",
-                                            badge: photoCountText(album.photoCount),
-                                            tint: LookTheme.ColorToken.primaryText,
-                                            coverPhotoId: album.coverPhotoId
+                                            subtitle: album.description?.nilIfBlank ?? "Manual album",
+                                            count: album.photoCount,
+                                            kind: .album,
+                                            coverPhotoId: album.coverPhotoId ?? album.photos?.first?.id
                                         )
                                     }
                                     .buttonStyle(.plain)
@@ -64,9 +64,10 @@ struct LibraryView: View {
                         }
                     }
 
-                    LibraryPanelSection(
-                        title: "Smart albums",
-                        trailing: "\(store.smartCollections.count)"
+                    LibraryCollectionSection(
+                        title: "Smart Albums",
+                        subtitle: "Collections that update from saved rules",
+                        count: store.smartCollections.count
                     ) {
                         if store.smartCollections.isEmpty {
                             LibraryEmptyPanel(
@@ -75,16 +76,10 @@ struct LibraryView: View {
                                 systemImage: "sparkles.rectangle.stack"
                             )
                         } else {
-                            VStack(spacing: LookTheme.Spacing.small) {
+                            LazyVGrid(columns: collectionColumns, spacing: LookTheme.Spacing.medium) {
                                 ForEach(store.smartCollections) { collection in
                                     NavigationLink(destination: SmartAlbumDetail(collection: collection)) {
-                                        LibraryCollectionRow(
-                                            icon: "sparkles.rectangle.stack.fill",
-                                            title: collection.name,
-                                            subtitle: collection.description?.nilIfBlank ?? "Rule-based collection.",
-                                            badge: "Smart",
-                                            tint: LookTheme.ColorToken.accent
-                                        )
+                                        SmartCollectionCard(collection: collection)
                                     }
                                     .buttonStyle(.plain)
                                     .contextMenu {
@@ -155,9 +150,8 @@ struct LibraryView: View {
         }
     }
 
-    private func photoCountText(_ count: Int?) -> String? {
-        guard let count else { return nil }
-        return count == 1 ? "1 photo" : "\(count) photos"
+    private var collectionColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 240, maximum: 420), spacing: LookTheme.Spacing.medium)]
     }
 
     private func reloadLibrary() async {
@@ -187,93 +181,141 @@ struct LibraryView: View {
     }
 }
 
-private struct LibraryPanelSection<Content: View>: View {
+private struct LibraryCollectionSection<Content: View>: View {
     let title: String
-    var trailing: String?
+    let subtitle: String
+    let count: Int
     let content: Content
 
-    init(title: String, trailing: String? = nil, @ViewBuilder content: () -> Content) {
+    init(title: String, subtitle: String, count: Int, @ViewBuilder content: () -> Content) {
         self.title = title
-        self.trailing = trailing
+        self.subtitle = subtitle
+        self.count = count
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
-            HStack {
-                LookTheme.sectionHeader(title)
-                Spacer()
-                if let trailing {
-                    Text(trailing)
-                        .font(LookTheme.Typography.captionEmphasis)
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    LookTheme.sectionHeader(title)
+                    Text(subtitle)
+                        .font(LookTheme.Typography.secondary)
                         .foregroundStyle(LookTheme.ColorToken.secondaryText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(LookTheme.ColorToken.surface, in: Capsule())
                 }
+                Spacer()
+                Text(count.formatted())
+                    .font(LookTheme.Typography.captionEmphasis)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(LookTheme.ColorToken.surface, in: Capsule())
             }
             content
         }
     }
 }
 
-private struct LibraryCollectionRow: View {
-    let icon: String
+private enum LibraryCollectionKind {
+    case album, smart
+
+    var title: String { self == .smart ? "Smart album" : "Album" }
+    var icon: String { self == .smart ? "sparkles.rectangle.stack.fill" : "rectangle.stack.fill" }
+    var tint: Color { self == .smart ? LookTheme.ColorToken.accent : LookTheme.ColorToken.primaryText }
+}
+
+/// The smart-collection list response contains rules but not membership. Load
+/// the lightweight detail once so its destination card can show a real cover
+/// and count instead of presenting like a settings row.
+private struct SmartCollectionCard: View {
+    let collection: SmartCollection
+    @State private var photos: [Photo]
+
+    init(collection: SmartCollection) {
+        self.collection = collection
+        _photos = State(initialValue: collection.photos ?? [])
+    }
+
+    var body: some View {
+        LibraryCollectionCard(
+            title: collection.name,
+            subtitle: collection.description?.nilIfBlank ?? "Updates automatically from a saved rule",
+            count: photos.isEmpty && collection.photos == nil ? nil : photos.count,
+            kind: .smart,
+            coverPhotoId: photos.first?.id
+        )
+        .task(id: collection.id) {
+            guard collection.photos == nil else { return }
+            if let detail = try? await APIClient.shared.smartCollectionDetail(collection.id) {
+                photos = detail.photos ?? []
+            }
+        }
+    }
+}
+
+private struct LibraryCollectionCard: View {
     let title: String
     let subtitle: String
-    var badge: String?
-    let tint: Color
+    let count: Int?
+    let kind: LibraryCollectionKind
     var coverPhotoId: String? = nil
 
     var body: some View {
-        HStack(spacing: LookTheme.Spacing.medium) {
+        VStack(alignment: .leading, spacing: 0) {
             if let coverPhotoId {
-                CachedThumbnail(url: APIClient.shared.thumbnailURL(for: coverPhotoId, size: 256))
-                    .frame(width: 52, height: 52)
-                    .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.thumbnail, style: .continuous))
+                CachedThumbnail(url: APIClient.shared.thumbnailURL(for: coverPhotoId, size: 512), maxPixel: 512)
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(16 / 10, contentMode: .fill)
+                    .clipped()
                     .accessibilityHidden(true)
             } else {
                 ZStack {
-                    RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
-                        .fill(tint.opacity(0.13))
-                    Image(systemName: icon)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(tint)
+                    LinearGradient(
+                        colors: [kind.tint.opacity(0.18), LookTheme.ColorToken.surface],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    Image(systemName: kind.icon)
+                        .font(.largeTitle.weight(.semibold))
+                        .foregroundStyle(kind.tint.opacity(0.82))
                 }
-                .frame(width: 44, height: 44)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(16 / 10, contentMode: .fit)
                 .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(LookTheme.Typography.bodyEmphasis)
-                    .foregroundStyle(LookTheme.ColorToken.primaryText)
-                    .lineLimit(1)
-                Text(subtitle)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: LookTheme.Spacing.tight) {
+                    Text(title)
+                        .font(LookTheme.Typography.bodyEmphasis)
+                        .foregroundStyle(LookTheme.ColorToken.primaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if kind == .smart {
+                        Label("Smart", systemImage: "sparkles")
+                            .font(LookTheme.Typography.captionEmphasis)
+                            .foregroundStyle(kind.tint)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(kind.tint.opacity(0.12), in: Capsule())
+                    }
+                }
+                Text(metadataLine)
                     .font(LookTheme.Typography.secondary)
                     .foregroundStyle(LookTheme.ColorToken.secondaryText)
                     .lineLimit(2)
             }
-
-            Spacer(minLength: LookTheme.Spacing.tight)
-
-            if let badge {
-                Text(badge)
-                    .font(LookTheme.Typography.captionEmphasis)
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(tint.opacity(0.11), in: Capsule())
-            }
-
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(LookTheme.ColorToken.secondaryText)
-                .accessibilityHidden(true)
+            .padding(LookTheme.Spacing.medium)
         }
-        .padding(LookTheme.Spacing.medium)
         .lookSurface()
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(kind.title), \(metadataLine)")
+        .accessibilityHint("Opens this collection")
+    }
+
+    private var metadataLine: String {
+        let countText = count.map { $0 == 1 ? "1 photo" : "\($0) photos" }
+        return [countText, subtitle].compactMap { $0 }.joined(separator: " · ")
     }
 }
 

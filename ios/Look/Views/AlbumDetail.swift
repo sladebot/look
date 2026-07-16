@@ -87,12 +87,7 @@ struct AlbumDetail: View {
     private var grid: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LookTheme.Spacing.medium) {
-                HStack {
-                    LookChip(title: photos.count == 1 ? "1 photo" : "\(photos.count) photos",
-                             systemImage: "photo", tint: LookTheme.ColorToken.primaryText)
-                    Spacer()
-                }
-                .padding(.horizontal, LookTheme.Spacing.tight)
+                albumHeader
 
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(photos) { photo in
@@ -127,6 +122,39 @@ struct AlbumDetail: View {
             .padding(.bottom, LookTheme.Spacing.large)
         }
         .refreshable { await loadPhotos() }
+    }
+
+    private var albumHeader: some View {
+        HStack(spacing: LookTheme.Spacing.medium) {
+            if let cover = photos.first {
+                CachedThumbnail(url: APIClient.shared.thumbnailURL(for: cover.id, size: 256))
+                    .frame(width: 88, height: 88)
+                    .clipped()
+            } else {
+                LookTheme.ColorToken.elevated
+                    .overlay { Image(systemName: "rectangle.stack").foregroundStyle(LookTheme.ColorToken.accent) }
+                    .frame(width: 88, height: 88)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("ALBUM")
+                    .font(.system(.caption2, design: .monospaced).weight(.bold))
+                    .tracking(1.3)
+                    .foregroundStyle(LookTheme.ColorToken.warning)
+                Text(albumName)
+                    .font(LookTheme.Typography.title)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
+                    .lineLimit(2)
+                Text(photos.count == 1 ? "1 frame" : "\(photos.count.formatted()) frames")
+                    .font(LookTheme.Typography.caption)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(LookTheme.Spacing.small)
+        .background(LookTheme.ColorToken.surface)
+        .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Toolbar & selection

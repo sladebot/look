@@ -173,7 +173,7 @@ struct PhotoDetail: View {
         HStack(spacing: LookTheme.Spacing.small) {
             quickAction(title: isFavorite ? "Favorited" : "Favorite",
                         systemImage: isFavorite ? "heart.fill" : "heart",
-                        iconTint: isFavorite ? Color.pink : LookTheme.ColorToken.accent,
+                        iconTint: isFavorite ? LookTheme.ColorToken.warning : LookTheme.ColorToken.accent,
                         accessibility: isFavorite ? "Remove from favorites" : "Add to favorites") {
                 toggleFavorite()
             }
@@ -284,9 +284,9 @@ struct PhotoDetail: View {
                         Marker(photo.filename, coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon))
                     }
                     .frame(height: 190)
-                    .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous))
+                    .clipShape(Rectangle())
                     .overlay {
-                        RoundedRectangle(cornerRadius: LookTheme.Radius.control, style: .continuous)
+                        Rectangle()
                             .stroke(LookTheme.ColorToken.elevated, lineWidth: 1)
                     }
                     .allowsHitTesting(false)
@@ -693,8 +693,8 @@ private struct PhotoDetailSprocketRail: View {
     var body: some View {
         LazyVGrid(columns: columns, spacing: 0) {
             ForEach(0..<14, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(LookTheme.ColorToken.canvas.opacity(0.22))
+                Rectangle()
+                    .fill(LookTheme.ColorToken.warning.opacity(0.72))
                     .frame(height: 5)
             }
         }
@@ -725,7 +725,19 @@ private struct PhotoDetailPanel<Content: View>: View {
                 content
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .lookCard(inset: LookTheme.Spacing.medium)
+            .padding(LookTheme.Spacing.medium)
+            .background(LookTheme.ColorToken.surface)
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(LookTheme.ColorToken.accent)
+                    .frame(width: 3)
+                    .accessibilityHidden(true)
+            }
+            .overlay {
+                Rectangle()
+                    .stroke(LookTheme.ColorToken.separator, lineWidth: 0.5)
+                    .accessibilityHidden(true)
+            }
         }
     }
 }
@@ -987,7 +999,7 @@ private enum PhotoDetailMetadataFormatter {
     }
 }
 
-private extension Photo {
+extension Photo {
     var fileExtension: String {
         URL(fileURLWithPath: filename).pathExtension.lowercased()
     }

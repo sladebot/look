@@ -15,11 +15,16 @@ struct HomeView: View {
     @State private var selectedMemory: Photo?
     @Namespace private var viewerZoomNamespace
 
-    private let latestColumns = [GridItem(.adaptive(minimum: 104), spacing: 2)]
-    private let monthColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
-
     private var latestPhotos: [Photo] {
-        Array(store.photos.prefix(12))
+        Array(store.photos.prefix(18))
+    }
+
+    private var heroPhotos: [Photo] {
+        Array(latestPhotos.prefix(5))
+    }
+
+    private var recentPhotos: [Photo] {
+        Array(latestPhotos.dropFirst(min(5, latestPhotos.count)))
     }
 
     var body: some View {
@@ -59,24 +64,24 @@ struct HomeView: View {
 
     private var home: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: LookTheme.Spacing.large) {
+            VStack(alignment: .leading, spacing: 28) {
                 header
 
                 if store.isSyncing {
                     syncLine
                 }
 
-                latestSection
+                archiveHero
+
+                libraryShortcuts
 
                 if !onThisDay.isEmpty {
                     onThisDaySection
                 }
 
-                if months.count > 1 {
-                    monthsSection
-                }
+                recentSection
 
-                quickSets
+                if !months.isEmpty { monthsSection }
             }
             .padding(.horizontal, LookTheme.Spacing.screen)
             .padding(.top, LookTheme.Spacing.small)
@@ -99,7 +104,7 @@ struct HomeView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: LookTheme.Spacing.small) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Photos")
+                Text("Look")
                     .font(LookTheme.Typography.display)
                     .foregroundStyle(LookTheme.ColorToken.primaryText)
                 Text(vitals)
@@ -115,7 +120,7 @@ struct HomeView: View {
                 Button {
                     Task { await store.syncNow() }
                 } label: {
-                    Label(store.isSyncing ? "Syncing" : "Sync and Import",
+                    Label(store.isSyncing ? "Syncing" : "Scan for new photos",
                           systemImage: "arrow.triangle.2.circlepath")
                 }
                 .disabled(store.isSyncing)
@@ -166,10 +171,115 @@ struct HomeView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var latestSection: some View {
+    private var archiveHero: some View {
+        VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
+            HStack(alignment: .lastTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("LATEST FROM YOUR ARCHIVE")
+                        .font(.system(.caption2, design: .monospaced).weight(.bold))
+                        .tracking(1.4)
+                        .foregroundStyle(LookTheme.ColorToken.warning)
+                    Text("Recently added")
+                        .font(.system(.title2, design: .rounded).weight(.bold))
+                        .foregroundStyle(LookTheme.ColorToken.primaryText)
+                }
+                Spacer()
+                NavigationLink("See all") { PhotosGrid(isRootPage: false) }
+                    .font(LookTheme.Typography.secondaryEmphasis)
+                    .foregroundStyle(LookTheme.ColorToken.accent)
+            }
+
+            GeometryReader { proxy in
+                let gap: CGFloat = 3
+                let leftWidth = proxy.size.width * 0.62
+                HStack(spacing: gap) {
+                    heroTile(at: 0, width: leftWidth, height: 286)
+                    VStack(spacing: gap) {
+                        heroTile(at: 1, width: proxy.size.width - leftWidth - gap, height: 141.5)
+                        HStack(spacing: gap) {
+                            heroTile(at: 2, width: (proxy.size.width - leftWidth - gap * 2) / 2, height: 141.5)
+                            heroTile(at: 3, width: (proxy.size.width - leftWidth - gap * 2) / 2, height: 141.5)
+                        }
+                    }
+                }
+            }
+            .frame(height: 286)
+            .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
+            .overlay(alignment: .bottomLeading) {
+                HStack(spacing: 7) {
+                    Rectangle().fill(LookTheme.ColorToken.warning).frame(width: 18, height: 2)
+                    Text("\(heroPhotos.count.formatted()) NEW FRAMES")
+                        .font(.system(.caption2, design: .monospaced).weight(.bold))
+                        .tracking(1)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(.black.opacity(0.72))
+                .padding(8)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func heroTile(at index: Int, width: CGFloat, height: CGFloat) -> some View {
+        if heroPhotos.indices.contains(index) {
+            let photo = heroPhotos[index]
+            CachedThumbnail(url: APIClient.shared.thumbnailURL(for: photo.id, size: 512))
+                .frame(width: width, height: height)
+                .clipped()
+                .contentShape(Rectangle())
+                .modifier(LookZoomSource(id: photo.id, namespace: viewerZoomNamespace))
+                .onTapGesture { selectedLatest = photo }
+                .accessibilityLabel("Open \(photo.filename)")
+        } else {
+            LookTheme.ColorToken.surface
+                .frame(width: width, height: height)
+        }
+    }
+
+    private var libraryShortcuts: some View {
+        HStack(spacing: LookTheme.Spacing.small) {
+            archiveShortcut(title: "All photos", detail: store.totalPhotos.formatted(), icon: "rectangle.stack") {
+                PhotosGrid(isRootPage: false)
+            }
+            archiveShortcut(title: "Favorites", detail: "Saved frames", icon: "heart") {
+                PhotosGrid(isRootPage: false, initialFilter: .favorites)
+            }
+            archiveShortcut(title: "RAW", detail: "Originals", icon: "camera.aperture") {
+                PhotosGrid(isRootPage: false, initialFilter: .raw)
+            }
+        }
+    }
+
+    private func archiveShortcut<Destination: View>(title: String, detail: String, icon: String,
+                                                     @ViewBuilder destination: () -> Destination) -> some View {
+        NavigationLink(destination: destination()) {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(LookTheme.ColorToken.accent)
+                Text(title)
+                    .font(LookTheme.Typography.secondaryEmphasis)
+                    .foregroundStyle(LookTheme.ColorToken.primaryText)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(LookTheme.Typography.caption)
+                    .foregroundStyle(LookTheme.ColorToken.secondaryText)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(LookTheme.ColorToken.surface)
+            .clipShape(RoundedRectangle(cornerRadius: LookTheme.Radius.card, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var recentSection: some View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             HStack(alignment: .firstTextBaseline) {
-                LookTheme.sectionHeader("Latest")
+                LookTheme.sectionHeader("Continue browsing")
                 Spacer()
                 NavigationLink {
                     PhotosGrid(isRootPage: false)
@@ -185,11 +295,17 @@ struct HomeView: View {
                 .accessibilityLabel("All photos, full library")
             }
 
-            LazyVGrid(columns: latestColumns, spacing: 2) {
-                ForEach(latestPhotos) { photo in
-                    PhotoCard(photo: photo)
-                        .modifier(LookZoomSource(id: photo.id, namespace: viewerZoomNamespace))
-                        .onTapGesture { selectedLatest = photo }
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 4) {
+                    ForEach(recentPhotos) { photo in
+                        CachedThumbnail(url: APIClient.shared.thumbnailURL(for: photo.id, size: 256))
+                            .frame(width: 128, height: 166)
+                            .clipped()
+                            .contentShape(Rectangle())
+                            .modifier(LookZoomSource(id: photo.id, namespace: viewerZoomNamespace))
+                            .onTapGesture { selectedLatest = photo }
+                            .accessibilityLabel("Open \(photo.filename)")
+                    }
                 }
             }
         }
@@ -232,36 +348,19 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: LookTheme.Spacing.small) {
             LookTheme.sectionHeader("Browse by month")
 
-            LazyVGrid(columns: monthColumns, spacing: 10) {
-                ForEach(months) { bucket in
-                    NavigationLink {
-                        MonthDetailView(bucket: bucket)
-                    } label: {
-                        MonthCard(bucket: bucket)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: LookTheme.Spacing.small) {
+                    ForEach(months.prefix(12)) { bucket in
+                        NavigationLink {
+                            MonthDetailView(bucket: bucket)
+                        } label: {
+                            MonthCard(bucket: bucket)
+                                .frame(width: 184)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
-        }
-    }
-
-    private var quickSets: some View {
-        HStack(spacing: LookTheme.Spacing.small) {
-            NavigationLink {
-                PhotosGrid(isRootPage: false, initialFilter: .favorites)
-            } label: {
-                LookChip(title: "Favorites", systemImage: "heart", tint: LookTheme.ColorToken.accent)
-            }
-            .buttonStyle(.plain)
-
-            NavigationLink {
-                PhotosGrid(isRootPage: false, initialFilter: .raw)
-            } label: {
-                LookChip(title: "RAW", systemImage: "camera.aperture", tint: LookTheme.ColorToken.accent)
-            }
-            .buttonStyle(.plain)
-
-            Spacer(minLength: 0)
         }
     }
 
